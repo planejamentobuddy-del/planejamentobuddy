@@ -45,7 +45,7 @@ export default function PlanningTab({ project }: { project: Project }) {
   ];
 
   const { widths: colWidths, onMouseDown: onColResize } = useResizableColumns([
-    220, 130, 100, 100, 70, 140, 120, 130, 130, 140, 100,
+    280, 120, 110, 110, 60, 130, 110, 110, 110, 150, 90,
   ]);
 
   const toggleExpand = (id: string) => {
