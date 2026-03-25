@@ -30,6 +30,24 @@ export default function PlanningTab({ project }: { project: Project }) {
 
   const [expandedStages, setExpandedStages] = useState<Set<string>>(() => new Set(stages.map(s => s.id)));
 
+  const columnHeaders = [
+    { label: 'Etapa / Atividade', align: 'left' },
+    { label: 'Responsável', align: 'left' },
+    { label: 'Início', align: 'left' },
+    { label: 'Término', align: 'left' },
+    { label: 'Duração', align: 'center' },
+    { label: '% Execução', align: 'left' },
+    { label: 'Status', align: 'left' },
+    { label: 'Predecessoras', align: 'left' },
+    { label: 'Sucessoras', align: 'left' },
+    { label: 'Observações', align: 'left' },
+    { label: 'Ações', align: 'center' },
+  ];
+
+  const { widths: colWidths, onMouseDown: onColResize } = useResizableColumns([
+    220, 130, 100, 100, 70, 140, 120, 130, 130, 140, 100,
+  ]);
+
   const toggleExpand = (id: string) => {
     setExpandedStages(prev => {
       const next = new Set(prev);
