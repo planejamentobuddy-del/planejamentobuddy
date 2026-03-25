@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Project, Task, WeeklyPlan, WeeklyHistory, getCurrentWeek } from '@/types/project';
+import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, getCurrentWeek } from '@/types/project';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
@@ -21,6 +21,11 @@ interface ProjectsContextType {
   deleteWeeklyPlan: (id: string) => Promise<void>;
   // History
   getHistoryForProject: (projectId: string) => WeeklyHistory[];
+  // Constraints
+  getConstraintsForProject: (projectId: string) => Constraint[];
+  addConstraint: (c: Omit<Constraint, 'id' | 'createdAt'>) => Promise<Constraint | null>;
+  updateConstraint: (c: Constraint) => Promise<void>;
+  deleteConstraint: (id: string) => Promise<void>;
   closeWeek: (projectId: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -33,6 +38,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [history, setHistory] = useState<WeeklyHistory[]>([]);
+  const [constraints, setConstraints] = useState<Constraint[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -41,6 +47,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       setTasks([]);
       setPlans([]);
       setHistory([]);
+      setConstraints([]);
       setLoading(false);
       return;
     }
@@ -51,11 +58,17 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       const { data: taskData, error: taskErr } = await supabase.from('tasks').select('*').order('created_at', { ascending: true });
       const { data: planData, error: planErr } = await supabase.from('weekly_plans').select('*');
       const { data: histData, error: histErr } = await supabase.from('weekly_history').select('*').order('closed_at', { ascending: false });
+      const { data: constrData, error: constrErr } = await (supabase.from('constraints') as any).select('*').order('created_at', { ascending: true });
 
       if (projErr) throw projErr;
       if (taskErr) throw taskErr;
       if (planErr) throw planErr;
       if (histErr) throw histErr;
+      
+      // We don't throw for constraints if the table doesn't exist yet to avoid breaking the app
+      if (constrErr && (constrErr as any).code !== 'PGRST116' && (constrErr as any).code !== '42P01' && (constrErr as any).code !== 'PGRST205') {
+        console.error('Constraints fetch error:', constrErr);
+      }
 
       if (projData) {
         setProjects(projData.map(p => ({
@@ -69,23 +82,32 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       }
       
       if (taskData) {
-        setTasks(taskData.map(t => ({
-          id: t.id,
-          projectId: t.project_id,
-          parentId: t.parent_id || undefined,
-          name: t.name,
-          startDate: t.start_date,
-          endDate: t.end_date,
-          duration: t.duration,
-          percentComplete: t.percent_complete,
-          responsible: t.responsible || '',
-          predecessors: t.predecessors || [],
-          hasRestriction: t.has_restriction,
-          restrictionType: t.restriction_type || '',
-          status: t.status as any,
-          observations: t.observations || '',
-          checklists: (Array.isArray(t.checklists) ? t.checklists : []) as ChecklistItem[],
-        })));
+        const today = new Date().toISOString().split('T')[0];
+        setTasks(taskData.map(t => {
+          let st = t.status as any;
+          if (st !== 'completed' && t.end_date && t.end_date < today) {
+            st = 'delayed';
+          } else if (st === 'delayed' && t.end_date && t.end_date >= today) {
+            st = 'in_progress';
+          }
+          return {
+            id: t.id,
+            projectId: t.project_id,
+            parentId: t.parent_id || undefined,
+            name: t.name,
+            startDate: t.start_date || '',
+            endDate: t.end_date || '',
+            duration: t.duration || 0,
+            percentComplete: t.percent_complete || 0,
+            responsible: t.responsible || '',
+            predecessors: t.predecessors || [],
+            hasRestriction: t.has_restriction || false,
+            restrictionType: t.restriction_type || '',
+            status: st,
+            observations: t.observations || '',
+            checklists: (Array.isArray(t.checklists) ? t.checklists : []) as unknown as ChecklistItem[],
+          };
+        }));
       }
 
       if (planData) {
@@ -113,6 +135,21 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           completed: h.completed,
           ppc: h.ppc,
           closedAt: h.closed_at,
+        })));
+      }
+
+      if (constrData) {
+        setConstraints(constrData.map((c: any) => ({
+          id: c.id,
+          projectId: c.project_id,
+          taskId: c.task_id || undefined,
+          description: c.description,
+          category: c.category as any,
+          status: c.status as any,
+          responsible: c.responsible || '',
+          dueDate: c.due_date || '',
+          closedAt: c.closed_at || undefined,
+          createdAt: c.created_at,
         })));
       }
     } catch (error: any) {
@@ -219,7 +256,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       restrictionType: data.restriction_type || '',
       status: data.status as any,
       observations: data.observations || '',
-      checklists: (Array.isArray(data.checklists) ? data.checklists : []) as ChecklistItem[],
+      checklists: (Array.isArray(data.checklists) ? data.checklists : []) as unknown as ChecklistItem[],
     };
     setTasks(prev => [...prev, newTask]);
     return newTask;
@@ -227,7 +264,6 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
 
   const updateTask = useCallback(async (task: Task) => {
     const original = [...tasks];
-    setTasks(prev => prev.map(t => t.id === task.id ? task : t));
 
     // Sanitize: never send empty strings for date fields
     const startDate = task.startDate || null;
@@ -237,6 +273,16 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     if (!startDate || !endDate) {
       return;
     }
+
+    let finalStatus = task.status;
+    const today = new Date().toISOString().split('T')[0];
+    if (finalStatus !== 'completed' && endDate < today) {
+      finalStatus = 'delayed';
+    } else if (finalStatus === 'delayed' && endDate >= today) {
+      finalStatus = 'in_progress';
+    }
+
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...task, status: finalStatus } : t));
 
     const { error } = await supabase
       .from('tasks')
@@ -250,7 +296,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         predecessors: task.predecessors,
         has_restriction: task.hasRestriction,
         restriction_type: task.restrictionType,
-        status: task.status,
+        status: finalStatus,
         observations: task.observations,
         checklists: (task.checklists as any) || [],
       })
@@ -352,7 +398,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       toast.error('Não há planos para fechar nesta semana.');
       return;
     }
-    const completed = projectPlans.filter(p => p.status === 'completed').length;
+    const completed = projectPlans.filter(p => p.status === 'completed' || p.status === 'in_progress').length;
     const ppc = Math.round((completed / projectPlans.length) * 100);
     
     const { data, error } = await supabase
@@ -386,11 +432,84 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [plans]);
 
+  const getConstraintsForProject = useCallback((projectId: string) => 
+    constraints.filter(c => c.projectId === projectId), [constraints]);
+
+  const addConstraint = useCallback(async (c: Omit<Constraint, 'id' | 'createdAt'>) => {
+    const { data, error } = await (supabase.from('constraints') as any)
+      .insert([{
+        project_id: c.projectId,
+        task_id: c.taskId,
+        description: c.description,
+        category: c.category,
+        status: c.status,
+        responsible: c.responsible,
+        due_date: c.dueDate || null,
+        created_by: user?.id
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding constraint:', error);
+      toast.error('Erro ao adicionar restrição: ' + error.message);
+      return null;
+    }
+
+    const newConstraint: Constraint = {
+      id: data.id,
+      projectId: data.project_id,
+      taskId: data.task_id || undefined,
+      description: data.description,
+      category: data.category as any,
+      status: data.status as any,
+      responsible: data.responsible || '',
+      dueDate: data.due_date || '',
+      createdAt: data.created_at,
+    };
+    setConstraints(prev => [...prev, newConstraint]);
+    toast.success('Restrição adicionada!');
+    return newConstraint;
+  }, [user]);
+
+  const updateConstraint = useCallback(async (c: Constraint) => {
+    const original = [...constraints];
+    setConstraints(prev => prev.map(item => item.id === c.id ? c : item));
+
+    const { error } = await (supabase.from('constraints') as any)
+      .update({
+        description: c.description,
+        category: c.category,
+        status: c.status,
+        responsible: c.responsible,
+        due_date: c.dueDate || null,
+        closed_at: c.status === 'closed' ? new Date().toISOString() : null
+      })
+      .eq('id', c.id);
+
+    if (error) {
+      setConstraints(original);
+      toast.error('Erro ao atualizar restrição.');
+    }
+  }, [constraints]);
+
+  const deleteConstraint = useCallback(async (id: string) => {
+    const original = [...constraints];
+    setConstraints(prev => prev.filter(c => c.id !== id));
+
+    const { error } = await (supabase.from('constraints') as any).delete().eq('id', id);
+    if (error) {
+      setConstraints(original);
+      toast.error('Erro ao excluir restrição.');
+    }
+  }, [constraints]);
+
   return (
     <ProjectsContext.Provider value={{
       projects, loading, addProject, deleteProject,
       getTasksForProject, addTask, updateTask, deleteTask,
       getPlansForProject, addWeeklyPlan, updateWeeklyPlan, deleteWeeklyPlan,
+      getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,
       getHistoryForProject, closeWeek,
       refresh: fetchData,
     }}>

@@ -41,7 +41,7 @@ export interface WeeklyPlan {
   responsible: string;
   week: string; // ISO week string e.g. "2024-W03"
   weekLabel: string;
-  status: 'planned' | 'completed' | 'not_completed';
+  status: 'planned' | 'in_progress' | 'completed' | 'not_completed';
   reason: string;
   observations: string;
 }
@@ -67,6 +67,30 @@ export const DELAY_REASONS = [
 ] as const;
 
 export type DelayReason = typeof DELAY_REASONS[number];
+
+export const CONSTRAINT_CATEGORIES = [
+  { id: 'labor', label: 'Mão de obra', color: 'text-blue-500 bg-blue-500/10' },
+  { id: 'material', label: 'Materiais', color: 'text-orange-500 bg-orange-500/10' },
+  { id: 'equipment', label: 'Equipamentos', color: 'text-purple-500 bg-purple-500/10' },
+  { id: 'design', label: 'Projeto/Definição', color: 'text-cyan-500 bg-cyan-500/10' },
+  { id: 'permit', label: 'Legal/Documentação', color: 'text-red-500 bg-red-500/10' },
+  { id: 'other', label: 'Outros', color: 'text-slate-500 bg-slate-500/10' },
+] as const;
+
+export type ConstraintCategory = typeof CONSTRAINT_CATEGORIES[number]['id'];
+
+export interface Constraint {
+  id: string;
+  projectId: string;
+  taskId?: string; // Vinculado a uma tarefa específica
+  description: string;
+  category: ConstraintCategory;
+  status: 'open' | 'closed';
+  responsible: string;
+  dueDate: string;
+  closedAt?: string;
+  createdAt: string;
+}
 
 export function getProjectProgress(tasks: Task[]): number {
   if (tasks.length === 0) return 0;

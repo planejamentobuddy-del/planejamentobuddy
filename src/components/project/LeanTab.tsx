@@ -1,12 +1,17 @@
 import { useState, useMemo } from 'react';
-import { Project, DELAY_REASONS, WeeklyPlan, Task } from '@/types/project';
+import { Project, DELAY_REASONS, WeeklyPlan, Task, Constraint, CONSTRAINT_CATEGORIES, ConstraintCategory } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronLeft, ChevronRight, Calendar, Eye, BarChart3, AlertTriangle } from 'lucide-react';
+import { 
+  ChevronLeft, ChevronRight, Calendar, Eye, BarChart3, 
+  AlertTriangle, CheckCircle2, Plus, Trash2, Filter,
+  Lock, Unlock, Clock
+} from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { toast } from 'sonner';
 
 function getWeekRange(weekStr: string): { start: Date; end: Date; label: string } {
   // Parse "YYYY-SWW" format
@@ -41,6 +46,7 @@ function offsetWeek(weekStr: string, offset: number): string {
 
 const statusOptions = [
   { value: 'planned', label: 'Planejado', color: 'bg-muted text-muted-foreground' },
+  { value: 'in_progress', label: 'Em andamento', color: 'bg-blue-500/15 text-blue-600' },
   { value: 'completed', label: 'Concluído', color: 'bg-[hsl(152_60%_42%/0.15)] text-status-ok' },
   { value: 'not_completed', label: 'Não concluído', color: 'bg-destructive/10 text-destructive' },
 ];
@@ -48,23 +54,55 @@ const statusOptions = [
 export default function LeanTab({ project }: { project: Project }) {
   const {
     getTasksForProject, getPlansForProject, addWeeklyPlan, updateWeeklyPlan,
-    deleteWeeklyPlan, getHistoryForProject, closeWeek
+    deleteWeeklyPlan, getHistoryForProject, closeWeek,
+    getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint
   } = useProjects();
 
   const tasks = getTasksForProject(project.id);
   const plans = getPlansForProject(project.id);
   const history = getHistoryForProject(project.id);
+  const constraints = getConstraintsForProject(project.id);
 
   const [currentWeekStr, setCurrentWeekStr] = useState(getCurrentWeek);
+  const [activeTab, setActiveTab] = useState('semanal');
+  
+  // Constraint Form State
+  const [showAddConstraint, setShowAddConstraint] = useState(false);
+  const [newConstraint, setNewConstraint] = useState({
+    taskId: '',
+    description: '',
+    category: 'material' as ConstraintCategory,
+    responsible: '',
+    dueDate: ''
+  });
+
   const weekRange = getWeekRange(currentWeekStr);
   const weekPlans = plans.filter(p => p.week === currentWeekStr);
-  const weekCompleted = weekPlans.filter(p => p.status === 'completed').length;
+  const weekCompleted = weekPlans.filter(p => p.status === 'completed' || p.status === 'in_progress').length;
   const ppc = weekPlans.length > 0 ? Math.round((weekCompleted / weekPlans.length) * 100) : null;
   const ppcColor = ppc === null ? 'text-muted-foreground' : ppc >= 80 ? 'text-status-ok' : ppc >= 60 ? 'text-status-warning' : 'text-status-danger';
 
-  // Add a task from planning to the weekly plan
+  // Lookahead weeks (Next 4 weeks)
+  const lookaheadWeeks = useMemo(() => {
+    return [0, 1, 2, 3].map(offset => {
+      const wStr = offsetWeek(currentWeekStr, offset);
+      const range = getWeekRange(wStr);
+      return { weekStr: wStr, label: range.label, range };
+    });
+  }, [currentWeekStr]);
+
+  // Tasks sorted by start date
+  const sortedTasks = useMemo(() => [...tasks].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || '')), [tasks]);
+
+  // Chart data for PPC
+  const chartData = useMemo(() => {
+    return [...history].sort((a, b) => a.week.localeCompare(b.week)).map(h => ({
+      week: h.week.split('-')[1], // Just "S01", "S02" etc.
+      PPC: h.ppc
+    }));
+  }, [history]);
+
   const handleAddFromPlanning = async (task: Task) => {
-    // Don't add duplicates
     if (weekPlans.some(p => p.taskId === task.id)) return;
     await addWeeklyPlan({
       projectId: project.id,
@@ -79,249 +117,620 @@ export default function LeanTab({ project }: { project: Project }) {
     });
   };
 
-  const handleChange = async (plan: WeeklyPlan, field: keyof WeeklyPlan, value: string) => {
-    await updateWeeklyPlan({ ...plan, [field]: value });
+  const handleCreateConstraint = async () => {
+    if (!newConstraint.description) {
+      toast.error('Descrição é obrigatória');
+      return;
+    }
+    await addConstraint({
+      projectId: project.id,
+      taskId: newConstraint.taskId || undefined,
+      description: newConstraint.description,
+      category: newConstraint.category,
+      status: 'open',
+      responsible: newConstraint.responsible,
+      dueDate: newConstraint.dueDate,
+    });
+    setShowAddConstraint(false);
+    setNewConstraint({ taskId: '', description: '', category: 'material', responsible: '', dueDate: '' });
   };
 
-  const handleCloseWeek = async () => {
-    await closeWeek(project.id);
+  const toggleConstraintStatus = async (c: Constraint) => {
+    await updateConstraint({
+      ...c,
+      status: c.status === 'open' ? 'closed' : 'open',
+      closedAt: c.status === 'open' ? new Date().toISOString() : undefined
+    });
   };
-
-  // Tasks not yet in this week's plan
-  const availableTasks = tasks.filter(t => !weekPlans.some(p => p.taskId === t.id));
-
-  const chartData = history.sort((a, b) => a.week.localeCompare(b.week)).map(h => ({
-    week: h.weekLabel,
-    PPC: h.ppc,
-  }));
 
   const formatDate = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—';
 
   return (
     <div className="space-y-5">
-      <Tabs defaultValue="semanal">
-        {/* Sub-tabs */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <TabsList className="bg-transparent border-0 p-0 h-auto gap-1">
-            <TabsTrigger value="semanal" className="gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        {/* Header with Navigation and Info */}
+        <div className="flex items-center justify-between flex-wrap gap-4 bg-card p-4 rounded-2xl border border-border/50 shadow-sm">
+          <TabsList className="bg-muted/50 p-1 h-auto gap-1 rounded-xl">
+            <TabsTrigger value="semanal" className="gap-2 rounded-lg px-4 py-2 text-sm">
               <Calendar className="w-4 h-4" /> Semanal
             </TabsTrigger>
-            <TabsTrigger value="lookahead" className="gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground">
+            <TabsTrigger value="lookahead" className="gap-2 rounded-lg px-4 py-2 text-sm">
               <Eye className="w-4 h-4" /> Lookahead
             </TabsTrigger>
-            <TabsTrigger value="indicadores" className="gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground">
+            <TabsTrigger value="restricoes" className="gap-2 rounded-lg px-4 py-2 text-sm">
+              <Lock className="w-4 h-4" /> Restrições
+            </TabsTrigger>
+            <TabsTrigger value="indicadores" className="gap-2 rounded-lg px-4 py-2 text-sm">
               <BarChart3 className="w-4 h-4" /> Indicadores
             </TabsTrigger>
           </TabsList>
 
-          {/* Week navigation + PPC */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setCurrentWeekStr(w => offsetWeek(w, -1))}>
-                <ChevronLeft className="w-4 h-4" />
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-muted" onClick={() => setCurrentWeekStr(w => offsetWeek(w, -1))}>
+                <ChevronLeft className="w-5 h-5" />
               </Button>
-              <span className="text-sm font-medium text-foreground min-w-[140px] text-center">{weekRange.label}</span>
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setCurrentWeekStr(w => offsetWeek(w, 1))}>
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => setCurrentWeekStr(getCurrentWeek())}>
-                Hoje
+              <div className="flex flex-col items-center min-w-[160px]">
+                <span className="text-xs font-semibold text-primary uppercase tracking-wider">{currentWeekStr}</span>
+                <span className="text-sm font-medium text-muted-foreground">{weekRange.label}</span>
+              </div>
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-muted" onClick={() => setCurrentWeekStr(w => offsetWeek(w, 1))}>
+                <ChevronRight className="w-5 h-5" />
               </Button>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-2 rounded-xl border bg-card">
-              <span className="text-xs font-medium text-muted-foreground">PPC</span>
-              <span className={`text-lg font-display font-bold ${ppcColor}`}>{ppc !== null ? `${ppc}%` : '—'}</span>
+            <div className="h-10 w-px bg-border/60 mx-2 hidden sm:block" />
+
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden sm:block">
+                <p className="text-[10px] uppercase tracking-tighter font-bold text-muted-foreground">Progresso Semanal</p>
+                <p className={`text-xl font-display font-black leading-none ${ppcColor}`}>{ppc !== null ? `${ppc}%` : '—'}</p>
+              </div>
+              <div className={`h-11 w-11 rounded-xl flex items-center justify-center border-2 ${ppcColor.replace('text-', 'border-').replace('text-', 'bg-')}/10 ${ppcColor}`}>
+                <BarChart3 className="w-6 h-6" />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Semanal Tab */}
-        <TabsContent value="semanal" className="mt-5 space-y-5">
-          {/* Add tasks from planning */}
-          {availableTasks.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-muted-foreground">Adicionar do planejamento:</span>
+        {/* Semanal Tab Contents */}
+        <TabsContent value="semanal" className="mt-6 space-y-6">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="bg-primary/10 p-2 rounded-lg">
+                <Plus className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-foreground leading-tight">Plano de Trabalho Semanal</h3>
+                <p className="text-xs text-muted-foreground">Adicione atividades do cronograma geral para execução esta semana</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
               <Select onValueChange={v => {
                 const task = tasks.find(t => t.id === v);
                 if (task) handleAddFromPlanning(task);
               }}>
-                <SelectTrigger className="h-8 w-[250px] text-xs rounded-xl">
-                  <SelectValue placeholder="Selecionar tarefa..." />
+                <SelectTrigger className="h-10 w-[240px] rounded-xl bg-card">
+                  <SelectValue placeholder="Selecionar do planejamento..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableTasks.map(t => (
+                  {tasks.filter(t => !weekPlans.some(p => p.taskId === t.id)).map(t => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <Button onClick={() => closeWeek(project.id)} className="rounded-xl h-10 px-6 font-semibold shadow-lg shadow-primary/20">
+                Fechar Semana
+              </Button>
             </div>
-          )}
-
-          {/* Weekly table */}
-          <div className="card-elevated overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: '900px' }}>
-              <thead>
-                <tr className="border-b bg-muted/30">
-                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Tarefa</th>
-                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Responsável</th>
-                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Início</th>
-                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Término</th>
-                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Progresso</th>
-                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Status Lean</th>
-                  <th className="text-left py-3 px-4 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Motivo</th>
-                  <th className="text-center py-3 px-4 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Restrição</th>
-                </tr>
-              </thead>
-              <tbody>
-                {weekPlans.map(plan => {
-                  const linkedTask = tasks.find(t => t.id === plan.taskId);
-                  const stOpt = statusOptions.find(s => s.value === plan.status) || statusOptions[0];
-                  const progress = linkedTask?.percentComplete ?? 0;
-                  const progressColor = progress >= 100 ? 'bg-status-ok' : progress > 0 ? 'bg-accent' : 'bg-muted-foreground/20';
-
-                  return (
-                    <tr key={plan.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                      <td className="py-3 px-4 font-medium text-foreground">{plan.taskName}</td>
-                      <td className="py-3 px-4 text-muted-foreground">{plan.responsible || '—'}</td>
-                      <td className="py-3 px-4 text-muted-foreground">{linkedTask ? formatDate(linkedTask.startDate) : '—'}</td>
-                      <td className="py-3 px-4 text-muted-foreground">{linkedTask ? formatDate(linkedTask.endDate) : '—'}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2 min-w-[100px]">
-                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: progress > 0 ? 'hsl(243 76% 58%)' : 'hsl(228 15% 80%)' }} />
-                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div className={`h-full rounded-full ${progressColor} transition-all`} style={{ width: `${progress}%` }} />
-                          </div>
-                          <span className="text-xs font-medium w-8 text-right">{progress}%</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Select value={plan.status} onValueChange={v => handleChange(plan, 'status', v)}>
-                          <SelectTrigger className="h-8 text-xs border-0 bg-transparent px-0 w-[140px]">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${stOpt.color}`}>
-                              {stOpt.label}
-                            </span>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {statusOptions.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="py-3 px-4">
-                        {plan.status === 'not_completed' ? (
-                          <Input
-                            className="h-8 text-sm border-0 bg-transparent px-1"
-                            value={plan.reason}
-                            onChange={e => handleChange(plan, 'reason', e.target.value)}
-                            placeholder="Motivo..."
-                          />
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {linkedTask?.hasRestriction ? (
-                          <AlertTriangle className="w-4 h-4 text-status-warning mx-auto" />
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {weekPlans.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
-                      Selecione tarefas do planejamento para adicionar à semana
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end">
-            <Button onClick={handleCloseWeek} className="rounded-xl gap-2 px-6">
-              Fechar Semana
+          <div className="grid grid-cols-1 gap-4">
+            {weekPlans.length > 0 ? (
+              <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-muted/30 border-b border-border/50">
+                      <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
+                        <div className="py-4 px-4 min-w-[200px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Atividade</span>
+                        </div>
+                      </th>
+                      <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
+                        <div className="py-4 px-4 min-w-[120px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Responsável</span>
+                        </div>
+                      </th>
+                      <th className="p-0 text-center border-r border-border/50 last:border-0 relative group">
+                        <div className="py-4 px-4 min-w-[180px] overflow-hidden flex justify-center" style={{ resize: 'horizontal' }}>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground shrink-0">Status</span>
+                        </div>
+                      </th>
+                      <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
+                        <div className="py-4 px-4 min-w-[140px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Restrições</span>
+                        </div>
+                      </th>
+                      <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
+                        <div className="py-4 px-4 min-w-[250px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Motivo/Obs</span>
+                        </div>
+                      </th>
+                      <th className="py-4 px-4 text-right w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {weekPlans.map(plan => {
+                      const linkedTask = tasks.find(t => t.id === plan.taskId);
+                      const stOpt = statusOptions.find(s => s.value === plan.status) || statusOptions[0];
+                      const taskConstraints = constraints.filter(c => c.taskId === plan.taskId && c.status === 'open');
+                      
+                      return (
+                        <tr key={plan.id} className="group hover:bg-muted/10 transition-colors">
+                          <td className="py-4 px-6">
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold text-foreground">{plan.taskName}</span>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Clock className="w-3 h-3 text-muted-foreground" />
+                                <span className="text-[10px] font-medium text-muted-foreground uppercase tabular-nums">
+                                  {linkedTask ? `${formatDate(linkedTask.startDate)} → ${formatDate(linkedTask.endDate)}` : '—'}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 text-sm text-muted-foreground font-medium">
+                            {plan.responsible || 'Sem resp.'}
+                          </td>
+                          <td className="py-4 px-6">
+                            <Select value={plan.status} onValueChange={v => updateWeeklyPlan({ ...plan, status: v as any })}>
+                              <SelectTrigger className="h-8 w-full min-w-[150px] rounded-lg border-0 bg-transparent hover:bg-muted font-bold text-xs mx-auto">
+                                <span className={`flex items-center justify-center px-3 py-1 rounded-full w-full ${stOpt.color}`}>
+                                  {stOpt.label}
+                                </span>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {statusOptions.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-1.5">
+                              {taskConstraints.length > 0 ? (
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  <span className="text-[10px] font-black uppercase">{taskConstraints.length} Aberta(s)</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span className="text-[10px] font-black uppercase">Liberada</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <Input
+                              className="h-8 text-xs bg-transparent border-0 border-b border-transparent focus-visible:border-primary shadow-none rounded-none p-0 italic text-muted-foreground placeholder:text-muted-foreground/30"
+                              defaultValue={plan.reason || plan.observations || ''}
+                              onBlur={e => {
+                                const val = e.target.value;
+                                if (val !== (plan.reason || plan.observations || '')) {
+                                  updateWeeklyPlan({ ...plan, observations: val });
+                                }
+                              }}
+                              placeholder="Anote o motivo do desvio ou observações..."
+                            />
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteWeeklyPlan(plan.id)}>
+                              <Trash2 className="w-4 h-4 text-destructive/60 hover:text-destructive" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="py-20 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border/50 bg-muted/20">
+                <Calendar className="w-12 h-12 text-muted-foreground/30 mb-4" />
+                <h4 className="text-base font-bold text-muted-foreground">Nenhuma atividade planejada</h4>
+                <p className="text-xs text-muted-foreground/70 max-w-[280px] text-center mt-1">Arraste ou selecione atividades do planejamento mestre para compor o plano desta semana.</p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Lookahead Tab Contents */}
+        <TabsContent value="lookahead" className="mt-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-foreground">Lookahead (Horizonte 4 Semanas)</h3>
+              <p className="text-xs text-muted-foreground">Análise de restrições e processo de "Make Ready"</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-xl border border-border/50 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Liberada</div>
+                <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500" /> C/ Restrição</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {lookaheadWeeks.map(w => {
+              const weekTasks = sortedTasks.filter(t => {
+                const startDate = new Date(t.startDate + 'T00:00:00');
+                const endDate = new Date(t.endDate + 'T23:59:59');
+                return (startDate <= w.range.end && endDate >= w.range.start);
+              });
+
+              return (
+                <div key={w.weekStr} className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                  <div className="bg-muted/30 px-6 py-3 border-b border-border/50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-black text-primary">{w.weekStr}</span>
+                      <span className="text-xs font-bold text-muted-foreground">{w.label}</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">{weekTasks.length} Atividades</span>
+                  </div>
+                  <div className="px-6 py-2 divide-y divide-border/40">
+                    {weekTasks.map(t => {
+                      const openConstrs = constraints.filter(c => c.taskId === t.id && c.status === 'open');
+                      const progressColor = t.percentComplete >= 100 ? 'bg-status-ok' : t.percentComplete > 0 ? 'bg-accent' : 'bg-muted-foreground/20';
+
+                      return (
+                        <div key={t.id} className="py-4 flex items-center justify-between group">
+                          <div className="flex items-center gap-4 flex-1">
+                            <div className={`w-1 h-10 rounded-full ${openConstrs.length > 0 ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]'}`} />
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold text-foreground">{t.name}</span>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-[10px] font-bold text-muted-foreground uppercase">{t.responsible || 'Sem resp.'}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-20 h-1 rounded-full bg-muted overflow-hidden">
+                                    <div className={`h-full ${progressColor}`} style={{ width: `${t.percentComplete}%` }} />
+                                  </div>
+                                  <span className="text-[10px] font-bold text-muted-foreground">{t.percentComplete}%</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4">
+                            {openConstrs.length > 0 ? (
+                              <div className="flex flex-col items-end">
+                                <div className="flex flex-wrap gap-1 justify-end max-w-[200px]">
+                                  {openConstrs.slice(0, 3).map(c => (
+                                    <div key={c.id} className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20 whitespace-nowrap">
+                                      {c.description}
+                                    </div>
+                                  ))}
+                                  {openConstrs.length > 3 && <div className="text-[9px] font-bold text-muted-foreground">+{openConstrs.length - 3}</div>}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-emerald-600">
+                                <CheckCircle2 className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-wider">Livre</span>
+                              </div>
+                            )}
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 rounded-lg text-xs gap-1.5 hover:bg-muted font-bold"
+                              onClick={() => {
+                                setNewConstraint({ ...newConstraint, taskId: t.id });
+                                setShowAddConstraint(true);
+                                setActiveTab('restricoes');
+                              }}
+                            >
+                              <Plus className="w-3 h-3" /> Restrição
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {weekTasks.length === 0 && (
+                      <div className="py-8 text-center text-muted-foreground/60 text-xs italic">Nenhuma atividade prevista para esta semana no cronograma geral.</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </TabsContent>
+
+        {/* Restrições Tab Contents */}
+        <TabsContent value="restricoes" className="mt-6 space-y-6">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-500/10 p-2 rounded-lg text-amber-600 border border-amber-500/20">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground leading-tight">Gestão de Restrições (Log de Impedimentos)</h3>
+                <p className="text-xs text-muted-foreground">Acompanhamento de pendências que impedem o início das tarefas</p>
+              </div>
+            </div>
+
+            <Button onClick={() => setShowAddConstraint(!showAddConstraint)} variant={showAddConstraint ? "outline" : "default"} className="rounded-xl h-10 gap-2 font-bold transition-all">
+              {showAddConstraint ? <ChevronLeft className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {showAddConstraint ? "Voltar ao Log" : "Nova Restrição"}
             </Button>
           </div>
 
-          {/* PPC History badges */}
-          {history.length > 0 && (
-            <div className="card-elevated p-5">
-              <h3 className="font-display font-bold text-sm mb-4">Histórico PPC por Semana</h3>
-              <div className="flex flex-wrap gap-3">
-                {history.sort((a, b) => a.week.localeCompare(b.week)).map(h => {
-                  const range = getWeekRange(h.week);
-                  const bgColor = h.ppc >= 80
-                    ? 'bg-[hsl(152_60%_42%/0.08)] border-[hsl(152_60%_42%/0.2)]'
-                    : h.ppc >= 60
-                    ? 'bg-[hsl(38_92%_50%/0.08)] border-[hsl(38_92%_50%/0.2)]'
-                    : 'bg-destructive/5 border-destructive/20';
-                  const textColor = h.ppc >= 80 ? 'text-status-ok' : h.ppc >= 60 ? 'text-status-warning' : 'text-destructive';
+          {showAddConstraint ? (
+            <div className="card-elevated p-6 animate-in fade-in slide-in-from-top-4 duration-300">
+              <h4 className="font-bold text-base mb-4 flex items-center gap-2">
+                <Plus className="w-4 h-4 text-primary" /> Registrar Impedimento / Restrição
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Tarefa Vinculada</label>
+                  <Select value={newConstraint.taskId} onValueChange={v => setNewConstraint({ ...newConstraint, taskId: v })}>
+                    <SelectTrigger className="rounded-xl h-11">
+                      <SelectValue placeholder="Opcional (Sem vínculo)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhuma (Geral da Obra)</SelectItem>
+                      {tasks.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  return (
-                    <div key={h.id} className={`flex flex-col items-center px-4 py-2.5 rounded-xl border ${bgColor}`}>
-                      <span className="text-[10px] text-muted-foreground">{range.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
-                      <span className={`text-lg font-display font-bold ${textColor}`}>{h.ppc}%</span>
-                    </div>
-                  );
-                })}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Categoria</label>
+                  <Select value={newConstraint.category} onValueChange={v => setNewConstraint({ ...newConstraint, category: v as any })}>
+                    <SelectTrigger className="rounded-xl h-11">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONSTRAINT_CATEGORIES.map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${cat.color.split(' ')[0]}`} />
+                            {cat.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Descrição do Impedimento</label>
+                  <Input 
+                    placeholder="Ex: Definir cor do forro na sala técnica..." 
+                    value={newConstraint.description} 
+                    onChange={e => setNewConstraint({ ...newConstraint, description: e.target.value })}
+                    className="rounded-xl h-11 shadow-inner bg-muted/30"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Quem Resolve? (Responsável)</label>
+                  <Input 
+                    placeholder="Nome do responsável..." 
+                    value={newConstraint.responsible} 
+                    onChange={e => setNewConstraint({ ...newConstraint, responsible: e.target.value })}
+                    className="rounded-xl h-11"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Data Limite (Deadline)</label>
+                  <Input 
+                    type="date" 
+                    value={newConstraint.dueDate} 
+                    onChange={e => setNewConstraint({ ...newConstraint, dueDate: e.target.value })}
+                    className="rounded-xl h-11"
+                  />
+                </div>
               </div>
-            </div>
-          )}
-        </TabsContent>
 
-        {/* Lookahead Tab */}
-        <TabsContent value="lookahead" className="mt-5">
-          <div className="card-elevated p-8 text-center text-muted-foreground text-sm">
-            Lookahead — planejamento de 3 a 6 semanas à frente (em desenvolvimento)
-          </div>
-        </TabsContent>
-
-        {/* Indicadores Tab */}
-        <TabsContent value="indicadores" className="mt-5 space-y-5">
-          {chartData.length > 0 ? (
-            <div className="card-elevated p-6">
-              <h3 className="font-display font-bold text-base mb-5">Evolução do PPC</h3>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(228 15% 90%)" />
-                    <XAxis dataKey="week" tick={{ fontSize: 10 }} stroke="hsl(224 10% 48%)" />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} stroke="hsl(224 10% 48%)" tickFormatter={v => `${v}%`} />
-                    <Tooltip />
-                    <ReferenceLine y={80} stroke="hsl(152 60% 42%)" strokeDasharray="4 4" label="Meta 80%" />
-                    <Line type="monotone" dataKey="PPC" stroke="hsl(243 76% 58%)" strokeWidth={2} dot={{ r: 4, fill: 'hsl(243 76% 58%)' }} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div className="mt-8 flex justify-end gap-3">
+                <Button variant="ghost" onClick={() => setShowAddConstraint(false)} className="rounded-xl px-6">Cancelar</Button>
+                <Button onClick={handleCreateConstraint} className="rounded-xl px-8 font-bold shadow-lg shadow-primary/20">Registrar Impedimento</Button>
               </div>
             </div>
           ) : (
-            <div className="card-elevated p-12 text-center text-muted-foreground text-sm">
-              Feche semanas para ver os indicadores de PPC
+            <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/30 border-b border-border/50">
+                    <th className="py-4 px-6 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">H</th>
+                    <th className="py-4 px-6 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Restrição / Pendência</th>
+                    <th className="py-4 px-6 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Tarefa Alvo</th>
+                    <th className="py-4 px-6 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prazo</th>
+                    <th className="py-4 px-6 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Responsável</th>
+                    <th className="py-4 px-6 text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {constraints.sort((a,b) => (a.status === 'open' ? -1 : 1)).map(c => {
+                    const cat = CONSTRAINT_CATEGORIES.find(cat => cat.id === c.category) || CONSTRAINT_CATEGORIES[5];
+                    const linkedTask = tasks.find(t => t.id === c.taskId);
+                    const isOverdue = c.status === 'open' && c.dueDate && new Date(c.dueDate) < new Date();
+                    
+                    return (
+                      <tr key={c.id} className={`group ${c.status === 'closed' ? 'opacity-50' : ''} hover:bg-muted/10 transition-colors`}>
+                        <td className="py-4 px-6">
+                           <div className={`w-1.5 h-8 rounded-full ${c.status === 'closed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex flex-col">
+                            <span className={`font-bold ${c.status === 'closed' ? 'line-through' : 'text-foreground'}`}>{c.description}</span>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${cat.color}`}>{cat.label}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 font-medium text-xs text-muted-foreground italic">
+                          {linkedTask ? linkedTask.name : 'Geral da Obra'}
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          <div className="flex flex-col items-center">
+                            <span className={`text-xs font-bold ${isOverdue ? 'text-destructive animate-pulse' : 'text-foreground'}`}>
+                              {c.dueDate ? formatDate(c.dueDate) : 'Sem prazo'}
+                            </span>
+                            {isOverdue && <span className="text-[8px] font-black tracking-tighter uppercase text-destructive">Atrasado</span>}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 text-sm font-medium text-muted-foreground uppercase">{c.responsible || '—'}</td>
+                        <td className="py-4 px-6 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button 
+                              variant={c.status === 'open' ? 'outline' : 'ghost'} 
+                              size="sm" 
+                              className={`h-8 rounded-lg text-xs gap-1.5 font-bold transition-all ${c.status === 'open' ? 'hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200' : 'text-emerald-600 bg-emerald-50'}`}
+                              onClick={() => toggleConstraintStatus(c)}
+                            >
+                              {c.status === 'open' ? (
+                                <>
+                                  <Unlock className="w-3 h-3 text-amber-500" /> Liberar
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="w-3 h-3" /> OK
+                                </>
+                              )}
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteConstraint(c.id)}>
+                              <Trash2 className="w-4 h-4 text-destructive/40" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {constraints.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-muted-foreground text-sm flex flex-col items-center justify-center">
+                        <CheckCircle2 className="w-10 h-10 text-emerald-500/20 mb-3" />
+                        Obra sem restrições ativas. Comece analisando o Lookahead.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
+        </TabsContent>
 
-          {/* Delay reasons ranking */}
-          {(() => {
-            const reasonCount: Record<string, number> = {};
-            plans.filter(p => p.status === 'not_completed' && p.reason).forEach(p => {
-              reasonCount[p.reason] = (reasonCount[p.reason] || 0) + 1;
-            });
-            const ranked = Object.entries(reasonCount).sort((a, b) => b[1] - a[1]);
-            if (ranked.length === 0) return null;
-            return (
-              <div className="card-elevated p-6">
-                <h3 className="font-display font-bold text-base mb-4">Motivos de Não Cumprimento</h3>
-                <div className="space-y-2.5">
-                  {ranked.map(([reason, count]) => (
-                    <div key={reason} className="flex items-center justify-between text-sm">
-                      <span className="text-foreground">{reason}</span>
-                      <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">{count}x</span>
+        {/* Indicadores Tab Contents */}
+        <TabsContent value="indicadores" className="mt-6 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Chart */}
+            <div className="lg:col-span-2 card-elevated p-8">
+               <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Performance Semanal (PPC)</h3>
+                    <p className="text-xs text-muted-foreground">Percentual de Pacotes Completados por semana</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Meta de Obra</p>
+                      <p className="text-sm font-black text-status-ok uppercase tracking-wider">85%</p>
                     </div>
-                  ))}
+                  </div>
+               </div>
+               
+               {chartData.length > 0 ? (
+                 <div className="h-72">
+                   <ResponsiveContainer width="100%" height="100%">
+                     <LineChart data={chartData}>
+                       <defs>
+                         <linearGradient id="ppcGradient" x1="0" y1="0" x2="0" y2="1">
+                           <stop offset="5%" stopColor="hsl(243 76% 58%)" stopOpacity={0.1}/>
+                           <stop offset="95%" stopColor="hsl(243 76% 58%)" stopOpacity={0}/>
+                         </linearGradient>
+                       </defs>
+                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(228 15% 90%)" />
+                       <XAxis 
+                         dataKey="week" 
+                         axisLine={false}
+                         tickLine={false}
+                         tick={{ fontSize: 10, fontWeight: 700 }} 
+                         stroke="hsl(224 10% 48%)" 
+                         dy={10}
+                       />
+                       <YAxis 
+                         domain={[0, 100]} 
+                         axisLine={false}
+                         tickLine={false}
+                         tick={{ fontSize: 10, fontWeight: 600 }} 
+                         stroke="hsl(224 10% 48%)" 
+                         tickFormatter={v => `${v}%`} 
+                       />
+                       <Tooltip 
+                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                         labelStyle={{ fontWeight: 800, fontSize: '12px', color: '#1e293b', marginBottom: '4px' }}
+                       />
+                       <ReferenceLine y={80} stroke="hsl(152 60% 42%)" strokeDasharray="3 3" strokeWidth={1.5} />
+                       <Line 
+                         type="monotone" 
+                         dataKey="PPC" 
+                         stroke="hsl(243 76% 58%)" 
+                         strokeWidth={4} 
+                         dot={{ r: 6, fill: '#fff', stroke: 'hsl(243 76% 58%)', strokeWidth: 3 }}
+                         activeDot={{ r: 8, fill: 'hsl(243 76% 58%)', stroke: '#fff', strokeWidth: 3 }}
+                         animationDuration={2000}
+                       />
+                     </LineChart>
+                   </ResponsiveContainer>
+                 </div>
+               ) : (
+                 <div className="flex flex-col items-center justify-center h-72 text-muted-foreground/50 italic border-2 border-dashed border-border/30 rounded-2xl">
+                    Aguardando encerramento da primeira semana...
+                 </div>
+               )}
+            </div>
+
+            {/* Sidebar Stats */}
+            <div className="space-y-6">
+              <div className="card-elevated p-6 bg-gradient-to-br from-primary/5 to-transparent border-primary/20">
+                <h4 className="text-xs font-black uppercase tracking-widest text-primary mb-5 flex items-center gap-2">
+                  <Clock className="w-4 h-4" /> Resumo de Campo
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Pacotes Exec.</p>
+                    <p className="text-2xl font-black text-foreground">{weekPlans.length}</p>
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Concluídos</p>
+                    <p className="text-2xl font-black text-status-ok">{weekCompleted}</p>
+                  </div>
                 </div>
               </div>
-            );
-          })()}
+
+              {(() => {
+                const reasonCount: Record<string, number> = {};
+                plans.filter(p => p.status === 'not_completed' && (p.reason || p.observations)).forEach(p => {
+                  const r = p.reason || p.observations || 'Outros';
+                  reasonCount[r] = (reasonCount[r] || 0) + 1;
+                });
+                const ranked = Object.entries(reasonCount).sort((a, b) => b[1] - a[1]);
+                return (
+                  <div className="card-elevated p-6">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-foreground mb-4">Motivos de Não Cumprimento</h4>
+                    <div className="space-y-3">
+                      {ranked.length > 0 ? ranked.map(([reason, count]) => (
+                        <div key={reason} className="group flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition-colors">
+                          <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground truncate max-w-[150px]">{reason}</span>
+                          <span className="text-[10px] font-black bg-muted px-2 py-0.5 rounded-full">{count}x</span>
+                        </div>
+                      )) : (
+                        <div className="text-[10px] text-muted-foreground/60 italic text-center py-4">Sem falhas registradas.</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

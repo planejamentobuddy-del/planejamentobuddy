@@ -6,10 +6,11 @@ import { motion } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart, ComposedChart } from 'recharts';
 
 export default function DashboardTab({ project }: { project: Project }) {
-  const { getTasksForProject, getPlansForProject, getHistoryForProject } = useProjects();
+  const { getTasksForProject, getPlansForProject, getHistoryForProject, getConstraintsForProject } = useProjects();
   const tasks = getTasksForProject(project.id);
   const plans = getPlansForProject(project.id);
   const history = getHistoryForProject(project.id);
+  const constraints = getConstraintsForProject(project.id);
   const progress = getProjectProgress(tasks);
   const status = getProjectStatus(tasks);
   const estimated = getEstimatedEndDate(project, tasks);
@@ -17,9 +18,9 @@ export default function DashboardTab({ project }: { project: Project }) {
   const delayed = tasks.filter(t => t.endDate < now && t.percentComplete < 100);
   const currentWeek = getCurrentWeek();
   const weekPlans = plans.filter(p => p.week === currentWeek);
-  const weekCompleted = weekPlans.filter(p => p.status === 'completed').length;
+  const weekCompleted = weekPlans.filter(p => p.status === 'completed' || p.status === 'in_progress').length;
   const ppc = weekPlans.length > 0 ? Math.round((weekCompleted / weekPlans.length) * 100) : null;
-  const restrictions = tasks.filter(t => t.hasRestriction);
+  const restrictions = constraints.filter(c => c.status === 'open');
 
   const delayDays = (() => {
     const est = new Date(estimated).getTime();
