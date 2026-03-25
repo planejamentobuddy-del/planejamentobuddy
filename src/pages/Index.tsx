@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar } from 'lucide-react';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useProjects } from '@/hooks/useProjects';
+import { useAuth } from '@/hooks/useAuth';
 import { getProjectProgress, getProjectStatus, getEstimatedEndDate } from '@/types/project';
 
 const statusConfig = {
@@ -18,6 +19,7 @@ const statusConfig = {
 
 export default function Index() {
   const { projects, addProject, getTasksForProject } = useProjects();
+  const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: '', startDate: '', endDate: '', description: '' });
@@ -40,42 +42,54 @@ export default function Index() {
             </div>
             <div>
               <h1 className="text-xl font-display font-bold text-foreground">Planejamento Buddy</h1>
-              <p className="text-xs text-muted-foreground">Construtora</p>
+              <p className="text-xs text-muted-foreground">
+                Olá, {profile?.full_name || 'Usuário'}
+              </p>
             </div>
           </div>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="w-4 h-4" /> Nova Obra
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button variant="outline" className="gap-2 rounded-xl" onClick={() => navigate('/admin/users')}>
+                <Shield className="w-4 h-4" /> Usuários
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="font-display">Nova Obra</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
-                <div>
-                  <Label>Nome da obra</Label>
-                  <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Residencial Alfa" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+            )}
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <Plus className="w-4 h-4" /> Nova Obra
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="font-display">Nova Obra</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
                   <div>
-                    <Label>Data de início</Label>
-                    <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
+                    <Label>Nome da obra</Label>
+                    <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Residencial Alfa" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Data de início</Label>
+                      <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label>Previsão de término</Label>
+                      <Input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
+                    </div>
                   </div>
                   <div>
-                    <Label>Previsão de término</Label>
-                    <Input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
+                    <Label>Descrição</Label>
+                    <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descrição da obra" />
                   </div>
+                  <Button onClick={handleCreate} className="w-full">Criar Obra</Button>
                 </div>
-                <div>
-                  <Label>Descrição</Label>
-                  <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descrição da obra" />
-                </div>
-                <Button onClick={handleCreate} className="w-full">Criar Obra</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+            <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => signOut()} title="Sair">
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </header>
 
