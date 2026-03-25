@@ -84,6 +84,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           restrictionType: t.restriction_type || '',
           status: t.status as any,
           observations: t.observations || '',
+          checklists: (Array.isArray(t.checklists) ? t.checklists : []) as ChecklistItem[],
         })));
       }
 
@@ -192,6 +193,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         restriction_type: task.restrictionType,
         status: task.status,
         observations: task.observations,
+        checklists: (task.checklists as any) || [],
       }])
       .select()
       .single();
@@ -217,6 +219,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       restrictionType: data.restriction_type || '',
       status: data.status as any,
       observations: data.observations || '',
+      checklists: (Array.isArray(data.checklists) ? data.checklists : []) as ChecklistItem[],
     };
     setTasks(prev => [...prev, newTask]);
     return newTask;
@@ -249,6 +252,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         restriction_type: task.restrictionType,
         status: task.status,
         observations: task.observations,
+        checklists: (task.checklists as any) || [],
       })
       .eq('id', task.id);
 

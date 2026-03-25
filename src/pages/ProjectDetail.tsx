@@ -67,11 +67,7 @@ export default function ProjectDetail() {
             <p className="text-xs text-muted-foreground">Gestão de Cronograma</p>
           </div>
 
-          {/* Critical Path button */}
-          <Button variant="outline" size="sm" className="rounded-xl gap-2 border-primary/20 text-primary hover:bg-primary/5 shrink-0">
-            <AlertTriangle className="w-4 h-4" />
-            Caminho Crítico
-          </Button>
+
         </div>
       </header>
 

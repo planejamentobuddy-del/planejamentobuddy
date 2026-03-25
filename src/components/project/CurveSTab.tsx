@@ -1,61 +1,68 @@
-import { Project } from '@/types/project';
+import { Project, calculateSCurve } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function CurveSTab({ project }: { project: Project }) {
-  const { getTasksForProject } = useProjects();
+  const { getTasksForProject, loading } = useProjects();
   const tasks = getTasksForProject(project.id);
 
-  const chartData = useMemo(() => {
-    if (tasks.length === 0) return [];
-    const start = new Date(project.startDate).getTime();
-    const end = new Date(project.endDate).getTime();
-    const totalDuration = end - start;
-    const now = Date.now();
-    const points: { label: string; planejado: number; realizado: number }[] = [];
-    
-    // Generate weekly points
-    const weekMs = 7 * 86400000;
-    let current = start;
-    while (current <= end + weekMs) {
-      const elapsed = current - start;
-      const planned = Math.min(100, Math.round((elapsed / totalDuration) * 100));
-      
-      // Realized: based on tasks that should be done by this date
-      let realized = 0;
-      if (current <= now) {
-        const tasksInScope = tasks.filter(t => new Date(t.startDate).getTime() <= current);
-        if (tasksInScope.length > 0) {
-          realized = Math.round(tasksInScope.reduce((s, t) => s + t.percentComplete, 0) / tasks.length);
-        }
-      }
+  const chartData = useMemo(() => calculateSCurve(tasks, project), [tasks, project]);
 
-      points.push({
-        label: new Date(current).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-        planejado: planned,
-        realizado: current <= now ? realized : 0,
-      });
-      current += weekMs;
-    }
-    return points;
-  }, [tasks, project]);
 
-  const lastPoint = chartData.filter(p => p.realizado > 0).pop();
-  const diff = lastPoint ? lastPoint.planejado - lastPoint.realizado : 0;
+  const nowTs = useMemo(() => {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    return d.getTime();
+  }, []);
+
+  const summaryPoint = useMemo(() => {
+    if (chartData.length === 0) return null;
+    // Find last point that is not in the future (compared to Today)
+    const pastPoints = chartData.filter(p => p.timestamp <= nowTs);
+    return pastPoints.length > 0 ? pastPoints[pastPoints.length - 1] : chartData[0];
+  }, [chartData, nowTs]);
+
+  const diff = summaryPoint ? summaryPoint.planejado - summaryPoint.realizado : 0;
+  const totalProgress = summaryPoint ? summaryPoint.realizado : 0;
+  const status = diff > 10 ? 'Atrasado' : diff > 0 ? 'Atenção' : 'No prazo';
+  const statusColor = diff > 10 ? 'text-status-danger bg-status-danger/10' : diff > 0 ? 'text-status-warning bg-status-warning/10' : 'text-status-ok bg-status-ok/10';
+
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="font-display font-semibold text-lg">Curva S</h2>
-        {lastPoint && (
-          <span className={`text-sm font-medium ${diff > 10 ? 'text-status-danger' : diff > 0 ? 'text-status-warning' : 'text-status-ok'}`}>
-            {diff > 0 ? `${diff}% abaixo do planejado` : diff === 0 ? 'No prazo' : `${Math.abs(diff)}% adiantado`}
-          </span>
-        )}
+        <h2 className="font-display font-bold text-xl text-foreground">Curva S — Progresso da Obra</h2>
       </div>
 
-      {chartData.length === 0 ? (
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="card-elevated p-6 space-y-1">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Progresso Total</p>
+          <p className="text-3xl font-display font-bold text-foreground">{totalProgress}%</p>
+        </div>
+        
+        <div className="card-elevated p-6 space-y-1">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Desvio</p>
+          <p className={`text-3xl font-display font-bold ${diff > 0 ? 'text-status-danger' : 'text-status-ok'}`}>
+            {diff > 0 ? `-${diff.toFixed(1)}%` : `+${Math.abs(diff).toFixed(1)}%`}
+          </p>
+        </div>
+
+        <div className="card-elevated p-6 space-y-1">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</p>
+          <div className="pt-1">
+            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${statusColor}`}>
+              {status}
+            </span>
+          </div>
+        </div>
+      </div>
+
+
+      {loading ? (
+        <div className="card-elevated p-8 text-center text-muted-foreground">Carregando dados...</div>
+      ) : chartData.length === 0 ? (
         <div className="card-elevated p-8 text-center text-muted-foreground">Adicione tarefas no Planejamento para visualizar a Curva S</div>
       ) : (
         <div className="card-elevated p-5">

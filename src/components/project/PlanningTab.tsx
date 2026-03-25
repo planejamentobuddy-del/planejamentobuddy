@@ -22,6 +22,34 @@ function isOverdue(task: Task): boolean {
   return task.endDate < now;
 }
 
+function getBusinessDays(startDateStr: string, endDateStr: string): number {
+  if (!startDateStr || !endDateStr) return 0;
+  const start = new Date(startDateStr + 'T12:00:00');
+  const end = new Date(endDateStr + 'T12:00:00');
+  if (start > end) return 0;
+  let days = 1;
+  let current = new Date(start);
+  while (current < end) {
+    current.setDate(current.getDate() + 1);
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) days++;
+  }
+  return days;
+}
+
+function addBusinessDays(startDateStr: string, duration: number): string {
+  if (!startDateStr || duration < 1) return startDateStr;
+  const d = new Date(startDateStr + 'T12:00:00');
+  let added = 1;
+  while (added < duration) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) added++;
+  }
+  return d.toISOString().split('T')[0];
+}
+
+
 export default function PlanningTab({ project }: { project: Project }) {
   const { getTasksForProject, addTask, updateTask, deleteTask } = useProjects();
   const { isAdmin } = useAuth();
@@ -67,16 +95,14 @@ export default function PlanningTab({ project }: { project: Project }) {
     const ends = subs.map(t => t.endDate).filter(Boolean).sort();
     const startDate = starts[0] || '';
     const endDate = ends[ends.length - 1] || '';
-    const duration = startDate && endDate
-      ? Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))
-      : 0;
+    const duration = getBusinessDays(startDate, endDate);
     const hasOverdue = subs.some(t => isOverdue(t));
     return { percent, startDate, endDate, duration, hasOverdue };
   };
 
   const handleAddStage = async () => {
     const start = project.startDate;
-    const end = new Date(new Date(start).getTime() + 7 * 86400000).toISOString().split('T')[0];
+    const end = addBusinessDays(start, 7);
     const task = await addTask({
       projectId: project.id,
       name: 'Nova Etapa',
@@ -99,7 +125,7 @@ export default function PlanningTab({ project }: { project: Project }) {
   const handleAddSubtask = async (stageId: string) => {
     const stage = allTasks.find(t => t.id === stageId);
     const start = stage?.startDate || project.startDate;
-    const end = new Date(new Date(start).getTime() + 7 * 86400000).toISOString().split('T')[0];
+    const end = addBusinessDays(start, 7);
     await addTask({
       projectId: project.id,
       parentId: stageId,
@@ -124,14 +150,35 @@ export default function PlanningTab({ project }: { project: Project }) {
       if (value.length < 10 || isNaN(new Date(value).getTime())) return;
     }
     const updated = { ...task, [field]: value };
+
+    // ── Fix 3: When predecessors change, auto-adjust start/end dates ──
+    if (field === 'predecessors') {
+      const predIds: string[] = value;
+      if (predIds.length > 0) {
+        // Find the latest end date among all predecessors
+        const predTasks = allTasks.filter(t => predIds.includes(t.id));
+        if (predTasks.length > 0) {
+          const latestEnd = predTasks
+            .map(p => p.endDate)
+            .sort()
+            .pop()!;
+          // Start = next business day after predecessor ends
+          const newStart = addBusinessDays(latestEnd, 2); // 1 day past = next business day
+          // Keep the same duration, recalculate end
+          const dur = task.duration || 1;
+          const newEnd = addBusinessDays(newStart, dur);
+          updated.startDate = newStart;
+          updated.endDate = newEnd;
+          updated.duration = dur;
+        }
+      }
+    }
+
     if (field === 'startDate' || field === 'endDate') {
-      const s = new Date(updated.startDate).getTime();
-      const e = new Date(updated.endDate).getTime();
-      updated.duration = Math.max(1, Math.round((e - s) / 86400000));
+      updated.duration = Math.max(1, getBusinessDays(updated.startDate, updated.endDate));
     }
     if (field === 'duration') {
-      const s = new Date(updated.startDate).getTime();
-      updated.endDate = new Date(s + value * 86400000).toISOString().split('T')[0];
+      updated.endDate = addBusinessDays(updated.startDate, value);
     }
     if (field === 'percentComplete') {
       updated.percentComplete = Math.min(100, Math.max(0, value));
@@ -140,6 +187,23 @@ export default function PlanningTab({ project }: { project: Project }) {
       else updated.status = 'not_started';
     }
     await updateTask(updated);
+
+    // ── Propagate to successors: cascade date changes ──
+    if (field === 'endDate' || field === 'duration' || field === 'startDate' || field === 'predecessors') {
+      const finalEndDate = updated.endDate;
+      const successors = allTasks.filter(t => t.predecessors.includes(task.id));
+      for (const succ of successors) {
+        const succStart = addBusinessDays(finalEndDate, 2);
+        const succEnd = addBusinessDays(succStart, succ.duration || 1);
+        if (succStart !== succ.startDate || succEnd !== succ.endDate) {
+          await updateTask({
+            ...succ,
+            startDate: succStart,
+            endDate: succEnd,
+          });
+        }
+      }
+    }
   };
 
   const handleDuplicate = async (task: Task) => {

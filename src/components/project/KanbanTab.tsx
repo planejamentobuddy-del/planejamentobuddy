@@ -1,7 +1,8 @@
 import { Project, Task, TaskStatus } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useState } from 'react';
-import { User, Calendar } from 'lucide-react';
+import { User, Calendar, CheckSquare } from 'lucide-react';
+import { TaskDetailModal } from './TaskDetailModal';
 
 function isOverdue(task: Task): boolean {
   if (task.percentComplete >= 100) return false;
@@ -52,6 +53,7 @@ export default function KanbanTab({ project }: { project: Project }) {
   const { getTasksForProject, updateTask } = useProjects();
   const tasks = getTasksForProject(project.id);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const handleDragStart = (id: string) => setDragging(id);
 
@@ -126,7 +128,8 @@ export default function KanbanTab({ project }: { project: Project }) {
                         key={task.id}
                         draggable
                         onDragStart={() => handleDragStart(task.id)}
-                        className="p-3.5 rounded-xl border border-border/40 bg-background cursor-grab active:cursor-grabbing hover:shadow-sm transition-all"
+                        onClick={() => setSelectedTask(task)}
+                        className="p-3.5 rounded-xl border border-border/40 bg-background cursor-grab active:cursor-grabbing hover:shadow-sm hover:border-border/80 transition-all"
                       >
                         <p className="text-sm font-semibold text-foreground mb-2 leading-tight">{task.name}</p>
 
@@ -139,6 +142,13 @@ export default function KanbanTab({ project }: { project: Project }) {
                           <Calendar className="w-3 h-3" />
                           <span>{formatDate(task.startDate)} → {formatDate(task.endDate)}</span>
                         </div>
+
+                        {task.checklists && task.checklists.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-3 bg-muted/40 w-fit px-2 py-0.5 rounded-full border border-border/50">
+                            <CheckSquare className="w-3 h-3 text-primary" />
+                            <span>{task.checklists.filter(c => c.completed).length}/{task.checklists.length}</span>
+                          </div>
+                        )}
 
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
@@ -163,6 +173,15 @@ export default function KanbanTab({ project }: { project: Project }) {
             );
           })}
         </div>
+      )}
+
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          isOpen={!!selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={updateTask}
+        />
       )}
     </div>
   );

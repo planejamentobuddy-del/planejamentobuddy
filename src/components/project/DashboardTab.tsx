@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate, isCriticalPath, getCurrentWeek } from '@/types/project';
+import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate, isCriticalPath, getCurrentWeek, calculateSCurve } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { AlertTriangle, CheckCircle, Clock, TrendingUp, Target, Shield, CalendarClock } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart, ComposedChart } from 'recharts';
 
 export default function DashboardTab({ project }: { project: Project }) {
   const { getTasksForProject, getPlansForProject, getHistoryForProject } = useProjects();
@@ -28,38 +28,22 @@ export default function DashboardTab({ project }: { project: Project }) {
     return diff > 0 ? diff : 0;
   })();
 
-  // Curva S data
-  const curveSData = useMemo(() => {
-    if (tasks.length === 0) return [];
-    const start = new Date(project.startDate).getTime();
-    const end = new Date(project.endDate).getTime();
-    const totalDuration = end - start;
-    const nowMs = Date.now();
-    const points: { label: string; planejado: number; realizado: number }[] = [];
-    const weekMs = 7 * 86400000;
-    let current = start;
-    while (current <= end + weekMs) {
-      const elapsed = current - start;
-      const planned = Math.min(100, Math.round((elapsed / totalDuration) * 100));
-      let realized = 0;
-      if (current <= nowMs) {
-        const tasksInScope = tasks.filter(t => new Date(t.startDate).getTime() <= current);
-        if (tasksInScope.length > 0) {
-          realized = Math.round(tasksInScope.reduce((s, t) => s + t.percentComplete, 0) / tasks.length);
-        }
-      }
-      points.push({
-        label: new Date(current).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-        planejado: planned,
-        realizado: current <= nowMs ? realized : 0,
-      });
-      current += weekMs;
-    }
-    return points;
-  }, [tasks, project]);
+  const curveSData = useMemo(() => calculateSCurve(tasks, project), [tasks, project]);
 
-  const lastCurvePoint = curveSData.filter(p => p.realizado > 0).pop();
+  const nowTs = useMemo(() => {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    return d.getTime();
+  }, []);
+
+  const lastCurvePoint = useMemo(() => {
+    if (curveSData.length === 0) return null;
+    const pastPoints = curveSData.filter(p => p.timestamp <= nowTs);
+    return pastPoints.length > 0 ? pastPoints[pastPoints.length - 1] : curveSData[0];
+  }, [curveSData, nowTs]);
+
   const curveDeviation = lastCurvePoint ? lastCurvePoint.planejado - lastCurvePoint.realizado : 0;
+
 
   // PPC history data
   const ppcChartData = history.sort((a, b) => a.week.localeCompare(b.week)).map(h => ({
@@ -200,21 +184,53 @@ export default function DashboardTab({ project }: { project: Project }) {
           {curveSData.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={curveSData}>
+                <ComposedChart data={curveSData}>
                   <defs>
                     <linearGradient id="plannedGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(243 76% 58%)" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="hsl(243 76% 58%)" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
+                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(228 15% 90%)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="hsl(224 10% 48%)" />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} stroke="hsl(224 10% 48%)" tickFormatter={v => `${v}%`} />
-                  <Tooltip formatter={(v: number) => `${v}%`} />
-                  <Legend />
-                  <Area type="monotone" name="Planejado" dataKey="planejado" stroke="hsl(243 76% 58%)" fill="url(#plannedGradient)" strokeWidth={2} />
-                  <Line type="monotone" name="Real" dataKey="realizado" stroke="hsl(152 60% 42%)" strokeWidth={2.5} dot={{ r: 3, fill: 'hsl(152 60% 42%)' }} />
-                </AreaChart>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
+                  <XAxis 
+                    dataKey="label" 
+                    tick={{ fontSize: 10 }} 
+                    stroke="hsl(var(--muted-foreground))"
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    tick={{ fontSize: 10 }} 
+                    stroke="hsl(var(--muted-foreground))" 
+                    tickFormatter={v => `${v}%`}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip 
+                    formatter={(v: number) => `${v}%`}
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} />
+                  <Area 
+                    type="monotone" 
+                    name="Planejado" 
+                    dataKey="planejado" 
+                    stroke="#2563eb" 
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    fill="url(#plannedGradient)" 
+                  />
+                  <Line 
+                    type="monotone" 
+                    name="Realizado" 
+                    dataKey="realizado" 
+                    stroke="#10b981" 
+                    strokeWidth={3} 
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           ) : (

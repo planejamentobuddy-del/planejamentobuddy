@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 @layer base {
   :root {
@@ -87,6 +87,9 @@
     --sidebar-accent-foreground: 228 15% 85%;
     --sidebar-border: 224 20% 14%;
     --sidebar-ring: 24 90% 55%;
+
+    --chart-planned: 24 90% 55%;
+    --chart-actual: 188 64% 42%;
   }
 }
 

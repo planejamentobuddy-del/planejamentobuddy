@@ -96,6 +96,7 @@ export type Database = {
           status: string
           observations: string | null
           assignee_id: string | null
+          checklists: Json | null
           created_at: string
         }
         Insert: {
@@ -115,6 +116,7 @@ export type Database = {
           status?: string
           observations?: string | null
           assignee_id?: string | null
+          checklists?: Json | null
           created_at?: string
         }
         Update: {
@@ -134,6 +136,7 @@ export type Database = {
           status?: string
           observations?: string | null
           assignee_id?: string | null
+          checklists?: Json | null
           created_at?: string
         }
         Relationships: [
