@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2 } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProjects } from '@/hooks/useProjects';
@@ -9,6 +9,15 @@ import GanttTab from '@/components/project/GanttTab';
 import KanbanTab from '@/components/project/KanbanTab';
 import LeanTab from '@/components/project/LeanTab';
 import CurveSTab from '@/components/project/CurveSTab';
+
+const tabs = [
+  { value: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
+  { value: 'planning', label: 'Planejamento', icon: TableProperties },
+  { value: 'gantt', label: 'Gantt', icon: GanttChart },
+  { value: 'kanban', label: 'Kanban', icon: Columns3 },
+  { value: 'curves', label: 'Curva S', icon: TrendingUp },
+  { value: 'lean', label: 'Lean', icon: Triangle },
+];
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -29,40 +38,57 @@ export default function ProjectDetail() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card sticky top-0 z-30">
-        <div className="container mx-auto flex items-center gap-3 py-3 px-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+      {/* Header */}
+      <header className="bg-card border-b sticky top-0 z-30">
+        <div className="container mx-auto flex items-center gap-4 py-4 px-6">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="shrink-0 rounded-xl hover:bg-muted">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-            <Building2 className="w-4 h-4 text-primary-foreground" />
+
+          {/* Project icon */}
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <LayoutDashboard className="w-5 h-5 text-primary" />
           </div>
+
+          {/* Title */}
           <div className="flex-1 min-w-0">
-            <h1 className="font-display font-bold text-foreground truncate">{project.name}</h1>
-            <p className="text-xs text-muted-foreground">
-              {new Date(project.startDate).toLocaleDateString('pt-BR')} — {new Date(project.endDate).toLocaleDateString('pt-BR')}
-            </p>
+            <div className="flex items-center gap-2">
+              <h1 className="font-display font-bold text-lg text-foreground truncate">{project.name}</h1>
+              <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+            </div>
+            <p className="text-xs text-muted-foreground">Gestão de Cronograma</p>
           </div>
+
+          {/* Critical Path button */}
+          <Button variant="outline" size="sm" className="rounded-xl gap-2 border-primary/20 text-primary hover:bg-primary/5 shrink-0">
+            <AlertTriangle className="w-4 h-4" />
+            Caminho Crítico
+          </Button>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-4">
+      {/* Content */}
+      <div className="container mx-auto px-6 py-5">
         <Tabs defaultValue="dashboard">
-          <TabsList className="mb-4 flex-wrap h-auto gap-1">
-            <TabsTrigger value="dashboard">Visão Geral</TabsTrigger>
-            <TabsTrigger value="planning">Planejamento</TabsTrigger>
-            <TabsTrigger value="gantt">Gantt</TabsTrigger>
-            <TabsTrigger value="kanban">Kanban</TabsTrigger>
-            <TabsTrigger value="lean">Lean</TabsTrigger>
-            <TabsTrigger value="curves">Curva S</TabsTrigger>
+          <TabsList className="mb-6 bg-transparent border-0 p-0 h-auto gap-1 flex-wrap">
+            {tabs.map(tab => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm hover:bg-muted transition-all"
+              >
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           <TabsContent value="dashboard"><DashboardTab project={project} /></TabsContent>
           <TabsContent value="planning"><PlanningTab project={project} /></TabsContent>
           <TabsContent value="gantt"><GanttTab project={project} /></TabsContent>
           <TabsContent value="kanban"><KanbanTab project={project} /></TabsContent>
-          <TabsContent value="lean"><LeanTab project={project} /></TabsContent>
           <TabsContent value="curves"><CurveSTab project={project} /></TabsContent>
+          <TabsContent value="lean"><LeanTab project={project} /></TabsContent>
         </Tabs>
       </div>
     </div>
