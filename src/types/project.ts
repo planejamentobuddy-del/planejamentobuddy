@@ -10,6 +10,7 @@ export interface Project {
 export interface Task {
   id: string;
   projectId: string;
+  parentId?: string; // if set, this is a subtask of that parent
   name: string;
   startDate: string;
   endDate: string;
@@ -20,6 +21,7 @@ export interface Task {
   hasRestriction: boolean;
   restrictionType: string;
   status: TaskStatus;
+  observations?: string;
 }
 
 export type TaskStatus = 'not_started' | 'in_progress' | 'completed' | 'delayed';
