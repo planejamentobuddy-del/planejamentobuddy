@@ -41,6 +41,217 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          start_date: string
+          end_date: string
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          start_date: string
+          end_date: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          start_date?: string
+          end_date?: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      tasks: {
+        Row: {
+          id: string
+          project_id: string
+          parent_id: string | null
+          name: string
+          description: string | null
+          start_date: string
+          end_date: string
+          duration: number
+          percent_complete: number
+          responsible: string | null
+          predecessors: string[] | null
+          has_restriction: boolean
+          restriction_type: string | null
+          status: string
+          observations: string | null
+          assignee_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          parent_id?: string | null
+          name: string
+          description?: string | null
+          start_date: string
+          end_date: string
+          duration?: number
+          percent_complete?: number
+          responsible?: string | null
+          predecessors?: string[] | null
+          has_restriction?: boolean
+          restriction_type?: string | null
+          status?: string
+          observations?: string | null
+          assignee_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          parent_id?: string | null
+          name?: string
+          description?: string | null
+          start_date?: string
+          end_date?: string
+          duration?: number
+          percent_complete?: number
+          responsible?: string | null
+          predecessors?: string[] | null
+          has_restriction?: boolean
+          restriction_type?: string | null
+          status?: string
+          observations?: string | null
+          assignee_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_id_fkey"
+            columns: ["parent_id"]
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_assignee_id_fkey"
+            columns: ["assignee_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      weekly_plans: {
+        Row: {
+          id: string
+          project_id: string
+          task_id: string
+          task_name: string
+          responsible: string | null
+          week: string
+          week_label: string
+          status: string
+          reason: string | null
+          observations: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          task_id: string
+          task_name: string
+          responsible?: string | null
+          week: string
+          week_label: string
+          status?: string
+          reason?: string | null
+          observations?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          task_id?: string
+          task_name?: string
+          responsible?: string | null
+          week?: string
+          week_label?: string
+          status?: string
+          reason?: string | null
+          observations?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_plans_project_id_fkey"
+            columns: ["project_id"]
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plans_task_id_fkey"
+            columns: ["task_id"]
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      weekly_history: {
+        Row: {
+          id: string
+          project_id: string
+          week: string
+          week_label: string
+          planned: number
+          completed: number
+          ppc: number
+          closed_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          week: string
+          week_label: string
+          planned: number
+          completed: number
+          ppc: number
+          closed_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          week?: string
+          week_label?: string
+          planned?: number
+          completed?: number
+          ppc?: number
+          closed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_history_project_id_fkey"
+            columns: ["project_id"]
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       user_roles: {
         Row: {
           id: string

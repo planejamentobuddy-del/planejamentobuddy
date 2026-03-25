@@ -55,7 +55,7 @@ export default function KanbanTab({ project }: { project: Project }) {
 
   const handleDragStart = (id: string) => setDragging(id);
 
-  const handleDrop = (colKey: string) => {
+  const handleDrop = async (colKey: string) => {
     if (!dragging) return;
     const task = tasks.find(t => t.id === dragging);
     if (!task) return;
@@ -79,7 +79,7 @@ export default function KanbanTab({ project }: { project: Project }) {
         status = 'not_started';
     }
 
-    updateTask({ ...task, status, percentComplete });
+    await updateTask({ ...task, status, percentComplete });
     setDragging(null);
   };
 

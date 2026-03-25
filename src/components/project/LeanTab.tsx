@@ -63,10 +63,10 @@ export default function LeanTab({ project }: { project: Project }) {
   const ppcColor = ppc === null ? 'text-muted-foreground' : ppc >= 80 ? 'text-status-ok' : ppc >= 60 ? 'text-status-warning' : 'text-status-danger';
 
   // Add a task from planning to the weekly plan
-  const handleAddFromPlanning = (task: Task) => {
+  const handleAddFromPlanning = async (task: Task) => {
     // Don't add duplicates
     if (weekPlans.some(p => p.taskId === task.id)) return;
-    addWeeklyPlan({
+    await addWeeklyPlan({
       projectId: project.id,
       taskId: task.id,
       taskName: task.name,
@@ -79,12 +79,12 @@ export default function LeanTab({ project }: { project: Project }) {
     });
   };
 
-  const handleChange = (plan: WeeklyPlan, field: keyof WeeklyPlan, value: string) => {
-    updateWeeklyPlan({ ...plan, [field]: value });
+  const handleChange = async (plan: WeeklyPlan, field: keyof WeeklyPlan, value: string) => {
+    await updateWeeklyPlan({ ...plan, [field]: value });
   };
 
-  const handleCloseWeek = () => {
-    closeWeek(project.id);
+  const handleCloseWeek = async () => {
+    await closeWeek(project.id);
   };
 
   // Tasks not yet in this week's plan

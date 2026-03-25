@@ -58,10 +58,10 @@ export default function Signup() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mb-4">
-            <Building2 className="w-7 h-7 text-primary-foreground" />
+          <div className="w-20 h-20 mb-4">
+            <img src="/logo.jpg" alt="Buddy Logo" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Planejamento Buddy</h1>
+          <h1 className="text-2xl font-display font-bold text-foreground">Buddy</h1>
         </div>
 
         <div className="card-elevated p-8">

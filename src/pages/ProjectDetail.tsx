@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProjects } from '@/hooks/useProjects';
@@ -22,8 +22,16 @@ const tabs = [
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { projects } = useProjects();
+  const { projects, loading } = useProjects();
   const project = projects.find(p => p.id === id);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!project) {
     return (
@@ -46,14 +54,14 @@ export default function ProjectDetail() {
           </Button>
 
           {/* Project icon */}
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-            <LayoutDashboard className="w-5 h-5 text-primary" />
+          <div className="w-12 h-12 flex items-center justify-center shrink-0">
+            <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain" />
           </div>
 
           {/* Title */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="font-display font-bold text-lg text-foreground truncate">{project.name}</h1>
+              <h1 className="font-display font-bold text-lg text-foreground truncate">Buddy</h1>
               <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
             </div>
             <p className="text-xs text-muted-foreground">Gestão de Cronograma</p>

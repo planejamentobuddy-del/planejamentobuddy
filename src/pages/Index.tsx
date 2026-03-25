@@ -18,18 +18,23 @@ const statusConfig = {
 };
 
 export default function Index() {
-  const { projects, addProject, getTasksForProject } = useProjects();
+  const { projects, addProject, getTasksForProject, loading } = useProjects();
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', startDate: '', endDate: '', description: '' });
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!form.name || !form.startDate || !form.endDate) return;
-    const p = addProject(form);
-    setForm({ name: '', startDate: '', endDate: '', description: '' });
-    setOpen(false);
-    navigate(`/obra/${p.id}`);
+    setSubmitting(true);
+    const p = await addProject(form);
+    setSubmitting(false);
+    if (p) {
+      setForm({ name: '', startDate: '', endDate: '', description: '' });
+      setOpen(false);
+      navigate(`/obra/${p.id}`);
+    }
   };
 
   return (
@@ -37,11 +42,11 @@ export default function Index() {
       <header className="border-b bg-card">
         <div className="container mx-auto flex items-center justify-between py-5 px-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-primary-foreground" />
+            <div className="w-12 h-12 flex items-center justify-center">
+              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="text-xl font-display font-bold text-foreground">Planejamento Buddy</h1>
+              <h1 className="text-xl font-display font-bold text-foreground">Buddy</h1>
               <p className="text-xs text-muted-foreground">
                 Olá, {profile?.full_name || 'Usuário'}
               </p>
@@ -82,7 +87,9 @@ export default function Index() {
                     <Label>Descrição</Label>
                     <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descrição da obra" />
                   </div>
-                  <Button onClick={handleCreate} className="w-full">Criar Obra</Button>
+                  <Button onClick={handleCreate} className="w-full" disabled={submitting}>
+                    {submitting ? 'Criando...' : 'Criar Obra'}
+                  </Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -94,7 +101,11 @@ export default function Index() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {projects.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Plus className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : projects.length === 0 ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-20">
             <Building2 className="w-16 h-16 mx-auto text-muted-foreground/40 mb-4" />
             <h2 className="text-xl font-display font-semibold text-foreground mb-2">Nenhuma obra cadastrada</h2>
