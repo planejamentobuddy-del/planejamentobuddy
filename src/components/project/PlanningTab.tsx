@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
+import { useResizableColumns, ResizeHandle } from '@/hooks/useResizableColumns';
 
 const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
   { value: 'not_started', label: 'Não iniciado', color: 'bg-muted text-muted-foreground' },
@@ -321,26 +322,24 @@ export default function PlanningTab({ project }: { project: Project }) {
       </div>
 
       <div className="card-elevated overflow-x-auto">
-        <table className="w-full text-sm" style={{ minWidth: '1100px' }}>
+        <table className="text-sm table-fixed" style={{ width: colWidths.reduce((s, w) => s + w, 0) }}>
+          <colgroup>
+            {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+          </colgroup>
           <thead>
             <tr className="border-b bg-muted/30">
-              <th className="text-left py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Etapa / Atividade</th>
-              <th className="text-left py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Responsável</th>
-              <th className="text-left py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Início</th>
-              <th className="text-left py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Término</th>
-              <th className="text-center py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Duração</th>
-              <th className="text-left py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">% Execução</th>
-              <th className="text-left py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
-              <th className="text-left py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Predecessoras</th>
-              <th className="text-left py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Sucessoras</th>
-              <th className="text-left py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Observações</th>
-              <th className="text-center py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Ações</th>
+              {columnHeaders.map((h, i) => (
+                <th key={i} className={`${h.align === 'center' ? 'text-center' : 'text-left'} py-3 px-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground relative`}>
+                  {h.label}
+                  <ResizeHandle index={i} onMouseDown={onColResize} />
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {stages.length === 0 && (
               <tr>
-                <td colSpan={11} className="py-16 text-center text-muted-foreground text-sm">
+                <td colSpan={columnHeaders.length} className="py-16 text-center text-muted-foreground text-sm">
                   Nenhuma etapa cadastrada. Clique em "Adicionar Etapa" para começar.
                 </td>
               </tr>
@@ -354,7 +353,7 @@ export default function PlanningTab({ project }: { project: Project }) {
                   {isExpanded && subtasks.map(sub => renderRow(sub, true, stage.id))}
                   {isExpanded && (
                     <tr className="border-b border-dashed">
-                      <td colSpan={11} className="py-1.5 px-3">
+                      <td colSpan={columnHeaders.length} className="py-1.5 px-3">
                         <Button
                           variant="ghost"
                           size="sm"
