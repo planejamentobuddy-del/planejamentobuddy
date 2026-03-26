@@ -64,7 +64,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       const { data: planData, error: planErr } = await supabase.from('weekly_plans').select('*');
       const { data: histData, error: histErr } = await supabase.from('weekly_history').select('*').order('closed_at', { ascending: false });
       const { data: constrData, error: constrErr } = await (supabase.from('constraints') as any).select('*').order('created_at', { ascending: true });
-      const { data: userData, error: userErr } = await supabase.from('profiles').select('id, full_name, email').eq('status', 'active');
+      const { data: userData, error: userErr } = await supabase.from('profiles').select('id, full_name, email').in('status', ['active', 'pending']);
 
       if (projErr) throw projErr;
       if (taskErr) throw taskErr;
