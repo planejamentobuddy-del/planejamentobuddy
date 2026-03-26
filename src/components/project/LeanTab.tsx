@@ -4,12 +4,12 @@ import { Project, DELAY_REASONS, WeeklyPlan, Task, Constraint, CONSTRAINT_CATEGO
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ChevronLeft, ChevronRight, Calendar, Eye, BarChart3, 
   AlertTriangle, CheckCircle2, Plus, Trash2, Filter,
-  Lock, Unlock, Clock
+  Lock, Unlock, Clock, AlertCircle
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { toast } from 'sonner';
@@ -100,6 +100,15 @@ export default function LeanTab({ project }: { project: Project }) {
   const weekCompleted = weekPlans.filter(p => p.status === 'completed' || p.status === 'in_progress').length;
   const ppc = weekPlans.length > 0 ? Math.round((weekCompleted / weekPlans.length) * 100) : null;
   const ppcColor = ppc === null ? 'text-muted-foreground' : ppc >= 80 ? 'text-status-ok' : ppc >= 60 ? 'text-status-warning' : 'text-status-danger';
+
+  const isTaskInWeek = (task: Task) => {
+    const s = new Date(task.startDate + 'T12:00:00').getTime();
+    const e = new Date(task.endDate + 'T12:00:00').getTime();
+    const ws = weekRange.start.getTime();
+    const we = weekRange.end.getTime();
+    // Overlap condition: start <= weekEnd AND end >= weekStart
+    return s <= we && e >= ws;
+  };
 
   // Lookahead weeks (Next 4 weeks)
   const lookaheadWeeks = useMemo(() => {
@@ -230,15 +239,42 @@ export default function LeanTab({ project }: { project: Project }) {
                 const task = tasks.find(t => t.id === v);
                 if (task) handleAddFromPlanning(task);
               }}>
-                <SelectTrigger className="h-10 w-[240px] rounded-xl bg-card">
-                  <SelectValue placeholder="Selecionar do planejamento..." />
+                <SelectTrigger className="h-10 w-[240px] rounded-xl bg-card border-dashed">
+                  <SelectValue placeholder="Puxar do Planejamento..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {tasks.filter(t => !weekPlans.some(p => p.taskId === t.id)).map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
+                  <SelectGroup>
+                    <SelectLabel>Tarefas desta semana</SelectLabel>
+                    {tasks.filter(t => isTaskInWeek(t) && !weekPlans.some(p => p.taskId === t.id)).map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Outras tarefas</SelectLabel>
+                    {tasks.filter(t => !isTaskInWeek(t) && !weekPlans.some(p => p.taskId === t.id)).map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
+
+              <Button 
+                variant="outline" 
+                onClick={() => addWeeklyPlan({
+                  projectId: project.id,
+                  taskName: 'Atividade Avulsa',
+                  responsible: '',
+                  week: currentWeekStr,
+                  weekLabel: currentWeekStr,
+                  status: 'planned',
+                  reason: '',
+                  observations: '',
+                })}
+                className="rounded-xl h-10 border-dashed"
+              >
+                + Avulsa
+              </Button>
+
               <Button onClick={() => closeWeek(project.id)} className="rounded-xl h-10 px-6 font-semibold shadow-lg shadow-primary/20">
                 Fechar Semana
               </Button>
@@ -289,18 +325,34 @@ export default function LeanTab({ project }: { project: Project }) {
                         <tr key={plan.id} className="group hover:bg-muted/10 transition-colors">
                           <td className="py-4 px-6">
                             <div className="flex flex-col">
-                              <span className="text-sm font-bold text-foreground">{plan.taskName}</span>
+                              {plan.taskId ? (
+                                <span className="text-sm font-bold text-foreground">{plan.taskName}</span>
+                              ) : (
+                                <Input 
+                                  className="h-7 text-sm p-0 border-0 bg-transparent font-bold focus-visible:ring-1 focus-visible:ring-primary/20 rounded px-1"
+                                  value={plan.taskName}
+                                  onChange={e => updateWeeklyPlan({ ...plan, taskName: e.target.value })}
+                                />
+                              )}
                               <div className="flex items-center gap-2 mt-1">
-                                <Clock className="w-3 h-3 text-muted-foreground" />
+                                {plan.taskId && <Clock className="w-3 h-3 text-muted-foreground" />}
                                 <span className="text-[10px] font-medium text-muted-foreground uppercase tabular-nums">
-                                  {linkedTask ? `${formatDate(linkedTask.startDate)} → ${formatDate(linkedTask.endDate)}` : '—'}
+                                  {linkedTask ? `${formatDate(linkedTask.startDate)} → ${formatDate(linkedTask.endDate)}` : 'Atividade Avulsa'}
                                 </span>
                               </div>
                             </div>
                           </td>
+
                           <td className="py-4 px-6 text-sm text-muted-foreground font-medium">
-                            {plan.responsible || 'Sem resp.'}
+                            <Input 
+                              list="users-list-lean"
+                              className="h-7 text-sm p-0 border-0 bg-transparent focus-visible:ring-1 focus-visible:ring-primary/20 rounded px-1"
+                              value={plan.responsible || ''}
+                              onChange={e => updateWeeklyPlan({ ...plan, responsible: e.target.value })}
+                              placeholder="Responsável..."
+                            />
                           </td>
+
                           <td className="py-4 px-6">
                             <Select value={plan.status} onValueChange={v => updateWeeklyPlan({ ...plan, status: v as any })}>
                               <SelectTrigger className="h-8 w-full min-w-[150px] rounded-lg border-0 bg-transparent hover:bg-muted font-bold text-xs mx-auto">
@@ -313,21 +365,24 @@ export default function LeanTab({ project }: { project: Project }) {
                               </SelectContent>
                             </Select>
                           </td>
+
                           <td className="py-4 px-6">
-                            <div className="flex items-center gap-1.5">
-                              {taskConstraints.length > 0 ? (
-                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                                  <AlertTriangle className="w-3 h-3" />
-                                  <span className="text-[10px] font-black uppercase">{taskConstraints.length} Aberta(s)</span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  <span className="text-[10px] font-black uppercase">Liberada</span>
-                                </div>
-                              )}
-                            </div>
+                            {taskConstraints.length > 0 ? (
+                              <button 
+                                onClick={() => handleTabChange('restricoes')}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-status-danger/10 text-status-danger hover:bg-status-danger/20 transition-colors"
+                              >
+                                <AlertTriangle className="w-3 h-3" />
+                                <span className="text-[10px] font-bold">{taskConstraints.length} Pendentes</span>
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span className="text-[10px] font-bold">Liberada</span>
+                              </div>
+                            )}
                           </td>
+
                           <td className="py-4 px-6">
                             <Input
                               className="h-8 text-xs bg-transparent border-0 border-b border-transparent focus-visible:border-primary shadow-none rounded-none p-0 italic text-muted-foreground placeholder:text-muted-foreground/30"
@@ -338,9 +393,10 @@ export default function LeanTab({ project }: { project: Project }) {
                                   updateWeeklyPlan({ ...plan, observations: val });
                                 }
                               }}
-                              placeholder="Anote o motivo do desvio ou observações..."
+                              placeholder="Motivo ou observações..."
                             />
                           </td>
+
                           <td className="py-4 px-6 text-right">
                             <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteWeeklyPlan(plan.id)}>
                               <Trash2 className="w-4 h-4 text-destructive/60 hover:text-destructive" />

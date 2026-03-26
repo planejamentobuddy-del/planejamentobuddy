@@ -36,7 +36,7 @@ export type TaskStatus = 'not_started' | 'in_progress' | 'completed' | 'delayed'
 export interface WeeklyPlan {
   id: string;
   projectId: string;
-  taskId: string;
+  taskId?: string;
   taskName: string;
   responsible: string;
   week: string; // ISO week string e.g. "2024-W03"

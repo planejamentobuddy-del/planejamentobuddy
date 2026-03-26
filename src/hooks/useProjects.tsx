@@ -9,6 +9,7 @@ interface ProjectsContextType {
   loading: boolean;
   tasks: Task[];
   constraints: Constraint[];
+  plans: WeeklyPlan[];
   addProject: (p: Omit<Project, 'id' | 'createdAt'>) => Promise<Project | null>;
   deleteProject: (id: string) => Promise<void>;
   // Tasks
@@ -523,6 +524,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       getHistoryForProject, closeWeek,
       refresh: fetchData,
       users: usersList,
+      plans,
     }}>
       {children}
     </ProjectsContext.Provider>

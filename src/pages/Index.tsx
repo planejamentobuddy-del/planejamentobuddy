@@ -56,10 +56,16 @@ export default function Index() {
             <Button variant="outline" className="gap-2 rounded-xl text-primary border-primary/20 hover:bg-primary/5 relative" onClick={() => navigate('/minhas-tarefas')}>
               <ClipboardCheck className="w-4 h-4" /> Minhas Tarefas
               {(() => {
-                const count = tasks.filter(t => t.responsible?.toLowerCase() === profile?.full_name?.toLowerCase() && t.status !== 'completed').length +
-                             constraints.filter(c => c.responsible?.toLowerCase() === profile?.full_name?.toLowerCase() && c.status === 'open').length;
-                return count > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-background animate-in zoom-in duration-300">
+                const me = profile?.full_name?.toLowerCase().trim() || '';
+                const match = (name?: string) => {
+                  const n = name?.toLowerCase().trim() || '';
+                  return n && me && (n === me || n.includes(me) || me.includes(n));
+                };
+                const count = tasks.filter(t => match(t.responsible) && t.status !== 'completed').length +
+                             constraints.filter(c => match(c.responsible) && c.status === 'open').length;
+                if (count === 0) return null;
+                return (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-status-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-in zoom-in duration-300">
                     {count}
                   </span>
                 );

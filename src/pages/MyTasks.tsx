@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Task, Constraint, CONSTRAINT_CATEGORIES } from '@/types/project';
 
 export default function MyTasks() {
-  const { tasks, constraints, updateTask, updateConstraint, projects } = useProjects();
+  const { tasks, constraints, updateTask, updateConstraint, projects, plans, updateWeeklyPlan } = useProjects();
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'tasks' | 'constraints'>('tasks');
@@ -18,23 +18,49 @@ export default function MyTasks() {
   const userName = profile?.full_name || '';
 
   const myTasks = useMemo(() => {
-    return tasks.filter(t => t.responsible?.toLowerCase() === userName.toLowerCase())
-      .sort((a, b) => a.endDate.localeCompare(b.endDate));
-  }, [tasks, userName]);
+    // 1. Gantt Tasks
+    const ganttTasks = tasks.filter(t => t.responsible?.toLowerCase().trim() === userName.toLowerCase().trim());
+    
+    // 2. Ad-hoc Weekly Plans (Lean)
+    const adhocPlans = plans.filter(p => !p.taskId && p.responsible?.toLowerCase().trim() === userName.toLowerCase().trim());
+    
+    // Combine them
+    return [
+      ...ganttTasks.map(t => ({ ...t, type: 'gantt' as const })),
+      ...adhocPlans.map(p => ({ 
+        id: p.id, 
+        name: p.taskName, 
+        responsible: p.responsible, 
+        projectId: p.projectId,
+        status: (p.status === 'completed' ? 'completed' : 'in_progress') as any,
+        endDate: '', // weekly plans don't have a single date usually, or we can use the week label
+        type: 'lean' as const,
+        original: p
+      }))
+    ].sort((a, b) => a.name.localeCompare(b.name));
+  }, [tasks, plans, userName]);
 
   const myConstraints = useMemo(() => {
-    return constraints.filter(c => c.responsible?.toLowerCase() === userName.toLowerCase())
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    return constraints.filter(c => {
+      const resp = c.responsible?.toLowerCase().trim() || '';
+      const me = userName.toLowerCase().trim();
+      return resp === me || resp.includes(me) || me.includes(resp);
+    }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   }, [constraints, userName]);
 
   const getProjectName = (projectId: string) => {
     return projects.find(p => p.id === projectId)?.name || 'Projeto Desconhecido';
   };
 
-  const handleToggleTask = async (task: Task) => {
-    const newStatus = task.status === 'completed' ? 'in_progress' : 'completed';
-    const newPercent = newStatus === 'completed' ? 100 : Math.max(0, task.percentComplete);
-    await updateTask({ ...task, status: newStatus, percentComplete: newPercent });
+  const handleToggleTask = async (item: any) => {
+    if (item.type === 'gantt') {
+      const newStatus = item.status === 'completed' ? 'in_progress' : 'completed';
+      const newPercent = newStatus === 'completed' ? 100 : Math.max(0, item.percentComplete);
+      await updateTask({ ...item, status: newStatus, percentComplete: newPercent });
+    } else {
+      const newStatus = item.status === 'completed' ? 'planned' : 'completed';
+      await updateWeeklyPlan({ ...item.original, status: newStatus });
+    }
   };
 
   const handleToggleConstraint = async (c: Constraint) => {
@@ -101,27 +127,33 @@ export default function MyTasks() {
                       <div className="flex items-start gap-4">
                         <button 
                           onClick={() => handleToggleTask(task)}
-                          className={`mt-1 transition-colors ${task.status === 'completed' ? 'text-green-500 hover:text-green-600' : 'text-slate-300 hover:text-primary'}`}
+                          className={`shrink-0 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${task.status === 'completed' ? 'bg-status-ok border-status-ok text-white' : 'border-slate-300 hover:border-primary'}`}
                         >
-                          {task.status === 'completed' ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
+                          {task.status === 'completed' && <CheckCircle2 className="w-4 h-4" />}
                         </button>
                         <div className="flex-1 min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
-                            <h4 className={`font-bold text-slate-800 truncate ${task.status === 'completed' ? 'line-through opacity-50' : ''}`}>
-                              {task.name}
-                            </h4>
-                            <Badge variant="secondary" className="w-fit text-[10px] font-bold bg-slate-100 text-slate-500 border-none px-2 rounded-md uppercase tracking-wide">
-                              {getProjectName(task.projectId)}
-                            </Badge>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">{getProjectName(task.projectId)}</span>
+                            {task.type === 'lean' && <Badge variant="secondary" className="text-[8px] h-4 py-0 uppercase bg-primary/10 text-primary">Plano Semanal</Badge>}
                           </div>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5" />
-                              {task.endDate ? new Date(task.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Sem data'}
-                            </span>
-                            <span className="flex items-center gap-1 font-medium text-slate-400">
-                              {task.percentComplete}% concluído
-                            </span>
+                          <h4 className={`text-sm font-bold truncate ${task.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{task.name}</h4>
+                          <div className="flex items-center gap-3 mt-1.5">
+                            {task.type === 'gantt' && (
+                              <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                                <Calendar className="w-3 h-3" />
+                                {task.endDate ? new Date(task.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Sem prazo'}
+                              </div>
+                            )}
+                            {task.type === 'lean' && (
+                              <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                                <Calendar className="w-3 h-3" />
+                                {task.original.weekLabel}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                              <LayoutDashboard className="w-3 h-3" />
+                              {task.type === 'gantt' ? 'Gantt' : 'Lean'}
+                            </div>
                           </div>
                         </div>
                         <Button 
