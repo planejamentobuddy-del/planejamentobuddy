@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,6 +22,7 @@ const tabs = [
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { projects, loading } = useProjects();
   const project = projects.find(p => p.id === id);
 
@@ -73,7 +74,7 @@ export default function ProjectDetail() {
 
       {/* Content */}
       <div className="container mx-auto px-6 py-5">
-        <Tabs defaultValue="dashboard">
+        <Tabs value={searchParams.get('tab') || 'dashboard'} onValueChange={(v) => setSearchParams({ tab: v })}>
           <TabsList className="mb-6 bg-transparent border-0 p-0 h-auto gap-1 flex-wrap">
             {tabs.map(tab => (
               <TabsTrigger

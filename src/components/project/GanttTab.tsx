@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
 import { Project, Task, getCriticalTaskIds } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
-import { Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, Users } from 'lucide-react';
 
 type ViewMode = 'diario' | 'semanal' | 'mensal';
 
@@ -23,7 +23,9 @@ export default function GanttTab({ project }: { project: Project }) {
   
   const [viewMode, setViewMode] = useState<ViewMode>('semanal');
   const [showCriticalPath, setShowCriticalPath] = useState(false);
+  const [showAllLabels, setShowAllLabels] = useState(false);
   const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
+  const [clickedBars, setClickedBars] = useState<Set<string>>(new Set());
   const timelineRef = useRef<HTMLDivElement>(null);
 
   // CPM critical path set
@@ -125,6 +127,16 @@ export default function GanttTab({ project }: { project: Project }) {
       } else {
         next.add(taskId);
       }
+      return next;
+    });
+  };
+
+  const toggleBarClick = (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setClickedBars(prev => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
       return next;
     });
   };
@@ -245,6 +257,16 @@ export default function GanttTab({ project }: { project: Project }) {
           >
             <Calendar className="w-3.5 h-3.5" />
             Caminho Crítico
+          </Button>
+
+          <Button 
+            variant={showAllLabels ? 'secondary' : 'outline'} 
+            size="sm" 
+            className={`h-8 rounded-lg gap-2 text-xs font-semibold px-4 transition-all ${showAllLabels ? 'bg-primary/10 border-primary/30 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setShowAllLabels(!showAllLabels)}
+          >
+            <Users className="w-3.5 h-3.5" />
+            Exibir Responsáveis
           </Button>
         </div>
       </div>
@@ -431,6 +453,7 @@ export default function GanttTab({ project }: { project: Project }) {
                           : 'bg-slate-300 text-slate-600'; 
 
                   const textColor = task.status === 'not_started' ? 'text-slate-600' : 'text-white';
+                  const isClicked = clickedBars.has(task.id);
                   
                   return (
                     <div key={task.id} className="h-10 relative group transition-colors hover:bg-muted/10 border-b border-border/30">
@@ -462,18 +485,14 @@ export default function GanttTab({ project }: { project: Project }) {
                           <div 
                             className="absolute top-2 right-0 w-0 h-0 border-l-[0px] border-r-[10px] border-t-[10px] border-transparent border-r-slate-800 dark:border-r-slate-200" 
                           />
-
-                          {/* Progress Text Badge */}
-                          <div className="absolute -right-12 top-0 h-full flex items-center text-[11px] font-bold text-slate-800 dark:text-slate-200">
-                             {computedProgress.get(task.id)}%
-                          </div>
                         </div>
                       ) : (
                         // Regular Task Bar
                         <div
-                          className={`absolute top-2 h-6 rounded-md transition-all shadow-sm flex items-center px-3 z-10 overflow-hidden font-bold text-[9px] cursor-pointer hover:brightness-110 active:scale-95 ${barColor} ${textColor}`}
+                          className={`absolute top-2 h-6 rounded-md transition-all shadow-sm flex items-center px-3 z-10 font-bold text-[9px] cursor-pointer hover:brightness-110 active:scale-95 ${barColor} ${textColor}`}
                           style={{ left: startPos, width }}
                           title={`${task.name}: ${task.percentComplete}%`}
+                          onClick={(e) => toggleBarClick(task.id, e)}
                         >
                           {task.status === 'in_progress' && task.percentComplete > 0 && (
                             <div 
@@ -481,9 +500,16 @@ export default function GanttTab({ project }: { project: Project }) {
                               style={{ width: `${task.percentComplete}%` }}
                             />
                           )}
-                          <span className="relative z-10 whitespace-nowrap overflow-hidden">
-                            {task.percentComplete}%
-                          </span>
+                          <span className="relative z-10">{task.percentComplete}%</span>
+                        </div>
+                      )}
+
+                      {!isSummary && (showAllLabels || isClicked) && (
+                        <div 
+                          className="absolute top-3 h-4 flex items-center px-2 z-20 whitespace-nowrap font-bold text-[9px] text-slate-800 pointer-events-none"
+                          style={{ left: startPos + width + 4 }}
+                        >
+                          {task.name} {task.responsible ? `• ${task.responsible}` : ''}
                         </div>
                       )}
                     </div>

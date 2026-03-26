@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate, isCriticalPath, getCurrentWeek, calculateSCurve } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { AlertTriangle, CheckCircle, Clock, TrendingUp, Target, Shield, CalendarClock } from 'lucide-react';
@@ -6,6 +7,7 @@ import { motion } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart, ComposedChart } from 'recharts';
 
 export default function DashboardTab({ project }: { project: Project }) {
+  const [, setSearchParams] = useSearchParams();
   const { getTasksForProject, getPlansForProject, getHistoryForProject, getConstraintsForProject } = useProjects();
   const tasks = getTasksForProject(project.id);
   const plans = getPlansForProject(project.id);
@@ -58,15 +60,15 @@ export default function DashboardTab({ project }: { project: Project }) {
     : '';
 
   // Alerts
-  const alerts: { text: string; type: 'warning' | 'danger' }[] = [];
+  const alerts: { text: string; type: 'warning' | 'danger'; onClick?: () => void }[] = [];
   if (ppc !== null && ppc < 80) {
-    alerts.push({ text: `PPC da semana em ${ppc}%. Risco de atraso identificado.`, type: ppc < 60 ? 'danger' : 'warning' });
+    alerts.push({ text: `PPC da semana em ${ppc}%. Risco de atraso identificado.`, type: ppc < 60 ? 'danger' : 'warning', onClick: () => setSearchParams({ tab: 'lean', subtab: 'indicadores' }) });
   }
   if (restrictions.length > 0) {
-    alerts.push({ text: `${restrictions.length} restrição(ões) pendente(s) no Lean.`, type: 'warning' });
+    alerts.push({ text: `${restrictions.length} restrição(ões) pendente(s) no Lean.`, type: 'warning', onClick: () => setSearchParams({ tab: 'lean', subtab: 'restricoes' }) });
   }
   if (delayed.length > 0) {
-    alerts.push({ text: `${delayed.length} tarefa(s) atrasada(s) identificada(s).`, type: 'danger' });
+    alerts.push({ text: `${delayed.length} tarefa(s) atrasada(s) identificada(s).`, type: 'danger', onClick: () => setSearchParams({ tab: 'kanban' }) });
   }
 
   const ppcColor = ppc === null ? 'text-muted-foreground' : ppc >= 80 ? 'text-status-ok' : ppc >= 60 ? 'text-status-warning' : 'text-status-danger';
@@ -104,7 +106,8 @@ export default function DashboardTab({ project }: { project: Project }) {
 
         {/* Atrasadas */}
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="card-elevated p-5"
+          className="card-elevated p-5 cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => setSearchParams({ tab: 'kanban' })}
         >
           <div className="flex items-center gap-2 mb-2">
             <Clock className="w-4 h-4 text-status-danger" />
@@ -115,7 +118,8 @@ export default function DashboardTab({ project }: { project: Project }) {
 
         {/* Restrições */}
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="card-elevated p-5"
+          className="card-elevated p-5 cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => setSearchParams({ tab: 'lean', subtab: 'restricoes' })}
         >
           <div className="flex items-center gap-2 mb-2">
             <Shield className="w-4 h-4 text-status-warning" />
@@ -151,7 +155,8 @@ export default function DashboardTab({ project }: { project: Project }) {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 * i }}
-              className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl border ${
+              onClick={alert.onClick}
+              className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl border ${alert.onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''} ${
                 alert.type === 'danger'
                   ? 'bg-destructive/5 border-destructive/20'
                   : 'bg-[hsl(38_92%_50%/0.08)] border-[hsl(38_92%_50%/0.2)]'

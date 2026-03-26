@@ -149,99 +149,113 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
     return Math.round(d.getTime() / 86400000);
   };
 
+  // Map ancestors to their leaf task indices
+  const ancestorToLeaves = new Map<string, number[]>();
+  parentIds.forEach(pId => ancestorToLeaves.set(pId, []));
+  leaves.forEach((task, leafIdx) => {
+    let pId = task.parentId;
+    while (pId) {
+      ancestorToLeaves.get(pId)?.push(leafIdx);
+      const parent = allTasks.find(x => x.id === pId);
+      pId = parent?.parentId;
+    }
+  });
+
+  const n = leaves.length;
   const idToIdx = new Map<string, number>();
   leaves.forEach((t, i) => idToIdx.set(t.id, i));
 
-  const n = leaves.length;
-  const dur = leaves.map(t => Math.max(1, t.duration));
-  const es = new Array(n).fill(0);
-  const ef = new Array(n).fill(0);
-
-  // Build adjacency: for each task, who are its predecessors (index)
-  const predIndices: number[][] = leaves.map(t =>
-    (t.predecessors || [])
-      .filter(pid => idToIdx.has(pid))
-      .map(pid => idToIdx.get(pid)!)
-  );
-
-  // Forward Pass — topological order (simple iterative since DAG is small)
-  // Initialize ES from actual start dates
-  const projectMinDay = Math.min(...leaves.map(t => toDay(t.startDate)));
-  leaves.forEach((t, i) => {
-    es[i] = toDay(t.startDate) - projectMinDay;
+  // Build Adjacency
+  const predIndices: number[][] = leaves.map(t => {
+    const indices = new Set<number>();
+    (t.predecessors || []).forEach(pid => {
+      if (idToIdx.has(pid)) indices.add(idToIdx.get(pid)!);
+      else if (ancestorToLeaves.has(pid)) {
+        ancestorToLeaves.get(pid)?.forEach(idx => indices.add(idx));
+      }
+    });
+    return Array.from(indices);
   });
 
-  // Enforce predecessor constraints
-  let changed = true;
-  let iterations = 0;
-  while (changed && iterations < n * 2) {
-    changed = false;
-    iterations++;
-    for (let i = 0; i < n; i++) {
-      for (const pi of predIndices[i]) {
-        const newEs = es[pi] + dur[pi];
-        if (newEs > es[i]) {
-          es[i] = newEs;
-          changed = true;
-        }
-      }
+  const succIndices: number[][] = Array.from({ length: n }, () => []);
+  predIndices.forEach((preds, i) => {
+    preds.forEach(pi => succIndices[pi].push(i));
+  });
+
+  // 1. Topological Sort (Kahn's algorithm)
+  const inDegree = predIndices.map(p => p.length);
+  const queue: number[] = [];
+  inDegree.forEach((deg, i) => { if (deg === 0) queue.push(i); });
+
+  const sorted: number[] = [];
+  while (queue.length > 0) {
+    const u = queue.shift()!;
+    sorted.push(u);
+    succIndices[u].forEach(v => {
+      inDegree[v]--;
+      if (inDegree[v] === 0) queue.push(v);
+    });
+  }
+
+  // Detect Cycles (Safety)
+  if (sorted.length < n) {
+    console.error("[CPM] Circular dependency detected! Critical path might be incomplete.");
+  }
+
+  const es = new Array(n).fill(0);
+  const ef = new Array(n).fill(0);
+  const dur = leaves.map(t => Math.max(1, t.duration));
+
+  // 2. Forward Pass
+  sorted.forEach(i => {
+    if (predIndices[i].length > 0) {
+      es[i] = Math.max(...predIndices[i].map(pi => ef[pi]));
+    } else {
+      es[i] = 0; // Strict CPM roots
     }
-  }
-
-  // Compute EF
-  for (let i = 0; i < n; i++) {
     ef[i] = es[i] + dur[i];
-  }
+  });
 
-  // Backward Pass
-  const projectEnd = Math.max(...ef);
-  const lf = new Array(n).fill(projectEnd);
+  // 3. Backward Pass
+  const projectDuration = Math.max(0, ...ef);
+  const lf = new Array(n).fill(projectDuration);
   const ls = new Array(n).fill(0);
 
-  // Build successor indices
-  const succIndices: number[][] = Array.from({ length: n }, () => []);
-  for (let i = 0; i < n; i++) {
-    for (const pi of predIndices[i]) {
-      succIndices[pi].push(i);
+  [...sorted].reverse().forEach(i => {
+    if (succIndices[i].length > 0) {
+      lf[i] = Math.min(...succIndices[i].map(si => ls[si]));
+    } else {
+      lf[i] = projectDuration;
     }
-  }
-
-  // Tasks with no successors: LF = projectEnd
-  // Tasks with successors: LF = min(LS of successors)
-  changed = true;
-  iterations = 0;
-  while (changed && iterations < n * 2) {
-    changed = false;
-    iterations++;
-    for (let i = 0; i < n; i++) {
-      ls[i] = lf[i] - dur[i];
-    }
-    for (let i = 0; i < n; i++) {
-      for (const si of succIndices[i]) {
-        const newLf = ls[si];
-        if (newLf < lf[i]) {
-          lf[i] = newLf;
-          changed = true;
-        }
-      }
-    }
-  }
-  for (let i = 0; i < n; i++) {
     ls[i] = lf[i] - dur[i];
-  }
+  });
 
-  // Critical = Total Float (LS - ES) === 0
+  // 4. Results & Debugging
   const critical = new Set<string>();
+  const allTasksMap = new Map<string, Task>();
+  allTasks.forEach(t => allTasksMap.set(t.id, t));
+
+  console.groupCollapsed(`[CPM Debug] Project Duration: ${projectDuration} days`);
   for (let i = 0; i < n; i++) {
-    const totalFloat = ls[i] - es[i];
-    if (totalFloat <= 0) {
-      critical.add(leaves[i].id);
-      // Also mark the parent (stage) as critical
-      if (leaves[i].parentId) {
-        critical.add(leaves[i].parentId!);
+    const float = ls[i] - es[i];
+    const leaf = leaves[i];
+    
+    console.log(
+      `Task: ${leaf.name.padEnd(25)} | ES: ${es[i].toString().padStart(3)} | EF: ${ef[i].toString().padStart(3)} | ` +
+      `LS: ${ls[i].toString().padStart(3)} | LF: ${lf[i].toString().padStart(3)} | Float: ${float.toString().padStart(3)}`
+    );
+
+    if (float <= 0) {
+      critical.add(leaf.id);
+      let currP = leaf.parentId;
+      while (currP) {
+        if (critical.has(currP)) break;
+        critical.add(currP);
+        currP = allTasksMap.get(currP)?.parentId;
       }
     }
   }
+  console.groupEnd();
 
   return critical;
 }

@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Project, DELAY_REASONS, WeeklyPlan, Task, Constraint, CONSTRAINT_CATEGORIES, ConstraintCategory } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
@@ -64,7 +65,24 @@ export default function LeanTab({ project }: { project: Project }) {
   const constraints = getConstraintsForProject(project.id);
 
   const [currentWeekStr, setCurrentWeekStr] = useState(getCurrentWeek);
-  const [activeTab, setActiveTab] = useState('semanal');
+  
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('subtab') || 'semanal');
+
+  useEffect(() => {
+    const subtab = searchParams.get('subtab');
+    if (subtab && subtab !== activeTab) {
+      setActiveTab(subtab);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (val: string) => {
+    setActiveTab(val);
+    setSearchParams(prev => {
+      prev.set('subtab', val);
+      return prev;
+    });
+  };
   
   // Constraint Form State
   const [showAddConstraint, setShowAddConstraint] = useState(false);
@@ -147,7 +165,7 @@ export default function LeanTab({ project }: { project: Project }) {
 
   return (
     <div className="space-y-5">
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         {/* Header with Navigation and Info */}
         <div className="flex items-center justify-between flex-wrap gap-4 bg-card p-4 rounded-2xl border border-border/50 shadow-sm">
           <TabsList className="bg-muted/50 p-1 h-auto gap-1 rounded-xl">
