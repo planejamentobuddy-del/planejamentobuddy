@@ -378,6 +378,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         status: plan.status,
         reason: plan.reason,
         observations: plan.observations,
+        task_name: plan.taskName,
+        responsible: plan.responsible,
       })
       .eq('id', plan.id);
 
