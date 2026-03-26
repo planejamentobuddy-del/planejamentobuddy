@@ -72,7 +72,6 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: 'Status', align: 'left', width: 140 },
     { label: 'Predecessoras', align: 'left', width: 160 },
     { label: 'Sucessoras', align: 'left', width: 160 },
-    { label: 'Situação Atual', align: 'left', width: 220 },
     { label: 'Observações', align: 'left', width: 200 },
     { label: 'Ações', align: 'center', width: 100 },
   ];
@@ -436,15 +435,6 @@ export default function PlanningTab({ project }: { project: Project }) {
           </div>
         </td>
 
-        {/* 10. Situação Atual */}
-        <td className="py-2 px-3 border-r border-border/40 min-w-[300px]">
-          <StatusCommentLog 
-            compact 
-            comments={task.statusComments || []} 
-            onAddComment={(newComments) => handleChange(task, 'statusComments', newComments)}
-          />
-        </td>
-
         {/* 11. Observações */}
         <td className="py-2.5 px-3 border-r border-border/40">
           <Input
@@ -558,9 +548,6 @@ export default function PlanningTab({ project }: { project: Project }) {
                     </td>
                     <td className="p-0 border-r border-border/50">
                       <div className="px-3" style={{ width: colWidths[7] }} />
-                    </td>
-                    <td className="p-0 border-r border-border/50">
-                      <div className="px-3" style={{ width: colWidths[8] }} />
                     </td>
                     <td className="p-0 border-r border-border/50">
                       <div className="px-3" style={{ width: colWidths[9] }} />
