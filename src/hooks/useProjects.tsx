@@ -82,6 +82,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
             restrictionType: t.restriction_type || '',
             status: st,
             observations: t.observations || '',
+            lastStatus: t.last_status || '',
+            lastStatusDate: t.last_status_date || '',
             checklists: (Array.isArray(t.checklists) ? t.checklists : []) as unknown as ChecklistItem[],
           };
         }));
@@ -99,6 +101,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           status: p.status as any,
           reason: p.reason || '',
           observations: p.observations || '',
+          lastStatus: p.last_status || '',
+          lastStatusDate: p.last_status_date || '',
         })));
       }
 
@@ -127,6 +131,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           dueDate: c.due_date || '',
           closedAt: c.closed_at || undefined,
           createdAt: c.created_at,
+          lastStatus: c.last_status || '',
+          lastStatusDate: c.last_status_date || '',
         })));
       }
 
@@ -278,6 +284,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         restriction_type: task.restrictionType,
         status: finalStatus,
         observations: task.observations,
+        last_status: task.lastStatus,
+        last_status_date: task.lastStatusDate,
         checklists: (task.checklists as any) || [],
       })
       .eq('id', task.id);
@@ -350,6 +358,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         observations: plan.observations,
         task_name: plan.taskName,
         responsible: plan.responsible,
+        last_status: plan.lastStatus,
+        last_status_date: plan.lastStatusDate,
       })
       .eq('id', plan.id);
 
@@ -465,6 +475,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         status: c.status,
         responsible: c.responsible,
         due_date: c.dueDate || null,
+        last_status: c.lastStatus,
+        last_status_date: c.lastStatusDate,
         closed_at: c.status === 'closed' ? new Date().toISOString() : null
       })
       .eq('id', c.id);

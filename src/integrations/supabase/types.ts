@@ -98,6 +98,8 @@ export type Database = {
           assignee_id: string | null
           checklists: Json | null
           created_at: string
+          last_status: string | null
+          last_status_date: string | null
         }
         Insert: {
           id?: string
@@ -118,6 +120,8 @@ export type Database = {
           assignee_id?: string | null
           checklists?: Json | null
           created_at?: string
+          last_status?: string | null
+          last_status_date?: string | null
         }
         Update: {
           id?: string
@@ -138,6 +142,8 @@ export type Database = {
           assignee_id?: string | null
           checklists?: Json | null
           created_at?: string
+          last_status?: string | null
+          last_status_date?: string | null
         }
         Relationships: [
           {
@@ -173,6 +179,8 @@ export type Database = {
           reason: string | null
           observations: string | null
           created_at: string
+          last_status: string | null
+          last_status_date: string | null
         }
         Insert: {
           id?: string
@@ -186,6 +194,8 @@ export type Database = {
           reason?: string | null
           observations?: string | null
           created_at?: string
+          last_status?: string | null
+          last_status_date?: string | null
         }
         Update: {
           id?: string
@@ -199,6 +209,8 @@ export type Database = {
           reason?: string | null
           observations?: string | null
           created_at?: string
+          last_status?: string | null
+          last_status_date?: string | null
         }
         Relationships: [
           {
@@ -286,6 +298,8 @@ export type Database = {
           closed_at: string | null
           created_at: string
           created_by: string | null
+          last_status: string | null
+          last_status_date: string | null
         }
         Insert: {
           id?: string
@@ -299,6 +313,8 @@ export type Database = {
           closed_at?: string | null
           created_at?: string
           created_by?: string | null
+          last_status?: string | null
+          last_status_date?: string | null
         }
         Update: {
           id?: string
@@ -312,6 +328,8 @@ export type Database = {
           closed_at?: string | null
           created_at?: string
           created_by?: string | null
+          last_status?: string | null
+          last_status_date?: string | null
         }
         Relationships: [
           {

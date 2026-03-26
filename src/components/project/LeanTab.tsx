@@ -339,7 +339,12 @@ export default function LeanTab({ project }: { project: Project }) {
                       </th>
                       <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
                         <div className="py-4 px-4 min-w-[250px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Motivo/Obs</span>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Situação Atual</span>
+                        </div>
+                      </th>
+                      <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
+                        <div className="py-4 px-4 min-w-[200px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Observações</span>
                         </div>
                       </th>
                       <th className="py-4 px-4 text-right w-10"></th>
@@ -414,16 +419,35 @@ export default function LeanTab({ project }: { project: Project }) {
                           </td>
 
                           <td className="py-4 px-6">
+                            <div className="space-y-1">
+                              <Input
+                                className="h-8 text-xs bg-white border border-slate-200 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-lg px-2 text-primary font-medium"
+                                value={plan.lastStatus || ''}
+                                onChange={e => {
+                                  const now = new Date().toISOString();
+                                  updateWeeklyPlan({ ...plan, lastStatus: e.target.value, lastStatusDate: now });
+                                }}
+                                placeholder="Status atual..."
+                              />
+                              {plan.lastStatusDate && (
+                                <div className="text-[8px] text-muted-foreground/50 px-1">
+                                  {new Date(plan.lastStatusDate).toLocaleDateString('pt-BR')}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="py-4 px-6">
                             <Input
                               className="h-8 text-xs bg-transparent border-0 border-b border-transparent focus-visible:border-primary shadow-none rounded-none p-0 italic text-muted-foreground placeholder:text-muted-foreground/30"
-                              defaultValue={plan.reason || plan.observations || ''}
+                              defaultValue={plan.observations || ''}
                               onBlur={e => {
                                 const val = e.target.value;
-                                if (val !== (plan.reason || plan.observations || '')) {
+                                if (val !== (plan.observations || '')) {
                                   updateWeeklyPlan({ ...plan, observations: val });
                                 }
                               }}
-                              placeholder="Motivo ou observações..."
+                              placeholder="Observações..."
                             />
                           </td>
 
@@ -649,7 +673,8 @@ export default function LeanTab({ project }: { project: Project }) {
                     <th className="py-4 px-6 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">H</th>
                     <th className="py-4 px-6 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Restrição / Pendência</th>
                     <th className="py-4 px-6 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Tarefa Alvo</th>
-                    <th className="py-4 px-6 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prazo</th>
+                    <th className="py-4 px-6 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prazo</th>
+                    <th className="py-4 px-6 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Situação Atual</th>
                     <th className="py-4 px-6 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Responsável</th>
                     <th className="py-4 px-6 text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status</th>
                   </tr>
@@ -676,12 +701,30 @@ export default function LeanTab({ project }: { project: Project }) {
                         <td className="py-4 px-6 font-medium text-xs text-muted-foreground italic">
                           {linkedTask ? linkedTask.name : 'Geral da Obra'}
                         </td>
-                        <td className="py-4 px-6 text-center">
-                          <div className="flex flex-col items-center">
+                        <td className="py-4 px-6">
+                          <div className="flex flex-col items-start min-w-[80px]">
                             <span className={`text-xs font-bold ${isOverdue ? 'text-destructive animate-pulse' : 'text-foreground'}`}>
-                              {c.dueDate ? formatDate(c.dueDate) : 'Sem prazo'}
+                              {c.dueDate ? formatDate(c.dueDate) : '—'}
                             </span>
                             {isOverdue && <span className="text-[8px] font-black tracking-tighter uppercase text-destructive">Atrasado</span>}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="space-y-1 min-w-[150px]">
+                            <Input
+                              className="h-8 text-xs bg-white border border-slate-200 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-lg px-2 text-primary font-medium"
+                              value={c.lastStatus || ''}
+                              onChange={e => {
+                                const now = new Date().toISOString();
+                                updateConstraint({ ...c, lastStatus: e.target.value, lastStatusDate: now });
+                              }}
+                              placeholder="Status da pendência..."
+                            />
+                            {c.lastStatusDate && (
+                              <div className="text-[8px] text-muted-foreground/50 px-1">
+                                {new Date(c.lastStatusDate).toLocaleDateString('pt-BR')}
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="py-4 px-6 text-sm font-medium text-muted-foreground uppercase">{c.responsible || '—'}</td>

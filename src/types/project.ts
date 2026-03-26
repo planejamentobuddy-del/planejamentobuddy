@@ -28,6 +28,8 @@ export interface Task {
   restrictionType: string;
   status: TaskStatus;
   observations?: string;
+  lastStatus?: string;
+  lastStatusDate?: string;
   checklists?: ChecklistItem[];
 }
 
@@ -44,6 +46,8 @@ export interface WeeklyPlan {
   status: 'planned' | 'in_progress' | 'completed' | 'not_completed';
   reason: string;
   observations: string;
+  lastStatus?: string;
+  lastStatusDate?: string;
 }
 
 export interface WeeklyHistory {
@@ -90,6 +94,8 @@ export interface Constraint {
   dueDate: string;
   closedAt?: string;
   createdAt: string;
+  lastStatus?: string;
+  lastStatusDate?: string;
 }
 
 export function getProjectProgress(tasks: Task[]): number {

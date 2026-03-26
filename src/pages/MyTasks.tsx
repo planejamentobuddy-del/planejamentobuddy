@@ -18,11 +18,17 @@ export default function MyTasks() {
   const userName = profile?.full_name || '';
 
   const myTasks = useMemo(() => {
+    const me = userName.toLowerCase().trim();
+    const match = (name?: string) => {
+      const n = name?.toLowerCase().trim() || '';
+      return n && me && (n === me || n.includes(me) || me.includes(n));
+    };
+
     // 1. Gantt Tasks
-    const ganttTasks = tasks.filter(t => t.responsible?.toLowerCase().trim() === userName.toLowerCase().trim());
+    const ganttTasks = tasks.filter(t => match(t.responsible));
     
     // 2. Ad-hoc Weekly Plans (Lean)
-    const adhocPlans = plans.filter(p => !p.taskId && p.responsible?.toLowerCase().trim() === userName.toLowerCase().trim());
+    const adhocPlans = plans.filter(p => !p.taskId && match(p.responsible));
     
     // Combine them
     return [
@@ -33,23 +39,40 @@ export default function MyTasks() {
         responsible: p.responsible, 
         projectId: p.projectId,
         status: (p.status === 'completed' ? 'completed' : 'in_progress') as any,
-        endDate: '', // weekly plans don't have a single date usually, or we can use the week label
+        endDate: '', 
         type: 'lean' as const,
+        lastStatus: p.lastStatus,
+        lastStatusDate: p.lastStatusDate,
         original: p
       }))
     ].sort((a, b) => a.name.localeCompare(b.name));
   }, [tasks, plans, userName]);
 
   const myConstraints = useMemo(() => {
-    return constraints.filter(c => {
-      const resp = c.responsible?.toLowerCase().trim() || '';
-      const me = userName.toLowerCase().trim();
-      return resp === me || resp.includes(me) || me.includes(resp);
-    }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const me = userName.toLowerCase().trim();
+    const match = (name?: string) => {
+      const n = name?.toLowerCase().trim() || '';
+      return n && me && (n === me || n.includes(me) || me.includes(n));
+    };
+
+    return constraints.filter(c => match(c.responsible))
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   }, [constraints, userName]);
 
   const getProjectName = (projectId: string) => {
     return projects.find(p => p.id === projectId)?.name || 'Projeto Desconhecido';
+  };
+
+  const handleUpdateStatus = async (item: any, newStatusText: string) => {
+    const now = new Date().toISOString();
+    if (item.type === 'gantt') {
+      await updateTask({ ...item, lastStatus: newStatusText, lastStatusDate: now });
+    } else if (item.type === 'lean') {
+      await updateWeeklyPlan({ ...item.original, lastStatus: newStatusText, lastStatusDate: now });
+    } else {
+      // Constraint
+      await updateConstraint({ ...item, lastStatus: newStatusText, lastStatusDate: now });
+    }
   };
 
   const handleToggleTask = async (item: any) => {
@@ -137,7 +160,38 @@ export default function MyTasks() {
                             {task.type === 'lean' && <Badge variant="secondary" className="text-[8px] h-4 py-0 uppercase bg-primary/10 text-primary">Plano Semanal</Badge>}
                           </div>
                           <h4 className={`text-sm font-bold truncate ${task.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{task.name}</h4>
-                          <div className="flex items-center gap-3 mt-1.5">
+                          
+                          {/* Status Update Section */}
+                          <div className="mt-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Última Atualização</span>
+                              {task.lastStatusDate && (
+                                <span className="text-[9px] text-slate-400">
+                                  {new Date(task.lastStatusDate).toLocaleDateString('pt-BR')}
+                                </span>
+                              )}
+                            </div>
+                            {task.lastStatus ? (
+                              <p className="text-[11px] text-slate-600 mb-2 italic">"{task.lastStatus}"</p>
+                            ) : (
+                              <p className="text-[10px] text-slate-400 mb-2">Nenhuma atualização registrada.</p>
+                            )}
+                            <div className="flex gap-2">
+                              <input 
+                                type="text" 
+                                placeholder="Novo status..." 
+                                className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleUpdateStatus(task, (e.target as HTMLInputElement).value);
+                                    (e.target as HTMLInputElement).value = '';
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 mt-3">
                             {task.type === 'gantt' && (
                               <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
                                 <Calendar className="w-3 h-3" />
@@ -214,6 +268,37 @@ export default function MyTasks() {
                                 {getProjectName(c.projectId)}
                               </Badge>
                             </div>
+                            
+                            {/* Status Update Section */}
+                            <div className="mt-3 mb-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Última Atualização</span>
+                                {c.lastStatusDate && (
+                                  <span className="text-[9px] text-slate-400">
+                                    {new Date(c.lastStatusDate).toLocaleDateString('pt-BR')}
+                                  </span>
+                                )}
+                              </div>
+                              {c.lastStatus ? (
+                                <p className="text-[11px] text-slate-600 mb-2 italic">"{c.lastStatus}"</p>
+                              ) : (
+                                <p className="text-[10px] text-slate-400 mb-2">Nenhuma atualização registrada.</p>
+                              )}
+                              <div className="flex gap-2">
+                                <input 
+                                  type="text" 
+                                  placeholder="Novo status..." 
+                                  className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleUpdateStatus({ ...c, type: 'constraint' }, (e.target as HTMLInputElement).value);
+                                      (e.target as HTMLInputElement).value = '';
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                               <span className={`flex items-center gap-1 font-bold ${c.dueDate && new Date(c.dueDate + 'T12:00:00') < new Date() && c.status === 'open' ? 'text-red-500' : 'text-slate-500'}`}>
                                 <Calendar className="w-3.5 h-3.5" />

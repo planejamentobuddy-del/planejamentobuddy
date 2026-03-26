@@ -71,6 +71,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: 'Status', align: 'left', width: 140 },
     { label: 'Predecessoras', align: 'left', width: 160 },
     { label: 'Sucessoras', align: 'left', width: 160 },
+    { label: 'Situação Atual', align: 'left', width: 220 },
     { label: 'Observações', align: 'left', width: 200 },
     { label: 'Ações', align: 'center', width: 100 },
   ];
@@ -431,7 +432,28 @@ export default function PlanningTab({ project }: { project: Project }) {
           </div>
         </td>
 
-        {/* 10. Observações */}
+        {/* 10. Situação Atual */}
+        <td className="py-2.5 px-3 border-r border-border/40">
+          <div className="space-y-1">
+            <Input
+              className="h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 font-medium text-primary"
+              value={task.lastStatus || ''}
+              onChange={e => {
+                const now = new Date().toISOString();
+                handleChange(task, 'lastStatus', e.target.value);
+                handleChange(task, 'lastStatusDate', now);
+              }}
+              placeholder="Ex: Comprado, aguardando..."
+            />
+            {task.lastStatusDate && (
+              <div className="text-[9px] text-muted-foreground/60 px-1.5">
+                Atualizado em: {new Date(task.lastStatusDate).toLocaleDateString('pt-BR')}
+              </div>
+            )}
+          </div>
+        </td>
+
+        {/* 11. Observações */}
         <td className="py-2.5 px-3 border-r border-border/40">
           <Input
             className="h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30"
