@@ -2,7 +2,8 @@ import { useState, useMemo, Fragment } from 'react';
 import { Project, Task, TaskStatus } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -90,7 +91,12 @@ export default function PlanningTab({ project }: { project: Project }) {
   const getStageAggregates = (stageId: string) => {
     const subs = getSubtasks(stageId);
     if (subs.length === 0) return null;
-    const percent = Math.round(subs.reduce((s, t) => s + t.percentComplete, 0) / subs.length);
+    
+    // Using duration-weighted progress for consistency
+    const totalDuration = subs.reduce((sum, t) => sum + Math.max(1, t.duration), 0);
+    const weightedSum = subs.reduce((sum, t) => sum + (t.percentComplete * Math.max(1, t.duration)), 0);
+    const percent = totalDuration > 0 ? Math.round(weightedSum / totalDuration) : 0;
+    
     const starts = subs.map(t => t.startDate).filter(Boolean).sort();
     const ends = subs.map(t => t.endDate).filter(Boolean).sort();
     const startDate = starts[0] || '';
@@ -99,6 +105,27 @@ export default function PlanningTab({ project }: { project: Project }) {
     const hasOverdue = subs.some(t => isOverdue(t));
     return { percent, startDate, endDate, duration, hasOverdue };
   };
+
+  const projectAggregate = useMemo(() => {
+    if (allTasks.length === 0) return null;
+    // Only non-parent tasks count for the weight
+    const parentIds = new Set(allTasks.filter(t => t.parentId).map(t => t.parentId!));
+    const leaves = allTasks.filter(t => !parentIds.has(t.id));
+    if (leaves.length === 0) return null;
+
+    const totalDuration = leaves.reduce((sum, t) => sum + Math.max(1, t.duration), 0);
+    const weightedSum = leaves.reduce((sum, t) => sum + (t.percentComplete * Math.max(1, t.duration)), 0);
+    const percent = totalDuration > 0 ? Math.round(weightedSum / totalDuration) : 0;
+
+    const starts = leaves.map(t => t.startDate).filter(Boolean).sort();
+    const ends = leaves.map(t => t.endDate).filter(Boolean).sort();
+    return { 
+      percent, 
+      startDate: starts[0] || '', 
+      endDate: ends[ends.length - 1] || '',
+      duration: getBusinessDays(starts[0], ends[ends.length - 1])
+    };
+  }, [allTasks]);
 
   const handleAddStage = async () => {
     const start = project.startDate;
@@ -468,30 +495,87 @@ export default function PlanningTab({ project }: { project: Project }) {
                 </td>
               </tr>
             ) : (
-              stages.map(stage => {
-                const subtasks = getSubtasks(stage.id);
-                const isExpanded = expandedStages.has(stage.id);
-                return (
-                  <Fragment key={stage.id}>
-                    {renderRow(stage, false)}
-                    {isExpanded && subtasks.map(sub => renderRow(sub, true, stage.id))}
-                    {isExpanded && (
-                      <tr className="border-b border-dashed bg-muted/5">
-                        <td colSpan={columnHeaders.length} className="py-2 px-3">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors pl-10 h-7"
-                            onClick={() => handleAddSubtask(stage.id)}
-                          >
-                            <Plus className="w-3.5 h-3.5" /> Adicionar Subetapa
-                          </Button>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })
+              <>
+                {/* Project Summary Row (Geral) */}
+                {projectAggregate && (
+                  <tr className="bg-primary/5 font-bold border-b-2 border-primary/20 hover:bg-primary/10 transition-colors">
+                    <td className="p-0 border-r border-border/50">
+                      <div className="flex items-center gap-3 py-3.5 px-3 min-w-[300px]" style={{ width: colWidths[0] }}>
+                        <div className="bg-primary/20 p-1.5 rounded-lg">
+                          <TrendingUp className="w-5 h-5 text-primary" />
+                        </div>
+                        <span className="text-sm font-black text-primary uppercase tracking-tight">RESUMO GERAL DO PROJETO</span>
+                      </div>
+                    </td>
+                    <td className="p-0 border-r border-border/50">
+                      <div className="px-3" style={{ width: colWidths[1] }} />
+                    </td>
+                    <td className="p-0 border-r border-border/50">
+                      <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[2] }}>
+                        {projectAggregate.startDate ? new Date(projectAggregate.startDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                      </div>
+                    </td>
+                    <td className="p-0 border-r border-border/50">
+                      <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[3] }}>
+                        {projectAggregate.endDate ? new Date(projectAggregate.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                      </div>
+                    </td>
+                    <td className="p-0 border-r border-border/50 text-center">
+                      <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[4] }}>
+                        {projectAggregate.duration} dias
+                      </div>
+                    </td>
+                    <td className="p-0 border-r border-border/50">
+                      <div className="px-3 flex items-center gap-2" style={{ width: colWidths[5] }}>
+                        <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden">
+                          <div className="bg-primary h-full transition-all duration-500" style={{ width: `${projectAggregate.percent}%` }} />
+                        </div>
+                        <span className="text-xs text-primary">{projectAggregate.percent}%</span>
+                      </div>
+                    </td>
+                    <td className="p-0 border-r border-border/50">
+                      <div className="px-3" style={{ width: colWidths[6] }}>
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">GERAL</Badge>
+                      </div>
+                    </td>
+                    <td className="p-0 border-r border-border/50">
+                      <div className="px-3" style={{ width: colWidths[7] }} />
+                    </td>
+                    <td className="p-0 border-r border-border/50">
+                      <div className="px-3" style={{ width: colWidths[8] }} />
+                    </td>
+                    <td className="p-0 border-r border-border/50">
+                      <div className="px-3" style={{ width: colWidths[9] }} />
+                    </td>
+                    <td className="p-0" style={{ width: colWidths[10] }} />
+                  </tr>
+                )}
+
+                {stages.map(stage => {
+                  const subtasks = getSubtasks(stage.id);
+                  const isExpanded = expandedStages.has(stage.id);
+                  return (
+                    <Fragment key={stage.id}>
+                      {renderRow(stage, false)}
+                      {isExpanded && subtasks.map(sub => renderRow(sub, true, stage.id))}
+                      {isExpanded && (
+                        <tr className="border-b border-dashed bg-muted/5">
+                          <td colSpan={columnHeaders.length} className="py-2 px-3">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors pl-10 h-7"
+                              onClick={() => handleAddSubtask(stage.id)}
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Adicionar Subetapa
+                            </Button>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </>
             )}
           </tbody>
         </table>

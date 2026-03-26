@@ -94,7 +94,10 @@ export interface Constraint {
 
 export function getProjectProgress(tasks: Task[]): number {
   if (tasks.length === 0) return 0;
-  return Math.round(tasks.reduce((sum, t) => sum + t.percentComplete, 0) / tasks.length);
+  // Use duration-weighted average for consistency with S-Curve
+  const totalDuration = tasks.reduce((sum, t) => sum + Math.max(1, t.duration), 0);
+  const weightedSum = tasks.reduce((sum, t) => sum + (t.percentComplete * Math.max(1, t.duration)), 0);
+  return Math.round(weightedSum / totalDuration);
 }
 
 export function getProjectStatus(tasks: Task[]): 'ok' | 'warning' | 'danger' {
