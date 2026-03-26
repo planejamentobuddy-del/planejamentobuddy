@@ -4,7 +4,7 @@ import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate, isC
 import { useProjects } from '@/hooks/useProjects';
 import { AlertTriangle, CheckCircle, Clock, TrendingUp, Target, Shield, CalendarClock } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart, ComposedChart } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart, ComposedChart, ReferenceLine } from 'recharts';
 
 export default function DashboardTab({ project }: { project: Project }) {
   const [, setSearchParams] = useSearchParams();
@@ -83,10 +83,18 @@ export default function DashboardTab({ project }: { project: Project }) {
         >
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle className="w-4 h-4 text-accent" />
-            <span className="text-xs font-medium text-muted-foreground">Executado</span>
+            <span className="text-xs font-medium text-muted-foreground">Executado Real</span>
           </div>
           <p className="text-3xl font-display font-bold text-foreground">{progress}%</p>
-          <p className="text-xs text-muted-foreground mt-1">{tasks.length} tarefas</p>
+          {lastCurvePoint && (
+            <p className="text-[10px] font-medium mt-1">
+              <span className="text-muted-foreground">Previsto: </span>
+              <span className="text-foreground">{lastCurvePoint.planejado}%</span>
+              <span className={`ml-2 ${curveDeviation > 2 ? 'text-status-danger' : curveDeviation < -2 ? 'text-status-ok' : 'text-muted-foreground'}`}>
+                {curveDeviation > 0 ? `(${curveDeviation}% atrasado)` : curveDeviation < 0 ? `(${Math.abs(curveDeviation)}% adiantado)` : '(Em dia)'}
+              </span>
+            </p>
+          )}
           <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
             <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progress}%` }} />
           </div>
@@ -183,7 +191,7 @@ export default function DashboardTab({ project }: { project: Project }) {
                   ? 'bg-[hsl(38_92%_50%/0.1)] text-status-warning'
                   : 'bg-[hsl(152_60%_42%/0.1)] text-status-ok'
               }`}>
-                {curveDeviation > 0 ? `-${curveDeviation}% desvio` : curveDeviation === 0 ? 'No prazo' : `+${Math.abs(curveDeviation)}%`}
+                {curveDeviation > 0 ? `-${curveDeviation}% atraso` : curveDeviation === 0 ? 'No prazo' : `+${Math.abs(curveDeviation)}% adiant.`}
               </span>
             )}
           </div>
@@ -236,6 +244,9 @@ export default function DashboardTab({ project }: { project: Project }) {
                     dot={false}
                     activeDot={{ r: 4, strokeWidth: 0 }}
                   />
+                  {lastCurvePoint && (
+                    <ReferenceLine x={lastCurvePoint.label} stroke="hsl(var(--accent))" strokeDasharray="3 3" />
+                  )}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>

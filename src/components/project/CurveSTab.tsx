@@ -1,7 +1,7 @@
 import { Project, calculateSCurve } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, Label } from 'recharts';
 
 export default function CurveSTab({ project }: { project: Project }) {
   const { getTasksForProject, loading } = useProjects();
@@ -73,9 +73,21 @@ export default function CurveSTab({ project }: { project: Project }) {
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="%" />
                 <Tooltip formatter={(v: number) => `${v}%`} />
-                <Legend />
+                <Legend verticalAlign="top" height={36}/>
                 <Line type="monotone" name="Planejado" dataKey="planejado" stroke="hsl(var(--chart-planned))" strokeWidth={2} strokeDasharray="6 3" dot={false} />
                 <Line type="monotone" name="Realizado" dataKey="realizado" stroke="hsl(var(--chart-actual))" strokeWidth={2.5} dot={{ r: 3 }} />
+                
+                {summaryPoint && (
+                  <ReferenceLine x={summaryPoint.label} stroke="hsl(var(--accent))" strokeDasharray="3 3">
+                    <Label 
+                      value={`HOJE: ${diff > 0 ? 'Atraso' : 'Adiant.'} de ${Math.abs(diff).toFixed(1)}%`} 
+                      position="top" 
+                      fill="hsl(var(--accent))" 
+                      fontSize={10} 
+                      fontWeight="bold"
+                    />
+                  </ReferenceLine>
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
