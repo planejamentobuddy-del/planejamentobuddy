@@ -4,37 +4,8 @@ import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, ge
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
-interface ProjectsContextType {
-  projects: Project[];
-  loading: boolean;
-  tasks: Task[];
-  constraints: Constraint[];
-  plans: WeeklyPlan[];
-  addProject: (p: Omit<Project, 'id' | 'createdAt'>) => Promise<Project | null>;
-  deleteProject: (id: string) => Promise<void>;
-  // Tasks
-  getTasksForProject: (projectId: string) => Task[];
-  addTask: (task: Omit<Task, 'id'>) => Promise<Task | null>;
-  updateTask: (task: Task) => Promise<void>;
-  deleteTask: (id: string) => Promise<void>;
-  // Weekly plans
-  getPlansForProject: (projectId: string) => WeeklyPlan[];
-  addWeeklyPlan: (plan: Omit<WeeklyPlan, 'id'>) => Promise<void>;
-  updateWeeklyPlan: (plan: WeeklyPlan) => Promise<void>;
-  deleteWeeklyPlan: (id: string) => Promise<void>;
-  // History
-  getHistoryForProject: (projectId: string) => WeeklyHistory[];
-  // Constraints
-  getConstraintsForProject: (projectId: string) => Constraint[];
-  addConstraint: (c: Omit<Constraint, 'id' | 'createdAt'>) => Promise<Constraint | null>;
-  updateConstraint: (c: Constraint) => Promise<void>;
-  deleteConstraint: (id: string) => Promise<void>;
-  closeWeek: (projectId: string) => Promise<void>;
-  refresh: () => Promise<void>;
-  users: any[];
-}
-
-const ProjectsContext = createContext<ProjectsContextType | null>(null);
+import { ProjectsContext, ProjectsContextType, useProjects } from './ProjectsContext';
+export { useProjects };
 
 export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -63,7 +34,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       const { data: taskData, error: taskErr } = await supabase.from('tasks').select('*').order('created_at', { ascending: true });
       const { data: planData, error: planErr } = await supabase.from('weekly_plans').select('*');
       const { data: histData, error: histErr } = await supabase.from('weekly_history').select('*').order('closed_at', { ascending: false });
-      const { data: constrData, error: constrErr } = await (supabase.from('constraints') as any).select('*').order('created_at', { ascending: true });
+      const { data: constrData, error: constrErr } = await supabase.from('constraints').select('*').order('created_at', { ascending: true });
       const { data: userData, error: userErr } = await supabase.from('profiles').select('id, full_name, email').in('status', ['active', 'pending']);
 
       if (projErr) throw projErr;
@@ -447,7 +418,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     constraints.filter(c => c.projectId === projectId), [constraints]);
 
   const addConstraint = useCallback(async (c: Omit<Constraint, 'id' | 'createdAt'>) => {
-    const { data, error } = await (supabase.from('constraints') as any)
+    const { data, error } = await supabase.from('constraints')
       .insert([{
         project_id: c.projectId,
         task_id: c.taskId,
@@ -487,7 +458,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     const original = [...constraints];
     setConstraints(prev => prev.map(item => item.id === c.id ? c : item));
 
-    const { error } = await (supabase.from('constraints') as any)
+    const { error } = await supabase.from('constraints')
       .update({
         description: c.description,
         category: c.category,
@@ -508,7 +479,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     const original = [...constraints];
     setConstraints(prev => prev.filter(c => c.id !== id));
 
-    const { error } = await (supabase.from('constraints') as any).delete().eq('id', id);
+    const { error } = await supabase.from('constraints').delete().eq('id', id);
     if (error) {
       setConstraints(original);
       toast.error('Erro ao excluir restrição.');
@@ -530,10 +501,4 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       {children}
     </ProjectsContext.Provider>
   );
-}
-
-export function useProjects() {
-  const ctx = useContext(ProjectsContext);
-  if (!ctx) throw new Error('useProjects must be inside ProjectsProvider');
-  return ctx;
 }

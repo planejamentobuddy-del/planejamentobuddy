@@ -273,6 +273,61 @@ export type Database = {
         }
         Relationships: []
       }
+      constraints: {
+        Row: {
+          id: string
+          project_id: string
+          task_id: string | null
+          description: string
+          category: string
+          status: string
+          responsible: string | null
+          due_date: string | null
+          closed_at: string | null
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          task_id?: string | null
+          description: string
+          category: string
+          status?: string
+          responsible?: string | null
+          due_date?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          task_id?: string | null
+          description?: string
+          category?: string
+          status?: string
+          responsible?: string | null
+          due_date?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "constraints_project_id_fkey"
+            columns: ["project_id"]
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "constraints_task_id_fkey"
+            columns: ["task_id"]
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
