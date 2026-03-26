@@ -18,7 +18,11 @@ export default function CurveSTab({ project }: { project: Project }) {
 
   const summaryPoint = useMemo(() => {
     if (chartData.length === 0) return null;
-    // Find last point that is not in the future (compared to Today)
+    // Find the point that corresponds exactly to Today (nowTs)
+    // or the closest one in the past if Today is outside the project range
+    const exactPoint = chartData.find(p => p.timestamp === nowTs);
+    if (exactPoint) return exactPoint;
+
     const pastPoints = chartData.filter(p => p.timestamp <= nowTs);
     return pastPoints.length > 0 ? pastPoints[pastPoints.length - 1] : chartData[0];
   }, [chartData, nowTs]);

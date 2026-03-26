@@ -316,13 +316,24 @@ export function calculateSCurve(tasks: Task[], project: Project): CurvePoint[] {
 
   const points: CurvePoint[] = [];
   
-  // We'll generate daily points but sample them if the project is long
-  const durationDays = Math.ceil((end - start) / 86400000);
-  const stepDays = Math.max(1, Math.ceil(durationDays / 40)); // Target ~40 points
+  // Collect all timestamps we want to calculate
+  const timePoints: number[] = [];
+  const durationMs = end - start;
+  const stepDays = Math.max(1, Math.ceil((durationMs / 86400000) / 40));
   const stepMs = stepDays * 86400000;
 
-  for (let current = start; current <= end + 86400000; current += stepMs) {
-    const currentSafe = Math.min(current, end);
+  for (let c = start; c <= end; c += stepMs) {
+    timePoints.push(c);
+  }
+  timePoints.push(end);
+  if (nowTs > start && nowTs < end) {
+    timePoints.push(nowTs);
+  }
+
+  // Deduplicate and sort
+  const uniqueTimePoints = Array.from(new Set(timePoints)).sort((a, b) => a - b);
+  
+  uniqueTimePoints.forEach(currentSafe => {
     let totalPlannedWeight = 0;
     let totalActualWeight = 0;
 
@@ -360,9 +371,7 @@ export function calculateSCurve(tasks: Task[], project: Project): CurvePoint[] {
       realizado: Math.round((totalActualWeight / totalWeight) * 100),
       timestamp: currentSafe,
     });
-
-    if (currentSafe >= end) break;
-  }
+  });
 
   return points;
 }
