@@ -292,7 +292,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         observations: task.observations,
         last_status: task.lastStatus,
         last_status_date: task.lastStatusDate,
-        status_comments: (task.statusComments as any) || [],
+        status_comments: (finalStatus === 'completed' ? [] : (task.statusComments as any) || []),
         checklists: (task.checklists as any) || [],
       })
       .eq('id', task.id);
@@ -367,7 +367,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         responsible: plan.taskId ? (tasks.find(t => t.id === plan.taskId)?.responsible || '') : plan.responsible,
         last_status: plan.lastStatus,
         last_status_date: plan.lastStatusDate,
-        status_comments: (plan.statusComments as any) || [],
+        status_comments: (plan.status === 'completed' ? [] : (plan.statusComments as any) || []),
       })
       .eq('id', plan.id);
 
@@ -485,7 +485,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         due_date: c.dueDate || null,
         last_status: c.lastStatus,
         last_status_date: c.lastStatusDate,
-        status_comments: (c.statusComments as any) || [],
+        status_comments: (c.status === 'closed' ? [] : (c.statusComments as any) || []),
         closed_at: c.status === 'closed' ? new Date().toISOString() : null
       })
       .eq('id', c.id);

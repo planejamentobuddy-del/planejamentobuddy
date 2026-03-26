@@ -27,8 +27,8 @@ export default function MyTasks() {
       return n && me && (n === me || n.includes(me) || me.includes(n));
     };
 
-    // 1. Gantt Tasks where user is responsible
-    const ganttTasks = tasks.filter(t => match(t.responsible));
+    // 1. Gantt Tasks where user is responsible AND not completed
+    const ganttTasks = tasks.filter(t => match(t.responsible) && t.status !== 'completed');
 
     // Collect task IDs already represented by Gantt tasks (avoid duplicates in combined list)
     const ganttTaskIds = new Set(ganttTasks.map(t => t.id));
@@ -38,6 +38,7 @@ export default function MyTasks() {
     //    - standalone/ad-hoc plans (no taskId) also show
     const myPlans = plans.filter(p => {
       if (!match(p.responsible)) return false;
+      if (p.status === 'completed') return false; // Filter out completed plans
       // If this plan is linked to a Gantt task already shown, skip it to avoid duplicate
       if (p.taskId && ganttTaskIds.has(p.taskId)) return false;
       return true;
@@ -68,7 +69,7 @@ export default function MyTasks() {
       return n && me && (n === me || n.includes(me) || me.includes(n));
     };
 
-    return constraints.filter(c => match(c.responsible))
+    return constraints.filter(c => match(c.responsible) && c.status === 'open')
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   }, [constraints, userName]);
 
