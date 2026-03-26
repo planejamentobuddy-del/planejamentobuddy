@@ -63,7 +63,13 @@ export default function Index() {
                 };
                 const count = tasks.filter(t => match(t.responsible) && t.status !== 'completed').length +
                              constraints.filter(c => match(c.responsible) && c.status === 'open').length +
-                             plans.filter(p => !p.taskId && match(p.responsible) && p.status !== 'completed').length;
+                             plans.filter(p => {
+                               if (!match(p.responsible)) return false;
+                               if (p.status === 'completed') return false;
+                               // Skip linked plans if the task is already counted
+                               if (p.taskId && tasks.some(t => t.id === p.taskId && match(t.responsible))) return false;
+                               return true;
+                             }).length;
                 if (count === 0) return null;
                 return (
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-status-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-in zoom-in duration-300">

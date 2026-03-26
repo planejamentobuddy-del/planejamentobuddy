@@ -19,31 +19,42 @@ export default function MyTasks() {
 
   const myTasks = useMemo(() => {
     const me = userName.toLowerCase().trim();
+    if (!me) return [];
+    // Strict match: user's name must be included in or include the responsible name
     const match = (name?: string) => {
       const n = name?.toLowerCase().trim() || '';
       return n && me && (n === me || n.includes(me) || me.includes(n));
     };
 
-    // 1. Gantt Tasks
+    // 1. Gantt Tasks where user is responsible
     const ganttTasks = tasks.filter(t => match(t.responsible));
-    
-    // 2. Ad-hoc Weekly Plans (Lean)
-    const adhocPlans = plans.filter(p => !p.taskId && match(p.responsible));
-    
-    // Combine them
+
+    // Collect task IDs already represented by Gantt tasks (avoid duplicates in combined list)
+    const ganttTaskIds = new Set(ganttTasks.map(t => t.id));
+
+    // 2. ALL Weekly Plans where user is responsible
+    //    - linked plans (taskId set) show if the responsible from the linked task matches
+    //    - standalone/ad-hoc plans (no taskId) also show
+    const myPlans = plans.filter(p => {
+      if (!match(p.responsible)) return false;
+      // If this plan is linked to a Gantt task already shown, skip it to avoid duplicate
+      if (p.taskId && ganttTaskIds.has(p.taskId)) return false;
+      return true;
+    });
+
     return [
       ...ganttTasks.map(t => ({ ...t, type: 'gantt' as const })),
-      ...adhocPlans.map(p => ({ 
-        id: p.id, 
-        name: p.taskName, 
-        responsible: p.responsible, 
+      ...myPlans.map(p => ({
+        id: p.id,
+        name: p.taskName,
+        responsible: p.responsible,
         projectId: p.projectId,
         status: (p.status === 'completed' ? 'completed' : 'in_progress') as any,
-        endDate: '', 
-        type: 'lean' as const,
+        endDate: '',
+        type: p.taskId ? 'lean_linked' as const : 'lean' as const,
         lastStatus: p.lastStatus,
         lastStatusDate: p.lastStatusDate,
-        original: p
+        original: p,
       }))
     ].sort((a, b) => a.name.localeCompare(b.name));
   }, [tasks, plans, userName]);
@@ -157,7 +168,8 @@ export default function MyTasks() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">{getProjectName(task.projectId)}</span>
-                            {task.type === 'lean' && <Badge variant="secondary" className="text-[8px] h-4 py-0 uppercase bg-primary/10 text-primary">Plano Semanal</Badge>}
+                            {task.type === 'lean' && <Badge variant="secondary" className="text-[8px] h-4 py-0 uppercase bg-primary/10 text-primary">Avulsa</Badge>}
+                            {task.type === 'lean_linked' && <Badge variant="secondary" className="text-[8px] h-4 py-0 uppercase bg-blue-50 text-blue-600">Plano Semanal</Badge>}
                           </div>
                           <h4 className={`text-sm font-bold truncate ${task.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{task.name}</h4>
                           

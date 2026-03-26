@@ -381,10 +381,12 @@ export default function LeanTab({ project }: { project: Project }) {
                           <td className="py-4 px-6 text-sm text-muted-foreground font-medium">
                             <Input 
                               list="users-list-lean"
-                              className="h-7 text-sm p-0 border-0 bg-transparent focus-visible:ring-1 focus-visible:ring-primary/20 rounded px-1"
+                              className={`h-7 text-sm p-0 border-0 bg-transparent rounded px-1 ${plan.taskId ? 'opacity-70 cursor-not-allowed font-bold text-primary' : 'focus-visible:ring-1 focus-visible:ring-primary/20'}`}
                               value={plan.responsible || ''}
-                              onChange={e => updateWeeklyPlan({ ...plan, responsible: e.target.value })}
+                              onChange={e => !plan.taskId && updateWeeklyPlan({ ...plan, responsible: e.target.value })}
                               placeholder="Responsável..."
+                              disabled={!!plan.taskId}
+                              title={plan.taskId ? "Responsável definido no planejamento mestre" : ""}
                             />
                           </td>
 

@@ -90,20 +90,23 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (planData) {
-        setPlans(planData.map(p => ({
-          id: p.id,
-          projectId: p.project_id,
-          taskId: p.task_id,
-          taskName: p.task_name,
-          responsible: p.responsible || '',
-          week: p.week,
-          weekLabel: p.week_label,
-          status: p.status as any,
-          reason: p.reason || '',
-          observations: p.observations || '',
-          lastStatus: p.last_status || '',
-          lastStatusDate: p.last_status_date || '',
-        })));
+        setPlans(planData.map(p => {
+          const linkedTask = taskData?.find(t => t.id === p.task_id);
+          return {
+            id: p.id,
+            projectId: p.project_id,
+            taskId: p.task_id,
+            taskName: p.task_name,
+            responsible: linkedTask ? (linkedTask.responsible || '') : (p.responsible || ''),
+            week: p.week,
+            weekLabel: p.week_label,
+            status: p.status as any,
+            reason: p.reason || '',
+            observations: p.observations || '',
+            lastStatus: p.last_status || '',
+            lastStatusDate: p.last_status_date || '',
+          };
+        }));
       }
 
       if (histData) {
@@ -357,7 +360,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         reason: plan.reason,
         observations: plan.observations,
         task_name: plan.taskName,
-        responsible: plan.responsible,
+        responsible: plan.taskId ? (tasks.find(t => t.id === plan.taskId)?.responsible || '') : plan.responsible,
         last_status: plan.lastStatus,
         last_status_date: plan.lastStatusDate,
       })
