@@ -117,7 +117,7 @@ export default function MyTasks() {
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3.5 h-3.5" />
-                              {new Date(task.endDate).toLocaleDateString('pt-BR')}
+                              {task.endDate ? new Date(task.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Sem data'}
                             </span>
                             <span className="flex items-center gap-1 font-medium text-slate-400">
                               {task.percentComplete}% concluído
@@ -183,9 +183,9 @@ export default function MyTasks() {
                               </Badge>
                             </div>
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                              <span className={`flex items-center gap-1 font-bold ${new Date(c.dueDate) < new Date() && c.status === 'open' ? 'text-red-500' : 'text-slate-500'}`}>
+                              <span className={`flex items-center gap-1 font-bold ${c.dueDate && new Date(c.dueDate + 'T12:00:00') < new Date() && c.status === 'open' ? 'text-red-500' : 'text-slate-500'}`}>
                                 <Calendar className="w-3.5 h-3.5" />
-                                Prazo: {new Date(c.dueDate).toLocaleDateString('pt-BR')}
+                                Prazo: {c.dueDate ? new Date(c.dueDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Sem prazo'}
                               </span>
                             </div>
                           </div>

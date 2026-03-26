@@ -30,6 +30,7 @@ interface ProjectsContextType {
   deleteConstraint: (id: string) => Promise<void>;
   closeWeek: (projectId: string) => Promise<void>;
   refresh: () => Promise<void>;
+  users: any[];
 }
 
 const ProjectsContext = createContext<ProjectsContextType | null>(null);
@@ -41,6 +42,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [history, setHistory] = useState<WeeklyHistory[]>([]);
   const [constraints, setConstraints] = useState<Constraint[]>([]);
+  const [usersList, setUsersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -61,6 +63,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       const { data: planData, error: planErr } = await supabase.from('weekly_plans').select('*');
       const { data: histData, error: histErr } = await supabase.from('weekly_history').select('*').order('closed_at', { ascending: false });
       const { data: constrData, error: constrErr } = await (supabase.from('constraints') as any).select('*').order('created_at', { ascending: true });
+      const { data: userData, error: userErr } = await supabase.from('profiles').select('id, full_name, email').eq('status', 'active');
 
       if (projErr) throw projErr;
       if (taskErr) throw taskErr;
@@ -153,6 +156,10 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           closedAt: c.closed_at || undefined,
           createdAt: c.created_at,
         })));
+      }
+
+      if (userData) {
+        setUsersList(userData);
       }
     } catch (error: any) {
       console.error('Error fetching data:', error);
@@ -515,6 +522,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,
       getHistoryForProject, closeWeek,
       refresh: fetchData,
+      users: usersList,
     }}>
       {children}
     </ProjectsContext.Provider>

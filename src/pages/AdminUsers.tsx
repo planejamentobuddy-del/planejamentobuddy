@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, CheckCircle, XCircle, Ban, Loader2, Shield } from 'lucide-react';
+import { ArrowLeft, Users, CheckCircle, XCircle, Ban, Loader2, Shield, Pencil } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
@@ -28,6 +31,8 @@ export default function AdminUsers() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [newName, setNewName] = useState('');
 
   const fetchUsers = async () => {
     const { data, error } = await supabase
@@ -60,6 +65,26 @@ export default function AdminUsers() {
     } else {
       toast({ title: 'Atualizado', description: `Status alterado para ${statusConfig[status].label}` });
       fetchUsers();
+    }
+  };
+
+  const updateName = async () => {
+    if (!editingUser) return;
+
+    setUpdating(editingUser.id);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: newName, updated_at: new Date().toISOString() })
+      .eq('id', editingUser.id);
+    
+    setUpdating(null);
+    if (error) {
+      toast({ title: 'Erro ao atualizar nome', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Atualizado', description: `Nome alterado para ${newName}` });
+      fetchUsers(); // Refresh the list
+      setEditingUser(null); // Close dialog
+      setNewName(''); // Clear input
     }
   };
 
@@ -108,8 +133,20 @@ export default function AdminUsers() {
                 {users.map(user => {
                   const cfg = statusConfig[user.status];
                   return (
-                    <tr key={user.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-4 font-medium text-foreground">{user.full_name || '—'}</td>
+                    <tr key={user.id} className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">{user.full_name || '—'}</span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => { setEditingUser(user); setNewName(user.full_name || ''); }}
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </td>
                       <td className="py-3 px-4 text-muted-foreground">{user.email}</td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${cfg.color}`}>
@@ -152,6 +189,31 @@ export default function AdminUsers() {
           </div>
         )}
       </main>
+
+      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Usuário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome Completo</Label>
+              <Input 
+                id="name" 
+                value={newName} 
+                onChange={e => setNewName(e.target.value)}
+                placeholder="Ex: JERRE"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingUser(null)}>Cancelar</Button>
+            <Button onClick={updateName} disabled={updating === editingUser?.id}>
+              {updating === editingUser?.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

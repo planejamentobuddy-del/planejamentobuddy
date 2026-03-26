@@ -56,7 +56,8 @@ export default function LeanTab({ project }: { project: Project }) {
   const {
     getTasksForProject, getPlansForProject, addWeeklyPlan, updateWeeklyPlan,
     deleteWeeklyPlan, getHistoryForProject, closeWeek,
-    getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint
+    getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,
+    users
   } = useProjects();
 
   const tasks = getTasksForProject(project.id);
@@ -530,6 +531,7 @@ export default function LeanTab({ project }: { project: Project }) {
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Quem Resolve? (Responsável)</label>
                   <Input 
+                    list="users-list-lean"
                     placeholder="Nome do responsável..." 
                     value={newConstraint.responsible} 
                     onChange={e => setNewConstraint({ ...newConstraint, responsible: e.target.value })}
@@ -751,6 +753,9 @@ export default function LeanTab({ project }: { project: Project }) {
           </div>
         </TabsContent>
       </Tabs>
+      <datalist id="users-list-lean">
+        {users.map(u => <option key={u.id} value={u.full_name} />)}
+      </datalist>
     </div>
   );
 }

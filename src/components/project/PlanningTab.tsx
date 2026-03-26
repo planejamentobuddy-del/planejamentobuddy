@@ -51,7 +51,7 @@ function addBusinessDays(startDateStr: string, duration: number): string {
 
 
 export default function PlanningTab({ project }: { project: Project }) {
-  const { getTasksForProject, addTask, updateTask, deleteTask } = useProjects();
+  const { getTasksForProject, addTask, updateTask, deleteTask, users } = useProjects();
   const { isAdmin } = useAuth();
   const allTasks = getTasksForProject(project.id);
 
@@ -283,6 +283,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         {/* 2. Responsável */}
         <td className="py-2.5 px-3 border-r border-border/40">
           <Input
+            list="users-list"
             className="h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30"
             value={task.responsible || ''}
             onChange={e => handleChange(task, 'responsible', e.target.value)}
@@ -494,7 +495,10 @@ export default function PlanningTab({ project }: { project: Project }) {
             )}
           </tbody>
         </table>
-      </div>
+      <datalist id="users-list">
+        {users.map(u => <option key={u.id} value={u.full_name} />)}
+      </datalist>
+    </div>
     </div>
   );
 }
