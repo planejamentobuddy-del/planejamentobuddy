@@ -13,6 +13,12 @@ export interface ChecklistItem {
   completed: boolean;
 }
 
+export interface StatusComment {
+  author: string;
+  text: string;
+  date: string; // ISO timestamp
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -30,6 +36,7 @@ export interface Task {
   observations?: string;
   lastStatus?: string;
   lastStatusDate?: string;
+  statusComments?: StatusComment[];
   checklists?: ChecklistItem[];
 }
 
@@ -48,6 +55,7 @@ export interface WeeklyPlan {
   observations: string;
   lastStatus?: string;
   lastStatusDate?: string;
+  statusComments?: StatusComment[];
 }
 
 export interface WeeklyHistory {
@@ -96,6 +104,7 @@ export interface Constraint {
   createdAt: string;
   lastStatus?: string;
   lastStatusDate?: string;
+  statusComments?: StatusComment[];
 }
 
 export function getProjectProgress(tasks: Task[]): number {

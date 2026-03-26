@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
-import { Task, Constraint, CONSTRAINT_CATEGORIES } from '@/types/project';
+import { Task, Constraint, CONSTRAINT_CATEGORIES, StatusComment } from '@/types/project';
+import StatusCommentLog from '@/components/project/StatusCommentLog';
 
 export default function MyTasks() {
   const { tasks, constraints, updateTask, updateConstraint, projects, plans, updateWeeklyPlan } = useProjects();
@@ -54,6 +55,7 @@ export default function MyTasks() {
         type: p.taskId ? 'lean_linked' as const : 'lean' as const,
         lastStatus: p.lastStatus,
         lastStatusDate: p.lastStatusDate,
+        statusComments: p.statusComments || [],
         original: p,
       }))
     ].sort((a, b) => a.name.localeCompare(b.name));
@@ -74,16 +76,16 @@ export default function MyTasks() {
     return projects.find(p => p.id === projectId)?.name || 'Projeto Desconhecido';
   };
 
-  const handleUpdateStatus = async (item: any, newStatusText: string) => {
-    const now = new Date().toISOString();
+  const addTaskComment = async (item: any, newComments: StatusComment[]) => {
     if (item.type === 'gantt') {
-      await updateTask({ ...item, lastStatus: newStatusText, lastStatusDate: now });
-    } else if (item.type === 'lean') {
-      await updateWeeklyPlan({ ...item.original, lastStatus: newStatusText, lastStatusDate: now });
+      await updateTask({ ...item, statusComments: newComments });
     } else {
-      // Constraint
-      await updateConstraint({ ...item, lastStatus: newStatusText, lastStatusDate: now });
+      await updateWeeklyPlan({ ...item.original, statusComments: newComments });
     }
+  };
+
+  const addConstraintComment = async (c: Constraint, newComments: StatusComment[]) => {
+    await updateConstraint({ ...c, statusComments: newComments });
   };
 
   const handleToggleTask = async (item: any) => {
@@ -174,33 +176,11 @@ export default function MyTasks() {
                           <h4 className={`text-sm font-bold truncate ${task.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{task.name}</h4>
                           
                           {/* Status Update Section */}
-                          <div className="mt-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Última Atualização</span>
-                              {task.lastStatusDate && (
-                                <span className="text-[9px] text-slate-400">
-                                  {new Date(task.lastStatusDate).toLocaleDateString('pt-BR')}
-                                </span>
-                              )}
-                            </div>
-                            {task.lastStatus ? (
-                              <p className="text-[11px] text-slate-600 mb-2 italic">"{task.lastStatus}"</p>
-                            ) : (
-                              <p className="text-[10px] text-slate-400 mb-2">Nenhuma atualização registrada.</p>
-                            )}
-                            <div className="flex gap-2">
-                              <input 
-                                type="text" 
-                                placeholder="Novo status..." 
-                                className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    handleUpdateStatus(task, (e.target as HTMLInputElement).value);
-                                    (e.target as HTMLInputElement).value = '';
-                                  }
-                                }}
-                              />
-                            </div>
+                          <div className="mt-3">
+                            <StatusCommentLog 
+                              comments={task.statusComments || []} 
+                              onAddComment={(newComments) => addTaskComment(task, newComments)}
+                            />
                           </div>
 
                           <div className="flex items-center gap-3 mt-3">
@@ -282,34 +262,12 @@ export default function MyTasks() {
                             </div>
                             
                             {/* Status Update Section */}
-                            <div className="mt-3 mb-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Última Atualização</span>
-                                {c.lastStatusDate && (
-                                  <span className="text-[9px] text-slate-400">
-                                    {new Date(c.lastStatusDate).toLocaleDateString('pt-BR')}
-                                  </span>
-                                )}
-                              </div>
-                              {c.lastStatus ? (
-                                <p className="text-[11px] text-slate-600 mb-2 italic">"{c.lastStatus}"</p>
-                              ) : (
-                                <p className="text-[10px] text-slate-400 mb-2">Nenhuma atualização registrada.</p>
-                              )}
-                              <div className="flex gap-2">
-                                <input 
-                                  type="text" 
-                                  placeholder="Novo status..." 
-                                  className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      handleUpdateStatus({ ...c, type: 'constraint' }, (e.target as HTMLInputElement).value);
-                                      (e.target as HTMLInputElement).value = '';
-                                    }
-                                  }}
-                                />
-                              </div>
-                            </div>
+                      <div className="mt-4">
+                        <StatusCommentLog 
+                          comments={c.statusComments || []} 
+                          onAddComment={(newComments) => addConstraintComment(c, newComments)}
+                        />
+                      </div>
 
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                               <span className={`flex items-center gap-1 font-bold ${c.dueDate && new Date(c.dueDate + 'T12:00:00') < new Date() && c.status === 'open' ? 'text-red-500' : 'text-slate-500'}`}>

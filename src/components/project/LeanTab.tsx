@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Project, DELAY_REASONS, WeeklyPlan, Task, Constraint, CONSTRAINT_CATEGORIES, ConstraintCategory } from '@/types/project';
+import { Project, DELAY_REASONS, WeeklyPlan, Task, Constraint, CONSTRAINT_CATEGORIES, ConstraintCategory, StatusComment } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,10 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ChevronLeft, ChevronRight, Calendar, Eye, BarChart3, 
   AlertTriangle, CheckCircle2, Plus, Trash2, Filter,
-  Lock, Unlock, Clock, AlertCircle
+  Lock, Unlock, Clock, AlertCircle, MessageSquare
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { toast } from 'sonner';
+import StatusCommentLog from './StatusCommentLog';
 
 function getWeekRange(weekStr: string): { start: Date; end: Date; label: string } {
   // Parse "YYYY-SWW" format
@@ -420,23 +421,12 @@ export default function LeanTab({ project }: { project: Project }) {
                             )}
                           </td>
 
-                          <td className="py-4 px-6">
-                            <div className="space-y-1">
-                              <Input
-                                className="h-8 text-xs bg-white border border-slate-200 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-lg px-2 text-primary font-medium"
-                                value={plan.lastStatus || ''}
-                                onChange={e => {
-                                  const now = new Date().toISOString();
-                                  updateWeeklyPlan({ ...plan, lastStatus: e.target.value, lastStatusDate: now });
-                                }}
-                                placeholder="Status atual..."
-                              />
-                              {plan.lastStatusDate && (
-                                <div className="text-[8px] text-muted-foreground/50 px-1">
-                                  {new Date(plan.lastStatusDate).toLocaleDateString('pt-BR')}
-                                </div>
-                              )}
-                            </div>
+                          <td className="py-2 px-4 min-w-[300px] border-r border-border/50">
+                            <StatusCommentLog 
+                              compact 
+                              comments={plan.statusComments || []} 
+                              onAddComment={(newComments) => updateWeeklyPlan({ ...plan, statusComments: newComments })}
+                            />
                           </td>
 
                           <td className="py-4 px-6">
@@ -711,23 +701,12 @@ export default function LeanTab({ project }: { project: Project }) {
                             {isOverdue && <span className="text-[8px] font-black tracking-tighter uppercase text-destructive">Atrasado</span>}
                           </div>
                         </td>
-                        <td className="py-4 px-6">
-                          <div className="space-y-1 min-w-[150px]">
-                            <Input
-                              className="h-8 text-xs bg-white border border-slate-200 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-lg px-2 text-primary font-medium"
-                              value={c.lastStatus || ''}
-                              onChange={e => {
-                                const now = new Date().toISOString();
-                                updateConstraint({ ...c, lastStatus: e.target.value, lastStatusDate: now });
-                              }}
-                              placeholder="Status da pendência..."
-                            />
-                            {c.lastStatusDate && (
-                              <div className="text-[8px] text-muted-foreground/50 px-1">
-                                {new Date(c.lastStatusDate).toLocaleDateString('pt-BR')}
-                              </div>
-                            )}
-                          </div>
+                        <td className="py-2 px-6 min-w-[300px]">
+                          <StatusCommentLog 
+                            compact 
+                            comments={c.statusComments || []} 
+                            onAddComment={(newComments) => updateConstraint({ ...c, statusComments: newComments })}
+                          />
                         </td>
                         <td className="py-4 px-6 text-sm font-medium text-muted-foreground uppercase">{c.responsible || '—'}</td>
                         <td className="py-4 px-6 text-right">

@@ -1,8 +1,9 @@
 import { useState, useMemo, Fragment } from 'react';
-import { Project, Task, TaskStatus, getProjectProgress } from '@/types/project';
+import { Project, Task, TaskStatus, getProjectProgress, StatusComment } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp } from 'lucide-react';
+import StatusCommentLog from './StatusCommentLog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -148,6 +149,7 @@ export default function PlanningTab({ project }: { project: Project }) {
       restrictionType: '',
       status: 'not_started',
       observations: '',
+      statusComments: [],
     });
     if (task) {
       setExpandedStages(prev => new Set([...prev, task.id]));
@@ -172,6 +174,7 @@ export default function PlanningTab({ project }: { project: Project }) {
       restrictionType: '',
       status: 'not_started',
       observations: '',
+      statusComments: [],
     });
     setExpandedStages(prev => new Set([...prev, stageId]));
   };
@@ -253,6 +256,7 @@ export default function PlanningTab({ project }: { project: Project }) {
       restrictionType: '',
       status: 'not_started',
       observations: '',
+      statusComments: [],
     });
   };
 
@@ -433,24 +437,12 @@ export default function PlanningTab({ project }: { project: Project }) {
         </td>
 
         {/* 10. Situação Atual */}
-        <td className="py-2.5 px-3 border-r border-border/40">
-          <div className="space-y-1">
-            <Input
-              className="h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 font-medium text-primary"
-              value={task.lastStatus || ''}
-              onChange={e => {
-                const now = new Date().toISOString();
-                handleChange(task, 'lastStatus', e.target.value);
-                handleChange(task, 'lastStatusDate', now);
-              }}
-              placeholder="Ex: Comprado, aguardando..."
-            />
-            {task.lastStatusDate && (
-              <div className="text-[9px] text-muted-foreground/60 px-1.5">
-                Atualizado em: {new Date(task.lastStatusDate).toLocaleDateString('pt-BR')}
-              </div>
-            )}
-          </div>
+        <td className="py-2 px-3 border-r border-border/40 min-w-[300px]">
+          <StatusCommentLog 
+            compact 
+            comments={task.statusComments || []} 
+            onAddComment={(newComments) => handleChange(task, 'statusComments', newComments)}
+          />
         </td>
 
         {/* 11. Observações */}

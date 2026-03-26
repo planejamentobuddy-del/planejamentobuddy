@@ -100,6 +100,7 @@ export type Database = {
           created_at: string
           last_status: string | null
           last_status_date: string | null
+          status_comments: Json | null
         }
         Insert: {
           id?: string
@@ -181,6 +182,7 @@ export type Database = {
           created_at: string
           last_status: string | null
           last_status_date: string | null
+          status_comments: Json | null
         }
         Insert: {
           id?: string
@@ -196,6 +198,7 @@ export type Database = {
           created_at?: string
           last_status?: string | null
           last_status_date?: string | null
+          status_comments?: Json | null
         }
         Update: {
           id?: string
@@ -211,6 +214,7 @@ export type Database = {
           created_at?: string
           last_status?: string | null
           last_status_date?: string | null
+          status_comments?: Json | null
         }
         Relationships: [
           {

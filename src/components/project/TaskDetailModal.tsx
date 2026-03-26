@@ -20,6 +20,7 @@ import {
   AlignLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import StatusCommentLog from './StatusCommentLog';
 
 interface TaskDetailModalProps {
   task: Task | null;
@@ -125,6 +126,18 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
               </p>
             </div>
           )}
+
+          {/* Status Comments */}
+          <div className="space-y-2">
+            <StatusCommentLog 
+              comments={localTask.statusComments || []} 
+              onAddComment={async (newComments) => {
+                const updatedTask = { ...localTask, statusComments: newComments };
+                setLocalTask(updatedTask);
+                await onUpdate(updatedTask);
+              }}
+            />
+          </div>
 
           {/* Checklists */}
           <div className="space-y-4">
