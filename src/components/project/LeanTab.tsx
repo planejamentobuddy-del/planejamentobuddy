@@ -111,9 +111,9 @@ export default function LeanTab({ project }: { project: Project }) {
     return s <= we && e >= ws;
   };
 
-  // Lookahead weeks (Next 4 weeks)
+  // Lookahead weeks (Next 8 weeks)
   const lookaheadWeeks = useMemo(() => {
-    return [0, 1, 2, 3].map(offset => {
+    return [0, 1, 2, 3, 4, 5, 6, 7].map(offset => {
       const wStr = offsetWeek(currentWeekStr, offset);
       const range = getWeekRange(wStr);
       return { weekStr: wStr, label: range.label, range };
@@ -468,7 +468,7 @@ export default function LeanTab({ project }: { project: Project }) {
         <TabsContent value="lookahead" className="mt-6 space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-bold text-foreground">Lookahead (Horizonte 4 Semanas)</h3>
+              <h3 className="text-lg font-bold text-foreground">Lookahead (Horizonte 8 Semanas)</h3>
               <p className="text-xs text-muted-foreground">Análise de restrições e processo de "Make Ready"</p>
             </div>
             <div className="flex items-center gap-2">
