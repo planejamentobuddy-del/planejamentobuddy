@@ -1,5 +1,5 @@
 import { useState, useMemo, Fragment } from 'react';
-import { Project, Task, TaskStatus } from '@/types/project';
+import { Project, Task, TaskStatus, getProjectProgress } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp } from 'lucide-react';
@@ -92,9 +92,16 @@ export default function PlanningTab({ project }: { project: Project }) {
     const subs = getSubtasks(stageId);
     if (subs.length === 0) return null;
     
-    // Using duration-weighted progress for consistency
-    const totalDuration = subs.reduce((sum, t) => sum + Math.max(1, t.duration), 0);
-    const weightedSum = subs.reduce((sum, t) => sum + (t.percentComplete * Math.max(1, t.duration)), 0);
+    // Only count leaf tasks within this stage for the weighted progress
+    const parentIds = new Set(subs.filter(t => t.parentId).map(t => t.parentId!));
+    const leaves = subs.filter(t => !parentIds.has(t.id));
+    // If no leaves (all are parents), we'd need a recursive approach, 
+    // but for current 2-level structure, we just take all if no leaves identified 
+    // (though in 2-level, subtasks are always leaves relative to the stage)
+    const targets = leaves.length > 0 ? leaves : subs;
+
+    const totalDuration = targets.reduce((sum, t) => sum + Math.max(1, t.duration), 0);
+    const weightedSum = targets.reduce((sum, t) => sum + (t.percentComplete * Math.max(1, t.duration)), 0);
     const percent = totalDuration > 0 ? Math.round(weightedSum / totalDuration) : 0;
     
     const starts = subs.map(t => t.startDate).filter(Boolean).sort();
@@ -108,17 +115,14 @@ export default function PlanningTab({ project }: { project: Project }) {
 
   const projectAggregate = useMemo(() => {
     if (allTasks.length === 0) return null;
-    // Only non-parent tasks count for the weight
+    
+    const percent = getProjectProgress(allTasks);
+
     const parentIds = new Set(allTasks.filter(t => t.parentId).map(t => t.parentId!));
     const leaves = allTasks.filter(t => !parentIds.has(t.id));
-    if (leaves.length === 0) return null;
-
-    const totalDuration = leaves.reduce((sum, t) => sum + Math.max(1, t.duration), 0);
-    const weightedSum = leaves.reduce((sum, t) => sum + (t.percentComplete * Math.max(1, t.duration)), 0);
-    const percent = totalDuration > 0 ? Math.round(weightedSum / totalDuration) : 0;
-
     const starts = leaves.map(t => t.startDate).filter(Boolean).sort();
     const ends = leaves.map(t => t.endDate).filter(Boolean).sort();
+    
     return { 
       percent, 
       startDate: starts[0] || '', 

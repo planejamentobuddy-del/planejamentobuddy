@@ -94,10 +94,18 @@ export interface Constraint {
 
 export function getProjectProgress(tasks: Task[]): number {
   if (tasks.length === 0) return 0;
-  // Use duration-weighted average for consistency with S-Curve
-  const totalDuration = tasks.reduce((sum, t) => sum + Math.max(1, t.duration), 0);
-  const weightedSum = tasks.reduce((sum, t) => sum + (t.percentComplete * Math.max(1, t.duration)), 0);
-  return Math.round(weightedSum / totalDuration);
+  
+  // Calculate leaf tasks (tasks that are not referenced as parentId by any other task)
+  const parentIds = new Set(tasks.filter(t => t.parentId).map(t => t.parentId!));
+  const leaves = tasks.filter(t => !parentIds.has(t.id));
+  
+  if (leaves.length === 0) return 0;
+
+  // Use duration-weighted average for consistency with S-Curve, considering only leaf tasks
+  const totalDuration = leaves.reduce((sum, t) => sum + Math.max(1, t.duration), 0);
+  const weightedSum = leaves.reduce((sum, t) => sum + (t.percentComplete * Math.max(1, t.duration)), 0);
+  
+  return totalDuration > 0 ? Math.round(weightedSum / totalDuration) : 0;
 }
 
 export function getProjectStatus(tasks: Task[]): 'ok' | 'warning' | 'danger' {

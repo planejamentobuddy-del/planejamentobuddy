@@ -279,17 +279,16 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     const startDate = task.startDate || null;
     const endDate = task.endDate || null;
 
-    // Skip update if dates are invalid
-    if (!startDate || !endDate) {
-      return;
-    }
-
     let finalStatus = task.status;
     const today = new Date().toISOString().split('T')[0];
-    if (finalStatus !== 'completed' && endDate < today) {
-      finalStatus = 'delayed';
-    } else if (finalStatus === 'delayed' && endDate >= today) {
-      finalStatus = 'in_progress';
+    
+    // Only calculate delayed status if we have an end date
+    if (endDate) {
+      if (finalStatus !== 'completed' && endDate < today) {
+        finalStatus = 'delayed';
+      } else if (finalStatus === 'delayed' && endDate >= today) {
+        finalStatus = 'in_progress';
+      }
     }
 
     setTasks(prev => prev.map(t => t.id === task.id ? { ...task, status: finalStatus } : t));
