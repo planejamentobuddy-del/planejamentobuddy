@@ -18,7 +18,7 @@ const statusConfig = {
 };
 
 export default function Index() {
-  const { projects, addProject, getTasksForProject, loading, tasks, constraints } = useProjects();
+  const { projects, addProject, getTasksForProject, loading, tasks, constraints, plans } = useProjects();
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -62,7 +62,8 @@ export default function Index() {
                   return n && me && (n === me || n.includes(me) || me.includes(n));
                 };
                 const count = tasks.filter(t => match(t.responsible) && t.status !== 'completed').length +
-                             constraints.filter(c => match(c.responsible) && c.status === 'open').length;
+                             constraints.filter(c => match(c.responsible) && c.status === 'open').length +
+                             plans.filter(p => !p.taskId && match(p.responsible) && p.status !== 'completed').length;
                 if (count === 0) return null;
                 return (
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-status-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-in zoom-in duration-300">

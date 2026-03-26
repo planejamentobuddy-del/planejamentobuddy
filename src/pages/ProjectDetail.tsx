@@ -24,7 +24,7 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { projects, loading, tasks, constraints } = useProjects();
+  const { projects, loading, tasks, constraints, plans } = useProjects();
   const { profile } = useAuth();
   const project = projects.find(p => p.id === id);
 
@@ -81,7 +81,8 @@ export default function ProjectDetail() {
                   return n && me && (n === me || n.includes(me) || me.includes(n));
                 };
                 const count = tasks.filter(t => match(t.responsible) && t.status !== 'completed').length +
-                             constraints.filter(c => match(c.responsible) && c.status === 'open').length;
+                             constraints.filter(c => match(c.responsible) && c.status === 'open').length +
+                             plans.filter(p => !p.taskId && match(p.responsible) && p.status !== 'completed').length;
                 if (count === 0) return null;
                 return (
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-status-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-in zoom-in duration-300">
