@@ -57,7 +57,7 @@ export default function LeanTab({ project }: { project: Project }) {
     getTasksForProject, getPlansForProject, addWeeklyPlan, updateWeeklyPlan,
     deleteWeeklyPlan, getHistoryForProject, closeWeek,
     getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,
-    users
+    users, loading
   } = useProjects();
 
   const tasks = getTasksForProject(project.id);
@@ -129,6 +129,33 @@ export default function LeanTab({ project }: { project: Project }) {
       PPC: h.ppc
     }));
   }, [history]);
+
+  // AUTO-SYNC EFFECT:
+  // Automatically add tasks that fall within the current week to the weekly plan
+  useEffect(() => {
+    const autoSync = async () => {
+      const tasksInWeek = tasks.filter(t => isTaskInWeek(t));
+      const missingTasks = tasksInWeek.filter(t => !weekPlans.some(p => p.taskId === t.id));
+      
+      if (missingTasks.length > 0) {
+        await Promise.all(missingTasks.map(task => 
+          addWeeklyPlan({
+            projectId: project.id,
+            taskId: task.id,
+            taskName: task.name,
+            responsible: task.responsible,
+            week: currentWeekStr,
+            weekLabel: currentWeekStr,
+            status: 'planned',
+            reason: '',
+            observations: '',
+          })
+        ));
+      }
+    };
+
+    autoSync();
+  }, [currentWeekStr, tasks.length]); // Re-run when week or task count changes
 
   const handleAddFromPlanning = async (task: Task) => {
     if (weekPlans.some(p => p.taskId === task.id)) return;
@@ -230,7 +257,10 @@ export default function LeanTab({ project }: { project: Project }) {
               </div>
               <div>
                 <h3 className="text-base font-bold text-foreground leading-tight">Plano de Trabalho Semanal</h3>
-                <p className="text-xs text-muted-foreground">Adicione atividades do cronograma geral para execução esta semana</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-status-ok animate-pulse" />
+                  Sincronizado automaticamente com o Planejamento S13
+                </p>
               </div>
             </div>
 
