@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 interface ProjectsContextType {
   projects: Project[];
   loading: boolean;
+  tasks: Task[];
+  constraints: Constraint[];
   addProject: (p: Omit<Project, 'id' | 'createdAt'>) => Promise<Project | null>;
   deleteProject: (id: string) => Promise<void>;
   // Tasks
@@ -506,7 +508,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ProjectsContext.Provider value={{
-      projects, loading, addProject, deleteProject,
+      projects, loading, tasks, constraints,
+      addProject, deleteProject,
       getTasksForProject, addTask, updateTask, deleteTask,
       getPlansForProject, addWeeklyPlan, updateWeeklyPlan, deleteWeeklyPlan,
       getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,

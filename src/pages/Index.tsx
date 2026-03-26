@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut } from 'lucide-react';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -18,7 +18,7 @@ const statusConfig = {
 };
 
 export default function Index() {
-  const { projects, addProject, getTasksForProject, loading } = useProjects();
+  const { projects, addProject, getTasksForProject, loading, tasks, constraints } = useProjects();
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -53,6 +53,18 @@ export default function Index() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-2 rounded-xl text-primary border-primary/20 hover:bg-primary/5 relative" onClick={() => navigate('/minhas-tarefas')}>
+              <ClipboardCheck className="w-4 h-4" /> Minhas Tarefas
+              {(() => {
+                const count = tasks.filter(t => t.responsible?.toLowerCase() === profile?.full_name?.toLowerCase() && t.status !== 'completed').length +
+                             constraints.filter(c => c.responsible?.toLowerCase() === profile?.full_name?.toLowerCase() && c.status === 'open').length;
+                return count > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-background animate-in zoom-in duration-300">
+                    {count}
+                  </span>
+                );
+              })()}
+            </Button>
             {isAdmin && (
               <Button variant="outline" className="gap-2 rounded-xl" onClick={() => navigate('/admin/users')}>
                 <Shield className="w-4 h-4" /> Usuários

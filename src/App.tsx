@@ -14,6 +14,7 @@ import ForgotPassword from "./pages/ForgotPassword.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import PendingApproval from "./pages/PendingApproval.tsx";
 import AdminUsers from "./pages/AdminUsers.tsx";
+import MyTasks from "./pages/MyTasks.tsx";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -61,6 +62,7 @@ const AppRoutes = () => (
     <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
     <Route path="/obra/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
+    <Route path="/minhas-tarefas" element={<ProtectedRoute><MyTasks /></ProtectedRoute>} />
     <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
