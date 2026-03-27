@@ -225,11 +225,14 @@ export default function PlanningTab({ project }: { project: Project }) {
     // ── Propagate to successors: cascade date changes ──
     if (field === 'endDate' || field === 'duration' || field === 'startDate' || field === 'predecessors') {
       const finalEndDate = updated.endDate;
+      if (!finalEndDate) return;
+      
       const successors = allTasks.filter(t => t.predecessors.includes(task.id));
       for (const succ of successors) {
         const succStart = addBusinessDays(finalEndDate, 2);
         const succEnd = addBusinessDays(succStart, succ.duration || 1);
-        if (succStart !== succ.startDate || succEnd !== succ.endDate) {
+        
+        if (succStart && succEnd && (succStart !== succ.startDate || succEnd !== succ.endDate)) {
           await updateTask({
             ...succ,
             startDate: succStart,

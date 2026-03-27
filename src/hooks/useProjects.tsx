@@ -259,8 +259,10 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     const original = [...tasks];
 
     // Sanitize: never send empty strings for date fields
-    const startDate = task.startDate || null;
-    const endDate = task.endDate || null;
+    // and handle the NOT NULL constraints of the tasks table
+    const startDate = task.startDate || new Date().toISOString().split('T')[0];
+    const endDate = task.endDate || startDate;
+    const lastStatusDate = task.lastStatusDate || null;
 
     let finalStatus = task.status;
     const today = new Date().toISOString().split('T')[0];
@@ -291,7 +293,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         status: finalStatus,
         observations: task.observations,
         last_status: task.lastStatus,
-        last_status_date: task.lastStatusDate,
+        last_status_date: lastStatusDate,
         status_comments: (finalStatus === 'completed' ? [] : (task.statusComments as any) || []),
         checklists: (task.checklists as any) || [],
       })
@@ -300,7 +302,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     if (error) {
       setTasks(original);
       console.error('[updateTask] Supabase error:', error);
-      toast.error('Erro ao salvar. Verifique os campos e tente novamente.');
+      toast.error(`Erro ao salvar: ${error.message || 'Verifique os campos'}`);
     }
   }, [tasks]);
 
