@@ -319,10 +319,14 @@ export default function PlanningTab({ project }: { project: Project }) {
         <td className="py-2.5 px-3 border-r border-border/40">
           <Input
             list="users-list"
-            className="h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30"
-            value={task.responsible || ''}
-            onChange={e => handleChange(task, 'responsible', e.target.value)}
-            placeholder="—"
+            className="h-8 text-sm border-0 border-b border-transparent bg-transparent px-1.5 focus-visible:ring-0 focus-visible:border-primary hover:border-border/60 transition-colors"
+            defaultValue={task.responsible || ''}
+            onBlur={e => {
+              if (e.target.value !== (task.responsible || '')) {
+                handleChange(task, 'responsible', e.target.value);
+              }
+            }}
+            placeholder="Responsável..."
           />
         </td>
 
