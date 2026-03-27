@@ -368,7 +368,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         task_name: plan.taskName,
         responsible: plan.taskId ? (tasks.find(t => t.id === plan.taskId || t.id === plan.id)?.responsible || '') : (plan.responsible || ''),
         last_status: plan.lastStatus,
-        last_status_date: plan.lastStatusDate,
+        last_status_date: plan.lastStatusDate || null,
         status_comments: (plan.status === 'completed' ? [] : (plan.statusComments as any) || []),
       })
       .eq('id', plan.id);
@@ -487,7 +487,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         responsible: c.responsible,
         due_date: c.dueDate || null,
         last_status: c.lastStatus,
-        last_status_date: c.lastStatusDate,
+        last_status_date: c.lastStatusDate || null,
         status_comments: (c.status === 'closed' ? [] : (c.statusComments as any) || []),
         closed_at: c.status === 'closed' ? new Date().toISOString() : null
       })
@@ -495,7 +495,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
 
     if (error) {
       setConstraints(original);
-      toast.error('Erro ao atualizar restrição.');
+      console.error('[updateConstraint] Supabase error:', error);
+      toast.error(`Erro ao atualizar restrição: ${error.message || ''}`);
     }
   }, [constraints]);
 
