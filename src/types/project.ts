@@ -38,6 +38,7 @@ export interface Task {
   lastStatusDate?: string;
   statusComments?: StatusComment[];
   checklists?: ChecklistItem[];
+  orderIndex?: number;
 }
 
 export type TaskStatus = 'not_started' | 'in_progress' | 'completed' | 'delayed';

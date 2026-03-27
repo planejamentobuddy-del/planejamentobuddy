@@ -14,6 +14,7 @@ export interface ProjectsContextType {
   addTask: (task: Omit<Task, 'id'>) => Promise<Task | null>;
   updateTask: (task: Task) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
+  reorderTasks: (updates: { id: string, orderIndex: number }[]) => Promise<void>;
   // Weekly plans
   getPlansForProject: (projectId: string) => WeeklyPlan[];
   addWeeklyPlan: (plan: Omit<WeeklyPlan, 'id'>) => Promise<void>;

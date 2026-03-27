@@ -18,7 +18,12 @@ import MyTasks from "./pages/MyTasks.tsx";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1 } },
+  defaultOptions: { 
+    queries: { 
+      retry: 1,
+      refetchOnWindowFocus: false
+    } 
+  },
 });
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {

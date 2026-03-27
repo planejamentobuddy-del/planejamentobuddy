@@ -17,18 +17,25 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const [usersList, setUsersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const isFetching = React.useRef(false);
+
   const fetchData = useCallback(async () => {
-    if (!user) {
-      setProjects([]);
-      setTasks([]);
-      setPlans([]);
-      setHistory([]);
-      setConstraints([]);
-      setLoading(false);
+    if (!user || isFetching.current) {
+      if (!user) {
+        setProjects([]);
+        setTasks([]);
+        setPlans([]);
+        setHistory([]);
+        setConstraints([]);
+        setLoading(false);
+      }
       return;
     }
 
-    setLoading(true);
+    isFetching.current = true;
+    if (tasks.length === 0) {
+      setLoading(true);
+    }
     try {
       const { data: projData, error: projErr } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
       const { data: taskData, error: taskErr } = await supabase.from('tasks').select('*').order('created_at', { ascending: true });
@@ -86,8 +93,9 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
             lastStatusDate: t.last_status_date || '',
             statusComments: (Array.isArray(t.status_comments) ? t.status_comments : []) as any,
             checklists: (Array.isArray(t.checklists) ? t.checklists : []) as unknown as ChecklistItem[],
+            orderIndex: (t as any).order_index || 0,
           };
-        }));
+        }).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0) || a.startDate.localeCompare(b.startDate)));
       }
 
       if (planData) {
@@ -150,6 +158,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       toast.error('Erro ao carregar dados: ' + (error.message || 'Erro desconhecido'));
     } finally {
       setLoading(false);
+      isFetching.current = false;
     }
   }, [user]);
 
@@ -224,6 +233,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         status: task.status,
         observations: task.observations,
         checklists: (task.checklists as any) || [],
+        order_index: task.orderIndex || 0,
       }])
       .select()
       .single();
@@ -250,6 +260,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       status: data.status as any,
       observations: data.observations || '',
       checklists: (Array.isArray(data.checklists) ? data.checklists : []) as unknown as ChecklistItem[],
+      orderIndex: (data as any).order_index || 0,
     };
     setTasks(prev => [...prev, newTask]);
     return newTask;
@@ -296,6 +307,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         last_status_date: lastStatusDate,
         status_comments: (finalStatus === 'completed' ? [] : (task.statusComments as any) || []),
         checklists: (task.checklists as any) || [],
+        order_index: task.orderIndex || 0,
       })
       .eq('id', task.id);
 
@@ -303,6 +315,40 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       setTasks(original);
       console.error('[updateTask] Supabase error:', error);
       toast.error(`Erro ao salvar: ${error.message || 'Verifique os campos'}`);
+    }
+  }, [tasks]);
+
+  const reorderTasks = useCallback(async (updates: { id: string, orderIndex: number }[]) => {
+    const original = [...tasks];
+    
+    // Optimistic local update
+    setTasks(prev => {
+      const newTasks = [...prev];
+      updates.forEach(upd => {
+        const idx = newTasks.findIndex(t => t.id === upd.id);
+        if (idx !== -1) {
+          newTasks[idx] = { ...newTasks[idx], orderIndex: upd.orderIndex };
+        }
+      });
+      return newTasks.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0) || a.startDate.localeCompare(b.startDate));
+    });
+
+    try {
+      // Direct update in Supabase for all changed tasks
+      const promises = updates.map(upd => 
+        supabase.from('tasks').update({ order_index: upd.orderIndex } as any).eq('id', upd.id)
+      );
+      
+      const results = await Promise.all(promises);
+      const firstError = results.find(r => r.error);
+      
+      if (firstError) {
+        throw firstError.error;
+      }
+    } catch (error: any) {
+      setTasks(original);
+      console.error('[reorderTasks] Error:', error);
+      toast.error(`Erro ao reordenar: ${error.message}`);
     }
   }, [tasks]);
 
@@ -515,7 +561,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     <ProjectsContext.Provider value={{
       projects, loading, tasks, constraints,
       addProject, deleteProject,
-      getTasksForProject, addTask, updateTask, deleteTask,
+      getTasksForProject, addTask, updateTask, deleteTask, reorderTasks,
       getPlansForProject, addWeeklyPlan, updateWeeklyPlan, deleteWeeklyPlan,
       getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,
       getHistoryForProject, closeWeek,

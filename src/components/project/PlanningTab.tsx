@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from 'react';
+import { useState, useMemo, Fragment, useEffect } from 'react';
 import { Project, Task, TaskStatus, getProjectProgress, StatusComment } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,6 +10,23 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { useResizableColumns, ResizeHandle } from '@/hooks/useResizableColumns';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
   { value: 'not_started', label: 'Não iniciado', color: 'bg-muted text-muted-foreground' },
@@ -53,14 +70,29 @@ function addBusinessDays(startDateStr: string, duration: number): string {
 
 
 export default function PlanningTab({ project }: { project: Project }) {
-  const { getTasksForProject, addTask, updateTask, deleteTask, users } = useProjects();
+  const { getTasksForProject, addTask, updateTask, deleteTask, reorderTasks, users } = useProjects();
   const { isAdmin } = useAuth();
   const allTasks = getTasksForProject(project.id);
 
   const stages = useMemo(() => allTasks.filter(t => !t.parentId), [allTasks]);
   const getSubtasks = (stageId: string) => allTasks.filter(t => t.parentId === stageId);
 
-  const [expandedStages, setExpandedStages] = useState<Set<string>>(() => new Set(stages.map(s => s.id)));
+  const storageKey = `planning_expanded_${project.id}`;
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        return new Set(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error parsing expanded stages:', e);
+      }
+    }
+    return new Set(stages.map(s => s.id));
+  });
+
+  useEffect(() => {
+    localStorage.setItem(storageKey, JSON.stringify(Array.from(expandedStages)));
+  }, [expandedStages, storageKey]);
 
   const columnHeaders = [
     { label: 'Etapa / Atividade', align: 'left', width: 300 },
@@ -87,6 +119,31 @@ export default function PlanningTab({ project }: { project: Project }) {
       else next.add(id);
       return next;
     });
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = stages.findIndex(s => s.id === active.id);
+    const newIndex = stages.findIndex(s => s.id === over.id);
+    
+    const newStages = arrayMove(stages, oldIndex, newIndex);
+    
+    // Efficiently update order for all stages
+    const updates = newStages.map((stage, i) => ({
+      id: stage.id,
+      orderIndex: i
+    }));
+
+    await reorderTasks(updates);
   };
 
   const getStageAggregates = (stageId: string) => {
@@ -133,7 +190,8 @@ export default function PlanningTab({ project }: { project: Project }) {
   }, [allTasks]);
 
   const handleAddStage = async () => {
-    const start = project.startDate;
+    const today = new Date().toISOString().split('T')[0];
+    const start = today;
     const end = addBusinessDays(start, 7);
     const task = await addTask({
       projectId: project.id,
@@ -156,8 +214,8 @@ export default function PlanningTab({ project }: { project: Project }) {
   };
 
   const handleAddSubtask = async (stageId: string) => {
-    const stage = allTasks.find(t => t.id === stageId);
-    const start = stage?.startDate || project.startDate;
+    const today = new Date().toISOString().split('T')[0];
+    const start = today;
     const end = addBusinessDays(start, 7);
     await addTask({
       projectId: project.id,
@@ -282,7 +340,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     );
   };
 
-  const renderRow = (task: Task, isSubtask: boolean, stageId?: string) => {
+  const renderRow = (task: Task, isSubtask: boolean, stageId?: string, dragHandleProps?: any) => {
     const overdue = isOverdue(task);
     const isStage = !isSubtask;
     const agg = isStage ? getStageAggregates(task.id) : null;
@@ -298,7 +356,14 @@ export default function PlanningTab({ project }: { project: Project }) {
         {/* 1. Etapa / Atividade */}
         <td className="py-2.5 px-3 border-r border-border/40 min-w-0">
           <div className="flex items-center gap-1.5 overflow-hidden">
-            <GripVertical className="w-4 h-4 text-muted-foreground/30 shrink-0 cursor-grab" />
+            {isStage && (
+              <div 
+                {...dragHandleProps} 
+                className="cursor-grab active:cursor-grabbing p-0.5 -ml-1 text-muted-foreground/30 hover:text-primary transition-colors shrink-0"
+              >
+                <GripVertical className="w-4 h-4" />
+              </div>
+            )}
             {isStage ? (
               <button onClick={() => toggleExpand(task.id)} className="p-0.5 shrink-0 hover:bg-muted rounded transition-colors">
                 {expandedStages.has(task.id)
@@ -483,118 +548,161 @@ export default function PlanningTab({ project }: { project: Project }) {
         </Button>
       </div>
 
-      <div className="card-elevated overflow-x-auto">
-        <table className="border-collapse table-fixed text-sm" style={{ width: colWidths.reduce((s, w) => s + w, 0) }}>
-          <colgroup>
-            {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
-          </colgroup>
-          <thead>
-            <tr className="border-b bg-muted/50 border-t border-border/50">
-              {columnHeaders.map((h, i) => (
-                <th 
-                  key={i} 
-                  style={{ width: colWidths[i] }}
-                  className={`${h.align === 'center' ? 'text-center' : 'text-left'} py-3.5 px-3 font-bold text-[11px] uppercase tracking-wider text-muted-foreground relative border-r border-border/50 last:border-0`}
-                >
-                  <div className="truncate">{h.label}</div>
-                  <ResizeHandle index={i} onMouseDown={onColResize} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {stages.length === 0 ? (
-              <tr>
-                <td colSpan={columnHeaders.length} className="py-16 text-center text-muted-foreground text-sm">
-                  Nenhuma etapa cadastrada. Clique em "Adicionar Etapa" para começar.
-                </td>
+      <div className="card-elevated overflow-x-auto p-0 border-none shadow-none bg-transparent">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <table className="border-collapse table-fixed text-sm w-full bg-card rounded-xl shadow-sm border border-border/50 overflow-hidden" style={{ minWidth: colWidths.reduce((s, w) => s + w, 0) }}>
+            <colgroup>
+              {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+            </colgroup>
+            <thead>
+              <tr className="border-b bg-muted/40 border-t border-border/50">
+                {columnHeaders.map((h, i) => (
+                  <th 
+                    key={i} 
+                    style={{ width: colWidths[i] }}
+                    className={`${h.align === 'center' ? 'text-center' : 'text-left'} py-3.5 px-3 font-bold text-[10px] uppercase tracking-wider text-muted-foreground relative border-r border-border/10 last:border-0`}
+                  >
+                    <div className="truncate">{h.label}</div>
+                    <ResizeHandle index={i} onMouseDown={onColResize} />
+                  </th>
+                ))}
               </tr>
+            </thead>
+            
+            {stages.length === 0 ? (
+              <tbody>
+                <tr>
+                  <td colSpan={columnHeaders.length} className="py-20 text-center text-muted-foreground text-sm bg-card">
+                    <div className="flex flex-col items-center gap-2 opacity-60">
+                      <Plus className="w-8 h-8 text-muted-foreground/20" />
+                      <span>Nenhuma etapa cadastrada.</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
             ) : (
               <>
                 {/* Project Summary Row (Geral) */}
                 {projectAggregate && (
-                  <tr className="bg-primary/5 font-bold border-b-2 border-primary/20 hover:bg-primary/10 transition-colors">
-                    <td className="p-0 border-r border-border/50">
-                      <div className="flex items-center gap-3 py-3.5 px-3 min-w-[300px]" style={{ width: colWidths[0] }}>
-                        <div className="bg-primary/20 p-1.5 rounded-lg">
-                          <TrendingUp className="w-5 h-5 text-primary" />
+                  <tbody className="bg-primary/[0.03] font-bold border-b-2 border-primary/10">
+                    <tr className="hover:bg-primary/[0.05] transition-colors">
+                      <td className="p-0 border-r border-border/10">
+                        <div className="flex items-center gap-3 py-3.5 px-3 min-w-[300px]" style={{ width: colWidths[0] }}>
+                          <div className="bg-primary/15 p-1.5 rounded-lg shrink-0">
+                            <TrendingUp className="w-5 h-5 text-primary" />
+                          </div>
+                          <span className="text-sm font-black text-primary uppercase tracking-tight truncate">RESUMO GERAL DO PROJETO</span>
                         </div>
-                        <span className="text-sm font-black text-primary uppercase tracking-tight">RESUMO GERAL DO PROJETO</span>
-                      </div>
-                    </td>
-                    <td className="p-0 border-r border-border/50">
-                      <div className="px-3" style={{ width: colWidths[1] }} />
-                    </td>
-                    <td className="p-0 border-r border-border/50">
-                      <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[2] }}>
-                        {projectAggregate.startDate ? new Date(projectAggregate.startDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-                      </div>
-                    </td>
-                    <td className="p-0 border-r border-border/50">
-                      <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[3] }}>
-                        {projectAggregate.endDate ? new Date(projectAggregate.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-                      </div>
-                    </td>
-                    <td className="p-0 border-r border-border/50 text-center">
-                      <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[4] }}>
-                        {projectAggregate.duration} dias
-                      </div>
-                    </td>
-                    <td className="p-0 border-r border-border/50">
-                      <div className="px-3 flex items-center gap-2" style={{ width: colWidths[5] }}>
-                        <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden">
-                          <div className="bg-primary h-full transition-all duration-500" style={{ width: `${projectAggregate.percent}%` }} />
+                      </td>
+                      <td className="p-0 border-r border-border/10" />
+                      <td className="p-0 border-r border-border/10">
+                        <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[2] }}>
+                          {projectAggregate.startDate ? formatDate(projectAggregate.startDate) : '—'}
                         </div>
-                        <span className="text-xs text-primary">{projectAggregate.percent}%</span>
-                      </div>
-                    </td>
-                    <td className="p-0 border-r border-border/50">
-                      <div className="px-3" style={{ width: colWidths[6] }}>
-                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">GERAL</Badge>
-                      </div>
-                    </td>
-                    <td className="p-0 border-r border-border/50">
-                      <div className="px-3" style={{ width: colWidths[7] }} />
-                    </td>
-                    <td className="p-0 border-r border-border/50">
-                      <div className="px-3" style={{ width: colWidths[9] }} />
-                    </td>
-                    <td className="p-0" style={{ width: colWidths[10] }} />
-                  </tr>
+                      </td>
+                      <td className="p-0 border-r border-border/10">
+                        <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[3] }}>
+                          {projectAggregate.endDate ? formatDate(projectAggregate.endDate) : '—'}
+                        </div>
+                      </td>
+                      <td className="p-0 border-r border-border/10 text-center">
+                        <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[4] }}>
+                          {projectAggregate.duration} dias
+                        </div>
+                      </td>
+                      <td className="p-0 border-r border-border/10">
+                        <div className="px-3 flex items-center gap-2" style={{ width: colWidths[5] }}>
+                          <div className="flex-1 bg-primary/10 h-2 rounded-full overflow-hidden">
+                            <div className="bg-primary h-full transition-all duration-500" style={{ width: `${projectAggregate.percent}%` }} />
+                          </div>
+                          <span className="text-xs text-primary font-bold">{projectAggregate.percent}%</span>
+                        </div>
+                      </td>
+                      <td className="p-0 border-r border-border/10">
+                        <div className="px-3" style={{ width: colWidths[6] }}>
+                          <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
+                        </div>
+                      </td>
+                      <td className="p-0 border-r border-border/10" />
+                      <td className="p-0 border-r border-border/10" />
+                      <td className="p-0 border-r border-border/10" />
+                      <td className="p-0" />
+                    </tr>
+                  </tbody>
                 )}
 
-                {stages.map(stage => {
-                  const subtasks = getSubtasks(stage.id);
-                  const isExpanded = expandedStages.has(stage.id);
-                  return (
-                    <Fragment key={stage.id}>
-                      {renderRow(stage, false)}
-                      {isExpanded && subtasks.map(sub => renderRow(sub, true, stage.id))}
-                      {isExpanded && (
-                        <tr className="border-b border-dashed bg-muted/5">
-                          <td colSpan={columnHeaders.length} className="py-2 px-3">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors pl-10 h-7"
-                              onClick={() => handleAddSubtask(stage.id)}
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Adicionar Subetapa
-                            </Button>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
+                <SortableContext items={stages.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                  {stages.map(stage => (
+                    <SortableStageRow 
+                      key={stage.id} 
+                      stage={stage} 
+                      subtasks={getSubtasks(stage.id)}
+                      isExpanded={expandedStages.has(stage.id)}
+                      renderRow={renderRow}
+                      handleAddSubtask={handleAddSubtask}
+                      columnHeaders={columnHeaders}
+                    />
+                  ))}
+                </SortableContext>
               </>
             )}
-          </tbody>
-        </table>
+          </table>
+        </DndContext>
+      </div>
+
       <datalist id="users-list">
         {users.map(u => <option key={u.id} value={u.full_name} />)}
       </datalist>
     </div>
-    </div>
+  );
+}
+
+function SortableStageRow({ 
+  stage, 
+  subtasks, 
+  isExpanded, 
+  renderRow, 
+  handleAddSubtask, 
+  columnHeaders 
+}: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: stage.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 0,
+    position: 'relative' as const,
+  };
+
+  return (
+    <tbody ref={setNodeRef} style={style} className={isDragging ? 'shadow-2xl ring-2 ring-primary border-primary rounded-lg overflow-hidden brightness-105 transition-none z-50 pointer-events-none' : ''}>
+      {renderRow(stage, false, stage.id, { ...attributes, ...listeners })}
+      {isExpanded && subtasks.map((sub: any) => renderRow(sub, true, stage.id))}
+      {isExpanded && (
+        <tr className="border-b border-dashed bg-muted/5">
+          <td colSpan={columnHeaders.length} className="py-2 px-3 pl-10">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors h-7 rounded-lg"
+              onClick={() => handleAddSubtask(stage.id)}
+            >
+              <Plus className="w-3.5 h-3.5" /> Adicionar subetapa
+            </Button>
+          </td>
+        </tr>
+      )}
+    </tbody>
   );
 }
