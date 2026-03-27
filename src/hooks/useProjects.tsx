@@ -366,7 +366,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         reason: plan.reason,
         observations: plan.observations,
         task_name: plan.taskName,
-        responsible: plan.taskId ? (tasks.find(t => t.id === plan.taskId)?.responsible || '') : plan.responsible,
+        responsible: plan.taskId ? (tasks.find(t => t.id === plan.taskId || t.id === plan.id)?.responsible || '') : (plan.responsible || ''),
         last_status: plan.lastStatus,
         last_status_date: plan.lastStatusDate,
         status_comments: (plan.status === 'completed' ? [] : (plan.statusComments as any) || []),
@@ -375,9 +375,10 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
 
     if (error) {
       setPlans(original);
-      toast.error('Erro ao atualizar plano semanal.');
+      console.error('[updateWeeklyPlan] Supabase error:', error);
+      toast.error(`Erro ao atualizar plano semanal: ${error.message || ''}`);
     }
-  }, [plans]);
+  }, [plans, tasks]);
 
   const deleteWeeklyPlan = useCallback(async (id: string) => {
     const original = [...plans];
