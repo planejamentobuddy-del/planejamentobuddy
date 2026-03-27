@@ -229,16 +229,22 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
     console.error("[CPM] Circular dependency detected! Critical path might be incomplete.");
   }
 
+  const dateToNum = (s: string) => new Date(s + 'T12:00:00').getTime() / 86400000;
+  const projectStartNum = allTasks.length > 0 
+    ? Math.min(...allTasks.filter(t => t.startDate).map(t => dateToNum(t.startDate)))
+    : 0;
+
   const es = new Array(n).fill(0);
   const ef = new Array(n).fill(0);
   const dur = leaves.map(t => Math.max(1, t.duration));
 
   // 2. Forward Pass
   sorted.forEach(i => {
+    const taskES = dateToNum(leaves[i].startDate) - projectStartNum;
     if (predIndices[i].length > 0) {
-      es[i] = Math.max(...predIndices[i].map(pi => ef[pi]));
+      es[i] = Math.max(taskES, ...predIndices[i].map(pi => ef[pi]));
     } else {
-      es[i] = 0; // Strict CPM roots
+      es[i] = taskES; 
     }
     ef[i] = es[i] + dur[i];
   });
