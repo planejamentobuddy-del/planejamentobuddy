@@ -16,12 +16,13 @@ function getWeekNumber(d: Date): string {
 }
 
 export default function GanttTab({ project }: { project: Project }) {
+  const [viewMode, setViewMode] = useState<ViewMode>('semanal');
   const { getTasksForProject } = useProjects();
   const allTasks = useMemo(() => 
-    getTasksForProject(project.id).sort((a, b) => a.startDate.localeCompare(b.startDate))
+    getTasksForProject(project.id)
   , [getTasksForProject, project.id]);
   
-  const [viewMode, setViewMode] = useState<ViewMode>('semanal');
+  const [sortMode, setSortMode] = useState<'manual' | 'chronological'>('manual');
   const [showCriticalPath, setShowCriticalPath] = useState(false);
   const [showAllLabels, setShowAllLabels] = useState(false);
   const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
@@ -31,7 +32,7 @@ export default function GanttTab({ project }: { project: Project }) {
   // CPM critical path set
   const criticalSet = useMemo(() => getCriticalTaskIds(allTasks), [allTasks]);
 
-  const { visibleTasks, hasChildrenMap, depthMap, computedBounds, computedProgress } = useMemo(() => {
+  const { visibleTasks, hasChildrenMap, depthMap, computedBounds, computedProgress, wbsMap } = useMemo(() => {
     const map = new Map<string | undefined, Task[]>();
     allTasks.forEach(t => {
       const pId = t.parentId || undefined;
@@ -39,7 +40,7 @@ export default function GanttTab({ project }: { project: Project }) {
       map.get(pId)!.push(t);
     });
 
-    const hasChildren = new Map<string, boolean>();
+    const hasChildrenMap = new Map<string, boolean>();
     const depth = new Map<string, number>();
     const bounds = new Map<string, { start: string, end: string }>();
     const progress = new Map<string, number>();
@@ -87,37 +88,62 @@ export default function GanttTab({ project }: { project: Project }) {
     allTasks.forEach(t => {
       const childList = map.get(t.id) || [];
       const childIsParent = childList.length > 0;
-      hasChildren.set(t.id, childIsParent);
+      hasChildrenMap.set(t.id, childIsParent);
       if (childIsParent) {
         computeBounds(t.id);
       }
     });
 
-    // Build visible flat list
-    const visible: Task[] = [];
-    const traverse = (parentId: string | undefined, currentDepth: number) => {
+    // Build WBS map based on fixed manual order (Planning order)
+    const wbsMap = new Map<string, string>();
+    const generateWBS = (parentId: string | undefined, parentNumber?: string) => {
       const children = map.get(parentId) || [];
-      // Sort children chronologically among siblings
-      children.sort((a, b) => {
-        const aStart = bounds.get(a.id)?.start || a.startDate;
-        const bStart = bounds.get(b.id)?.start || b.startDate;
-        return aStart.localeCompare(bStart);
-      });
-
-      children.forEach(child => {
-        depth.set(child.id, currentDepth);
-        visible.push(child);
-        
-        if (hasChildren.get(child.id) && !collapsedTasks.has(child.id)) {
-          traverse(child.id, currentDepth + 1);
-        }
+      children.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      children.forEach((child, index) => {
+        const myNumber = parentNumber ? `${parentNumber}.${index + 1}` : `${index + 1}`;
+        wbsMap.set(child.id, myNumber);
+        generateWBS(child.id, myNumber);
       });
     };
+    generateWBS(undefined);
 
-    traverse(undefined, 0);
+    // Build visible list based on sortMode
+    const visible: Task[] = [];
+    
+    if (sortMode === 'chronological') {
+      // Flat hierarchical view: Keep parent-child grouping but sort siblings by date
+      const traverseCrono = (parentId: string | undefined, currentDepth: number) => {
+        const children = map.get(parentId) || [];
+        children.sort((a, b) => (a.startDate || '9999').localeCompare(b.startDate || '9999'));
 
-    return { visibleTasks: visible, hasChildrenMap: hasChildren, depthMap: depth, computedBounds: bounds, computedProgress: progress };
-  }, [allTasks, collapsedTasks]);
+        children.forEach((child) => {
+          depth.set(child.id, currentDepth);
+          visible.push(child);
+          if (hasChildrenMap.get(child.id) && !collapsedTasks.has(child.id)) {
+            traverseCrono(child.id, currentDepth + 1);
+          }
+        });
+      };
+      traverseCrono(undefined, 0);
+    } else {
+      // Manual EAP logic (Synchronized with Planning)
+      const traverseManual = (parentId: string | undefined, currentDepth: number) => {
+        const children = map.get(parentId) || [];
+        children.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+        children.forEach((child) => {
+          depth.set(child.id, currentDepth);
+          visible.push(child);
+          if (hasChildrenMap.get(child.id) && !collapsedTasks.has(child.id)) {
+            traverseManual(child.id, currentDepth + 1);
+          }
+        });
+      };
+      traverseManual(undefined, 0);
+    }
+
+    return { visibleTasks: visible, hasChildrenMap, depthMap: depth, computedBounds: bounds, computedProgress: progress, wbsMap };
+  }, [allTasks, collapsedTasks, sortMode]);
 
   const toggleCollapse = (taskId: string) => {
     setCollapsedTasks(prev => {
@@ -224,6 +250,27 @@ export default function GanttTab({ project }: { project: Project }) {
         <div className="flex items-center gap-3">
           <div className="bg-muted/50 p-1 rounded-xl flex gap-1 border border-border/40">
             <Button 
+              variant={sortMode === 'manual' ? 'secondary' : 'ghost'} 
+              size="sm" 
+              className={`text-xs h-8 px-4 rounded-lg transition-all ${sortMode === 'manual' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setSortMode('manual')}
+              title="Ordenar conforme o Planejamento"
+            >
+              Manual
+            </Button>
+            <Button 
+              variant={sortMode === 'chronological' ? 'secondary' : 'ghost'} 
+              size="sm" 
+              className={`text-xs h-8 px-4 rounded-lg transition-all ${sortMode === 'chronological' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setSortMode('chronological')}
+              title="Ordenar por data de início"
+            >
+              Crono
+            </Button>
+          </div>
+
+          <div className="bg-muted/50 p-1 rounded-xl flex gap-1 border border-border/40">
+            <Button 
               variant={viewMode === 'diario' ? 'secondary' : 'ghost'} 
               size="sm" 
               className={`text-xs h-8 px-4 rounded-lg transition-all ${viewMode === 'diario' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
@@ -310,8 +357,10 @@ export default function GanttTab({ project }: { project: Project }) {
                           <div className="w-4 shrink-0" />
                         )}
                         <div className="flex flex-col truncate">
-                          <span className={`text-[11px] truncate ${hasChildren ? 'font-bold text-foreground' : 'font-semibold text-foreground/80'}`}>
-                            {task.name}
+                          <span className={`text-[11px] truncate flex items-center ${hasChildren ? 'font-bold text-foreground' : 'font-semibold text-foreground/80'}`}>
+                            <span className="text-muted-foreground/50 mr-2 font-mono text-[10px] w-9 shrink-0">{wbsMap.get(task.id)}</span>
+                            {hasChildren && <Calendar className="w-3.5 h-3.5 mr-1.5 text-primary/60 shrink-0" />}
+                            <span className="truncate">{task.name}</span>
                           </span>
                         </div>
                       </div>
@@ -430,11 +479,14 @@ export default function GanttTab({ project }: { project: Project }) {
                   const isSummary = hasChildrenMap.get(task.id);
                   const bounds = computedBounds.get(task.id);
                   
-                  const startStr = bounds && isSummary ? bounds.start : task.startDate;
-                  const endStr = bounds && isSummary ? bounds.end : task.endDate;
+                  const hasNoDates = !task.startDate || !task.endDate;
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  
+                  const startStr = (bounds && isSummary ? bounds.start : task.startDate) || todayStr;
+                  const endStr = (bounds && isSummary ? bounds.end : task.endDate) || todayStr;
                   
                   const startPos = getPosition(startStr);
-                  const endPos = getPosition(endStr) + pixelsPerDay; // +1 day: end-of-day inclusive
+                  const endPos = getPosition(endStr) + (hasNoDates ? pixelsPerDay * 3 : pixelsPerDay);
                   
                   // Summary task bar should stretch exactly between bounds. Regular tasks have min width.
                   const width = isSummary ? Math.max(8, endPos - startPos) : Math.max(24, endPos - startPos);
@@ -443,16 +495,16 @@ export default function GanttTab({ project }: { project: Project }) {
 
                   // Color based on status
                   const barColor = critical
-                    ? 'bg-red-500'
+                    ? 'bg-status-danger text-white'
                     : task.status === 'completed'
-                      ? 'bg-[#2A9D8F]'         
+                      ? 'bg-status-ok text-white'         
                       : task.status === 'in_progress'
-                        ? 'bg-blue-500'         
+                      ? 'bg-blue-600 text-white shadow-sm'         
                         : task.status === 'delayed'
-                          ? 'bg-red-400'        
-                          : 'bg-slate-300 text-slate-600'; 
+                          ? 'bg-status-danger/70 text-white shadow-inner'        
+                          : 'bg-muted/80 text-muted-foreground'; 
 
-                  const textColor = task.status === 'not_started' ? 'text-slate-600' : 'text-white';
+                  const textColor = task.status === 'not_started' ? 'text-muted-foreground' : 'text-white';
                   const isClicked = clickedBars.has(task.id);
                   
                   return (
@@ -489,18 +541,18 @@ export default function GanttTab({ project }: { project: Project }) {
                       ) : (
                         // Regular Task Bar
                         <div
-                          className={`absolute top-2 h-6 rounded-md transition-all shadow-sm flex items-center px-3 z-10 font-bold text-[9px] cursor-pointer hover:brightness-110 active:scale-95 ${barColor} ${textColor}`}
+                          className={`absolute top-2.5 h-5 rounded-lg flex items-center px-3 z-10 font-black text-[9px] cursor-pointer hover:brightness-110 ${hasNoDates ? 'bg-muted-foreground/10 border-2 border-dashed border-muted-foreground/30 text-muted-foreground/50' : `${barColor} ${textColor}`}`}
                           style={{ left: startPos, width }}
-                          title={`${task.name}: ${task.percentComplete}%`}
+                          title={hasNoDates ? `${task.name}: Sem data definida` : `${task.name}: ${task.percentComplete}%`}
                           onClick={(e) => toggleBarClick(task.id, e)}
                         >
-                          {task.status === 'in_progress' && task.percentComplete > 0 && (
+                          {!hasNoDates && task.status === 'in_progress' && task.percentComplete > 0 && (
                             <div 
-                              className="absolute inset-0 bg-white/20 pointer-events-none rounded-md"
+                              className="absolute inset-0 bg-white/20 pointer-events-none rounded-lg"
                               style={{ width: `${task.percentComplete}%` }}
                             />
                           )}
-                          <span className="relative z-10">{task.percentComplete}%</span>
+                          <span className="relative z-10">{hasNoDates ? 'SEM DATA' : `${task.percentComplete}%`}</span>
                         </div>
                       )}
 
@@ -521,35 +573,35 @@ export default function GanttTab({ project }: { project: Project }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-8 text-[11px] text-muted-foreground font-semibold px-3 bg-muted/20 py-3 rounded-xl border border-border/30">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center gap-8 text-[11px] text-muted-foreground font-black px-6 bg-muted/20 py-4 rounded-2xl border border-border/30 shadow-inner">
+        <div className="flex items-center gap-3">
           {/* Mock Summary Task Icon */}
-          <div className="relative w-5 h-3">
-             <div className="absolute top-0 left-0 right-0 h-1 bg-slate-800 dark:bg-slate-200" />
-             <div className="absolute top-1 left-0 w-0 h-0 border-l-[4px] border-r-[0px] border-t-[4px] border-transparent border-l-slate-800 dark:border-l-slate-200" />
-             <div className="absolute top-1 right-0 w-0 h-0 border-l-[0px] border-r-[4px] border-t-[4px] border-transparent border-r-slate-800 dark:border-r-slate-200" />
+          <div className="relative w-6 h-3 shadow-sm">
+             <div className="absolute top-0 left-0 right-0 h-1 bg-foreground rounded-full" />
+             <div className="absolute top-1 left-0 w-0 h-0 border-l-[5px] border-r-[0px] border-t-[5px] border-transparent border-l-foreground" />
+             <div className="absolute top-1 right-0 w-0 h-0 border-l-[0px] border-r-[5px] border-t-[5px] border-transparent border-r-foreground" />
           </div>
-          <span className="ml-1">Etapa</span>
+          <span className="uppercase tracking-widest text-[9px]">Etapa</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-3.5 rounded bg-blue-500 shadow-sm" />
-          <span>Em andamento</span>
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-4 rounded-md bg-blue-600 shadow-sm" />
+          <span className="uppercase tracking-widest text-[9px]">Em andamento</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-3.5 rounded bg-[#2A9D8F] shadow-sm" />
-          <span>Concluído</span>
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-4 rounded-md bg-status-ok shadow-sm" />
+          <span className="uppercase tracking-widest text-[9px]">Concluído</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-3.5 rounded bg-slate-300 shadow-sm" />
-          <span>Não iniciado</span>
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-4 rounded-md bg-muted border border-border/50 shadow-sm" />
+          <span className="uppercase tracking-widest text-[9px]">Não iniciado</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-3.5 rounded bg-red-400 shadow-sm" />
-          <span>Atrasado</span>
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-4 rounded-md bg-status-danger/70 shadow-sm" />
+          <span className="uppercase tracking-widest text-[9px]">Atrasado Plano</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-3.5 rounded bg-red-500 shadow-sm" />
-          <span className="text-red-500">Caminho Crítico</span>
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-4 rounded-md bg-status-danger animate-pulse shadow-md" />
+          <span className="text-status-danger uppercase tracking-widest text-[9px]">Caminho Crítico</span>
         </div>
       </div>
     </div>

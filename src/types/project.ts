@@ -153,10 +153,13 @@ export function getEstimatedEndDate(project: Project, tasks: Task[]): string {
 }
 
 export function getCurrentWeek(): string {
-  const now = new Date();
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-  const weekNum = Math.ceil(((now.getTime() - yearStart.getTime()) / 86400000 + yearStart.getDay() + 1) / 7);
-  return `${now.getFullYear()}-S${weekNum.toString().padStart(2, '0')}`;
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  const dayNum = d.getDay() || 7; // Segunda=1, ..., Domingo=7
+  d.setDate(d.getDate() + 4 - dayNum);
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${d.getFullYear()}-S${weekNo.toString().padStart(2, '0')}`;
 }
 
 /**

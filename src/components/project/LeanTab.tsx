@@ -24,16 +24,19 @@ function getWeekRange(weekStr: string): { start: Date; end: Date; label: string 
   const jan1 = new Date(year, 0, 1);
   const dayOffset = (weekNum - 1) * 7 - jan1.getDay() + 1;
   const start = new Date(year, 0, 1 + dayOffset);
-  const end = new Date(start.getTime() + 6 * 86400000);
+  const end = new Date(start.getTime() + 7 * 86400000 - 1000); // Fim do Domingo (23:59:59)
   const fmt = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   return { start, end, label: `${fmt(start)} — ${fmt(end)}` };
 }
 
-function getCurrentWeek(): string {
-  const now = new Date();
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-  const weekNum = Math.ceil(((now.getTime() - yearStart.getTime()) / 86400000 + yearStart.getDay() + 1) / 7);
-  return `${now.getFullYear()}-S${weekNum.toString().padStart(2, '0')}`;
+export function getCurrentWeek(): string {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  const dayNum = d.getDay() || 7; // Segunda=1, ..., Domingo=7
+  d.setDate(d.getDate() + 4 - dayNum);
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${d.getFullYear()}-S${weekNo.toString().padStart(2, '0')}`;
 }
 
 function offsetWeek(weekStr: string, offset: number): string {
@@ -103,11 +106,13 @@ export default function LeanTab({ project }: { project: Project }) {
   const ppcColor = ppc === null ? 'text-muted-foreground' : ppc >= 80 ? 'text-status-ok' : ppc >= 60 ? 'text-status-warning' : 'text-status-danger';
 
   const isTaskInWeek = (task: Task) => {
-    const s = new Date(task.startDate + 'T12:00:00').getTime();
-    const e = new Date(task.endDate + 'T12:00:00').getTime();
+    if (!task.startDate || !task.endDate) return false;
+    // Usar início do dia (00:00) para início e fim do dia (23:59) para término
+    const s = new Date(task.startDate + 'T00:00:00').getTime();
+    const e = new Date(task.endDate + 'T23:59:59').getTime();
     const ws = weekRange.start.getTime();
     const we = weekRange.end.getTime();
-    // Overlap condition: start <= weekEnd AND end >= weekStart
+    // Condição de sobreposição: InícioTarefa <= FimSemana E FimTarefa >= InícioSemana
     return s <= we && e >= ws;
   };
 
@@ -120,8 +125,14 @@ export default function LeanTab({ project }: { project: Project }) {
     });
   }, [currentWeekStr]);
 
+  // Identify parent tasks (stages) to filter them out from Lean
+  const leafTasks = useMemo(() => {
+    const parentIds = new Set(tasks.filter(t => t.parentId).map(t => t.parentId!));
+    return tasks.filter(t => !parentIds.has(t.id));
+  }, [tasks]);
+
   // Tasks sorted by start date
-  const sortedTasks = useMemo(() => [...tasks].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || '')), [tasks]);
+  const sortedTasks = useMemo(() => [...leafTasks].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || '')), [leafTasks]);
 
   // Chart data for PPC
   const chartData = useMemo(() => {
@@ -133,9 +144,10 @@ export default function LeanTab({ project }: { project: Project }) {
 
   // AUTO-SYNC EFFECT:
   // Automatically add tasks that fall within the current week to the weekly plan
+  // Only pulls leaf tasks (subetapas), never parent stages (etapas)
   useEffect(() => {
     const autoSync = async () => {
-      const tasksInWeek = tasks.filter(t => isTaskInWeek(t));
+      const tasksInWeek = leafTasks.filter(t => isTaskInWeek(t));
       const missingTasks = tasksInWeek.filter(t => !weekPlans.some(p => p.taskId === t.id));
       
       if (missingTasks.length > 0) {
@@ -156,7 +168,7 @@ export default function LeanTab({ project }: { project: Project }) {
     };
 
     autoSync();
-  }, [currentWeekStr, tasks.length]); // Re-run when week or task count changes
+  }, [currentWeekStr, leafTasks.length]); // Re-run when week or leaf task count changes
 
   const handleAddFromPlanning = async (task: Task) => {
     if (weekPlans.some(p => p.taskId === task.id)) return;
@@ -260,7 +272,7 @@ export default function LeanTab({ project }: { project: Project }) {
                 <h3 className="text-base font-bold text-foreground leading-tight">Plano de Trabalho Semanal</h3>
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <span className="inline-block w-2 h-2 rounded-full bg-status-ok animate-pulse" />
-                  Sincronizado automaticamente com o Planejamento S13
+                  Sincronizado automaticamente com o Planejamento {currentWeekStr}
                 </p>
               </div>
             </div>
@@ -276,13 +288,13 @@ export default function LeanTab({ project }: { project: Project }) {
                 <SelectContent>
                   <SelectGroup>
                     <SelectLabel>Tarefas desta semana</SelectLabel>
-                    {tasks.filter(t => isTaskInWeek(t) && !weekPlans.some(p => p.taskId === t.id)).map(t => (
+                    {leafTasks.filter(t => isTaskInWeek(t) && !weekPlans.some(p => p.taskId === t.id)).map(t => (
                       <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                     ))}
                   </SelectGroup>
                   <SelectGroup>
                     <SelectLabel>Outras tarefas</SelectLabel>
-                    {tasks.filter(t => !isTaskInWeek(t) && !weekPlans.some(p => p.taskId === t.id)).map(t => (
+                    {leafTasks.filter(t => !isTaskInWeek(t) && !weekPlans.some(p => p.taskId === t.id)).map(t => (
                       <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                     ))}
                   </SelectGroup>

@@ -18,33 +18,34 @@ type KanbanColumn = {
   filter: (t: Task) => boolean;
 };
 
+
 const columns: KanbanColumn[] = [
   {
     key: 'not_started',
     label: 'Não Iniciado',
-    borderColor: 'border-muted-foreground/30',
-    bgColor: 'bg-card',
+    borderColor: 'border-muted-foreground/20',
+    bgColor: 'bg-muted/10',
     filter: t => t.status === 'not_started' && !isOverdue(t),
   },
   {
     key: 'in_progress',
     label: 'Em Andamento',
-    borderColor: 'border-accent',
-    bgColor: 'bg-card',
+    borderColor: 'border-blue-600',
+    bgColor: 'bg-blue-600/5',
     filter: t => t.status === 'in_progress' && !isOverdue(t),
   },
   {
     key: 'completed',
     label: 'Concluído',
     borderColor: 'border-status-ok',
-    bgColor: 'bg-card',
+    bgColor: 'bg-status-ok/5',
     filter: t => t.status === 'completed',
   },
   {
     key: 'delayed',
     label: 'Atrasado',
-    borderColor: 'border-destructive',
-    bgColor: 'bg-card',
+    borderColor: 'border-status-danger',
+    bgColor: 'bg-status-danger/5',
     filter: t => t.status === 'delayed' || isOverdue(t),
   },
 ];
@@ -107,9 +108,9 @@ export default function KanbanTab({ project }: { project: Project }) {
                 onDrop={() => handleDrop(col.key)}
               >
                 {/* Column header */}
-                <div className="flex items-center justify-between px-4 py-3.5 border-b border-border/30">
-                  <h3 className="font-display font-semibold text-sm text-foreground">{col.label}</h3>
-                  <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border/40">
+                  <h3 className="font-display font-black text-xs uppercase tracking-widest text-foreground">{col.label}</h3>
+                  <span className="text-[10px] font-black text-foreground bg-muted/50 rounded-lg px-2 py-0.5 border border-border/50">
                     {colTasks.length}
                   </span>
                 </div>
@@ -119,8 +120,8 @@ export default function KanbanTab({ project }: { project: Project }) {
                   {colTasks.map(task => {
                     const progressColor = task.percentComplete >= 100
                       ? 'bg-status-ok'
-                      : task.percentComplete > 0
-                      ? 'bg-accent'
+                      : task.status === 'in_progress'
+                      ? 'bg-blue-600'
                       : 'bg-muted-foreground/20';
 
                     return (
@@ -129,35 +130,35 @@ export default function KanbanTab({ project }: { project: Project }) {
                         draggable
                         onDragStart={() => handleDragStart(task.id)}
                         onClick={() => setSelectedTask(task)}
-                        className="p-3.5 rounded-xl border border-border/40 bg-background cursor-grab active:cursor-grabbing hover:shadow-sm hover:border-border/80 transition-all"
+                        className="p-4 rounded-xl border border-border/50 bg-card cursor-grab active:cursor-grabbing hover:shadow-md hover:border-primary/40 transition-all duration-200 group"
                       >
-                        <p className="text-sm font-semibold text-foreground mb-2 leading-tight">{task.name}</p>
+                        <p className="text-sm font-bold text-foreground mb-3 leading-snug group-hover:text-primary transition-colors">{task.name}</p>
 
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                          <User className="w-3 h-3" />
-                          <span>{task.responsible || '—'}</span>
+                        <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground mb-1.5">
+                          <User className="w-3.5 h-3.5" />
+                          <span>{task.responsible || 'Sem responsável'}</span>
                         </div>
 
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
-                          <Calendar className="w-3 h-3" />
+                        <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground mb-4">
+                          <Calendar className="w-3.5 h-3.5" />
                           <span>{formatDate(task.startDate)} → {formatDate(task.endDate)}</span>
                         </div>
 
                         {task.checklists && task.checklists.length > 0 && (
-                          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-3 bg-muted/40 w-fit px-2 py-0.5 rounded-full border border-border/50">
-                            <CheckSquare className="w-3 h-3 text-primary" />
-                            <span>{task.checklists.filter(c => c.completed).length}/{task.checklists.length}</span>
+                          <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground mb-4 bg-muted/40 w-fit px-2.5 py-1 rounded-lg border border-border/50">
+                            <CheckSquare className="w-3.5 h-3.5 text-primary" />
+                            <span>{task.checklists.filter(c => c.completed).length}/{task.checklists.length} ITENS</span>
                           </div>
                         )}
 
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${progressColor} transition-all`}
+                              className={`h-full rounded-full ${task.percentComplete >= 100 ? 'bg-status-ok' : 'bg-blue-600'} transition-all duration-500`}
                               style={{ width: `${task.percentComplete}%` }}
                             />
                           </div>
-                          <span className="text-xs font-medium text-muted-foreground">{task.percentComplete}%</span>
+                          <span className="text-[11px] font-black text-foreground w-8 text-right">{task.percentComplete}%</span>
                         </div>
                       </div>
                     );

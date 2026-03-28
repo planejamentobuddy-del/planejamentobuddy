@@ -30,9 +30,9 @@ import { CSS } from '@dnd-kit/utilities';
 
 const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
   { value: 'not_started', label: 'Não iniciado', color: 'bg-muted text-muted-foreground' },
-  { value: 'in_progress', label: 'Em andamento', color: 'bg-blue-500/15 text-blue-500' },
-  { value: 'completed', label: 'Concluído', color: 'bg-[hsl(152_60%_42%/0.1)] text-status-ok' },
-  { value: 'delayed', label: 'Atrasado', color: 'bg-destructive/10 text-destructive' },
+  { value: 'in_progress', label: 'Em andamento', color: 'bg-blue-600/10 text-blue-600 border border-blue-600/20' },
+  { value: 'completed', label: 'Concluído', color: 'bg-status-ok/10 text-status-ok border border-status-ok/20' },
+  { value: 'delayed', label: 'Atrasado', color: 'bg-status-danger/10 text-status-danger border border-status-danger/20' },
 ];
 
 function isOverdue(task: Task): boolean {
@@ -74,8 +74,11 @@ export default function PlanningTab({ project }: { project: Project }) {
   const { isAdmin } = useAuth();
   const allTasks = getTasksForProject(project.id);
 
-  const stages = useMemo(() => allTasks.filter(t => !t.parentId), [allTasks]);
-  const getSubtasks = (stageId: string) => allTasks.filter(t => t.parentId === stageId);
+  const stages = useMemo(() => 
+    allTasks.filter(t => !t.parentId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
+  , [allTasks]);
+  const getSubtasks = (stageId: string) => 
+    allTasks.filter(t => t.parentId === stageId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
 
   const storageKey = `planning_expanded_${project.id}`;
   const [expandedStages, setExpandedStages] = useState<Set<string>>(() => {
@@ -340,7 +343,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     );
   };
 
-  const renderRow = (task: Task, isSubtask: boolean, stageId?: string, dragHandleProps?: any) => {
+  const renderRow = (task: Task, isSubtask: boolean, number: string, dragHandleProps?: any) => {
     const overdue = isOverdue(task);
     const isStage = !isSubtask;
     const agg = isStage ? getStageAggregates(task.id) : null;
@@ -348,10 +351,15 @@ export default function PlanningTab({ project }: { project: Project }) {
     const effectiveOverdue = agg ? agg.hasOverdue : overdue;
     const effectiveStatus = effectiveOverdue ? 'delayed' as TaskStatus : (agg ? (percent >= 100 ? 'completed' : percent > 0 ? 'in_progress' : 'not_started') : task.status);
 
+    const statusBorderColor = effectiveStatus === 'completed' ? 'border-l-status-ok' :
+                             effectiveStatus === 'in_progress' ? 'border-l-blue-600' :
+                             effectiveStatus === 'delayed' ? 'border-l-status-danger' :
+                             'border-l-muted';
+
     return (
       <tr
         key={task.id}
-        className={`border-b border-border/50 transition-colors ${effectiveOverdue ? 'bg-destructive/[0.02]' : 'hover:bg-muted/30'}`}
+        className={`border-b border-border/50 transition-colors border-l-4 ${statusBorderColor} ${effectiveOverdue ? 'bg-destructive/[0.02]' : 'hover:bg-muted/30'}`}
       >
         {/* 1. Etapa / Atividade */}
         <td className="py-2.5 px-3 border-r border-border/40 min-w-0">
@@ -364,6 +372,7 @@ export default function PlanningTab({ project }: { project: Project }) {
                 <GripVertical className="w-4 h-4" />
               </div>
             )}
+            <span className="text-[10px] font-bold text-muted-foreground/40 w-6 shrink-0">{number}</span>
             {isStage ? (
               <button onClick={() => toggleExpand(task.id)} className="p-0.5 shrink-0 hover:bg-muted rounded transition-colors">
                 {expandedStages.has(task.id)
@@ -372,7 +381,7 @@ export default function PlanningTab({ project }: { project: Project }) {
                 }
               </button>
             ) : (
-              <span className="text-muted-foreground/30 text-xs pl-5 shrink-0">↳</span>
+              <span className="text-muted-foreground/30 text-xs pl-1 shrink-0">↳</span>
             )}
             <Input
               className={`h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 truncate ${isStage ? 'font-bold text-foreground' : 'text-foreground/80'}`}
@@ -446,7 +455,7 @@ export default function PlanningTab({ project }: { project: Project }) {
             {isStage && agg ? (
               <>
                 <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${percent >= 100 ? 'bg-[#2A9D8F]' : 'bg-blue-500'}`} style={{ width: `${percent}%` }} />
+                  <div className={`h-full rounded-full transition-all ${percent >= 100 ? 'bg-status-ok' : 'bg-blue-600'}`} style={{ width: `${percent}%` }} />
                 </div>
                 <span className="text-xs font-semibold w-8 text-right">{percent}%</span>
               </>
@@ -636,13 +645,17 @@ export default function PlanningTab({ project }: { project: Project }) {
                 )}
 
                 <SortableContext items={stages.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                  {stages.map(stage => (
+                  {stages.map((stage, sIdx) => (
                     <SortableStageRow 
                       key={stage.id} 
                       stage={stage} 
                       subtasks={getSubtasks(stage.id)}
                       isExpanded={expandedStages.has(stage.id)}
-                      renderRow={renderRow}
+                      renderRow={(t: Task, isSub: boolean, dragProps?: any) => {
+                        const subIdx = isSub ? getSubtasks(stage.id).findIndex(st => st.id === t.id) : -1;
+                        const number = isSub ? `${sIdx + 1}.${subIdx + 1}` : `${sIdx + 1}`;
+                        return renderRow(t, isSub, number, dragProps);
+                      }}
                       handleAddSubtask={handleAddSubtask}
                       columnHeaders={columnHeaders}
                     />
@@ -687,8 +700,8 @@ function SortableStageRow({
 
   return (
     <tbody ref={setNodeRef} style={style} className={isDragging ? 'shadow-2xl ring-2 ring-primary border-primary rounded-lg overflow-hidden brightness-105 transition-none z-50 pointer-events-none' : ''}>
-      {renderRow(stage, false, stage.id, { ...attributes, ...listeners })}
-      {isExpanded && subtasks.map((sub: any) => renderRow(sub, true, stage.id))}
+      {renderRow(stage, false, { ...attributes, ...listeners })}
+      {isExpanded && subtasks.map((sub: any) => renderRow(sub, true))}
       {isExpanded && (
         <tr className="border-b border-dashed bg-muted/5">
           <td colSpan={columnHeaders.length} className="py-2 px-3 pl-10">

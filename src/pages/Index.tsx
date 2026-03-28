@@ -12,9 +12,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { getProjectProgress, getProjectStatus, getEstimatedEndDate } from '@/types/project';
 
 const statusConfig = {
-  ok: { emoji: '🟢', label: 'Em dia', class: 'status-badge-ok' },
-  warning: { emoji: '🟡', label: 'Atenção', class: 'status-badge-warning' },
-  danger: { emoji: '🔴', label: 'Atrasada', class: 'status-badge-danger' },
+  ok: { emoji: '✓', label: 'No Prazo', class: 'status-badge-ok' },
+  warning: { emoji: '!', label: 'Atenção', class: 'status-badge-warning' },
+  danger: { emoji: '⚠', label: 'Atrasada', class: 'status-badge-danger' },
 };
 
 export default function Index() {
@@ -39,21 +39,21 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="container mx-auto flex items-center justify-between py-5 px-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 flex items-center justify-center">
-              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain" />
+      <header className="border-b bg-card/80 backdrop-blur-md sticky top-0 z-50 shadow-sm">
+        <div className="container mx-auto flex items-center justify-between py-4 px-6">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 flex items-center justify-center bg-primary/10 rounded-xl">
+              <Building2 className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-display font-bold text-foreground">Buddy</h1>
-              <p className="text-xs text-muted-foreground">
-                Olá, {profile?.full_name || 'Usuário'}
+              <h1 className="text-lg font-display font-black text-foreground tracking-tight">Buddy Construtora</h1>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                Gestão de Obras • {profile?.full_name || 'Usuário'}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2 rounded-xl text-primary border-primary/20 hover:bg-primary/5 relative" onClick={() => navigate('/minhas-tarefas')}>
+            <Button variant="ghost" className="gap-2 rounded-xl text-primary font-bold hover:bg-primary/5 relative px-4" onClick={() => navigate('/minhas-tarefas')}>
               <ClipboardCheck className="w-4 h-4" /> Minhas Tarefas
               {(() => {
                 const me = profile?.full_name?.toLowerCase().trim() || '';
@@ -72,20 +72,20 @@ export default function Index() {
                              }).length;
                 if (count === 0) return null;
                 return (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-status-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-in zoom-in duration-300">
+                  <span className="absolute -top-1.5 -right-1 w-5 h-5 bg-status-danger text-white text-[10px] font-black rounded-lg flex items-center justify-center shadow-md animate-pulse">
                     {count}
                   </span>
                 );
               })()}
             </Button>
             {isAdmin && (
-              <Button variant="outline" className="gap-2 rounded-xl" onClick={() => navigate('/admin/users')}>
+              <Button variant="ghost" className="gap-2 rounded-xl font-bold" onClick={() => navigate('/admin/users')}>
                 <Shield className="w-4 h-4" /> Usuários
               </Button>
             )}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button className="gap-2">
+                <Button className="btn-primary gap-2 h-10">
                   <Plus className="w-4 h-4" /> Nova Obra
                 </Button>
               </DialogTrigger>
@@ -150,37 +150,39 @@ export default function Index() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="card-elevated p-5 cursor-pointer group"
+                  className="card-elevated p-6 cursor-pointer group hover:border-primary/40 relative overflow-hidden"
                   onClick={() => navigate(`/obra/${project.id}`)}
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <h3 className="font-display font-semibold text-foreground text-lg leading-tight group-hover:text-accent transition-colors">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-8 -mt-8 transition-all group-hover:scale-110" />
+                  
+                  <div className="flex items-start justify-between mb-6 relative z-10">
+                    <h3 className="font-display font-black text-foreground text-xl leading-tight group-hover:text-primary transition-colors">
                       {project.name}
                     </h3>
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${cfg.class}`}>
-                      {cfg.emoji} {cfg.label}
+                    <span className={`text-[10px] px-2.5 py-1 rounded-lg font-black uppercase tracking-widest ${cfg.class}`}>
+                       {cfg.label}
                     </span>
                   </div>
-                  <div className="mb-4">
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span className="text-muted-foreground">Progresso</span>
-                      <span className="font-semibold text-foreground">{progress}%</span>
+                  <div className="mb-6 relative z-10">
+                    <div className="flex justify-between text-xs font-bold mb-2 uppercase tracking-tighter">
+                      <span className="text-muted-foreground">Status do Cronograma</span>
+                      <span className="text-foreground">{progress}%</span>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden shadow-inner font-bold">
                       <div
-                        className="h-full rounded-full bg-accent transition-all duration-500"
+                        className="h-full rounded-full bg-blue-600 transition-all duration-700 ease-out shadow-sm"
                         style={{ width: `${progress}%` }}
                       />
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
-                      Prev: {new Date(estimated).toLocaleDateString('pt-BR')}
+                  <div className="flex items-center gap-5 text-[11px] font-bold text-muted-foreground relative z-10">
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-primary" />
+                      PREVISÃO: {new Date(estimated).toLocaleDateString('pt-BR')}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      {tasks.length} tarefas
+                    <span className="flex items-center gap-1.5">
+                      <TrendingUp className="w-4 h-4 text-primary" />
+                      {tasks.length} TAREFAS
                     </span>
                   </div>
                 </motion.div>
