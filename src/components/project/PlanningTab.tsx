@@ -1,5 +1,5 @@
 import { useState, useMemo, Fragment, useEffect } from 'react';
-import { Project, Task, TaskStatus, getProjectProgress, StatusComment } from '@/types/project';
+import { Project, Task, TaskStatus, getProjectProgress, StatusComment, safeParseDate } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp } from 'lucide-react';
@@ -38,17 +38,19 @@ const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
 function isOverdue(task: Task): boolean {
   if (task.percentComplete >= 100) return false;
   const now = new Date().toISOString().split('T')[0];
-  return task.endDate < now;
+  const nowTs = safeParseDate(now);
+  const endTs = safeParseDate(task.endDate);
+  return endTs < nowTs;
 }
 
 function getBusinessDays(startDateStr: string, endDateStr: string): number {
   if (!startDateStr || !endDateStr) return 0;
-  const start = new Date(startDateStr + 'T12:00:00');
-  const end = new Date(endDateStr + 'T12:00:00');
+  const start = safeParseDate(startDateStr);
+  const end = safeParseDate(endDateStr);
   if (start > end) return 0;
   let days = 1;
   let current = new Date(start);
-  while (current < end) {
+  while (current.getTime() < end) {
     current.setDate(current.getDate() + 1);
     const day = current.getDay();
     if (day !== 0 && day !== 6) days++;
@@ -58,7 +60,7 @@ function getBusinessDays(startDateStr: string, endDateStr: string): number {
 
 function addBusinessDays(startDateStr: string, duration: number): string {
   if (!startDateStr || duration < 1) return startDateStr;
-  const d = new Date(startDateStr + 'T12:00:00');
+  const d = new Date(safeParseDate(startDateStr));
   let added = 1;
   while (added < duration) {
     d.setDate(d.getDate() + 1);

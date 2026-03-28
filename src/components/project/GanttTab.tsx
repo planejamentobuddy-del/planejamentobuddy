@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
-import { Project, Task, getCriticalTaskIds } from '@/types/project';
+import { Project, Task, getCriticalTaskIds, safeParseDate } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Calendar, ChevronDown, ChevronRight, Users } from 'lucide-react';
@@ -51,8 +51,8 @@ export default function GanttTab({ project }: { project: Project }) {
       if (children.length === 0) {
         const t = allTasks.find(x => x.id === taskId);
         return t ? { 
-          start: new Date(t.startDate + 'T12:00:00').getTime(), 
-          end: new Date(t.endDate + 'T12:00:00').getTime(),
+          start: safeParseDate(t.startDate), 
+          end: safeParseDate(t.endDate),
           avgProgress: t.percentComplete
         } : null;
       }
@@ -75,9 +75,11 @@ export default function GanttTab({ project }: { project: Project }) {
       const avg = count > 0 ? Math.round(totalProg / count) : 0;
       
       if (minStart !== Infinity && maxEnd !== -Infinity) {
+        const sStr = new Date(minStart).toISOString().split('T')[0];
+        const eStr = new Date(maxEnd).toISOString().split('T')[0];
         bounds.set(taskId, {
-          start: new Date(minStart).toISOString().split('T')[0],
-          end: new Date(maxEnd).toISOString().split('T')[0]
+          start: sStr,
+          end: eStr
         });
         progress.set(taskId, avg);
         return { start: minStart, end: maxEnd, avgProgress: avg };
@@ -176,10 +178,10 @@ export default function GanttTab({ project }: { project: Project }) {
 
     const taskDates = allTasks.flatMap(t => {
       const b = computedBounds.get(t.id) || { start: t.startDate, end: t.endDate };
-      return [new Date(b.start + 'T12:00:00').getTime(), new Date(b.end + 'T12:00:00').getTime()];
+      return [safeParseDate(b.start), safeParseDate(b.end)];
     });
-    let start = Math.min(...taskDates, new Date(project.startDate + 'T12:00:00').getTime());
-    let end = Math.max(...taskDates, new Date(project.endDate + 'T12:00:00').getTime());
+    let start = Math.min(...taskDates, safeParseDate(project.startDate));
+    let end = Math.max(...taskDates, safeParseDate(project.endDate));
 
     // Add padding to timeline (1 week before, 4 weeks after)
     const startDate = new Date(start);
@@ -199,7 +201,7 @@ export default function GanttTab({ project }: { project: Project }) {
         current.setDate(current.getDate() + 1);
       }
     } else if (viewMode === 'semanal') {
-      // Align to start of week
+      // Align to start of week (Sunday)
       current.setDate(current.getDate() - current.getDay());
       while (current.getTime() <= end) {
         ticks.push(new Date(current));
@@ -226,7 +228,7 @@ export default function GanttTab({ project }: { project: Project }) {
   const tickWidth = viewMode === 'diario' ? pixelsPerDay : viewMode === 'semanal' ? pixelsPerDay * 7 : pixelsPerDay * 30;
 
   const getPosition = (dateStr: string) => {
-    const date = new Date(dateStr + 'T12:00:00').getTime();
+    const date = safeParseDate(dateStr);
     return ((date - minDate) / 86400000) * pixelsPerDay;
   };
 
@@ -334,9 +336,7 @@ export default function GanttTab({ project }: { project: Project }) {
                   const hasChildren = hasChildrenMap.get(task.id) || false;
                   const isCollapsed = collapsedTasks.has(task.id);
                   const bounds = computedBounds.get(task.id);
-                  const displayDate = hasChildren && bounds ? bounds.start : task.startDate;
-                  const displayEndDate = hasChildren && bounds ? bounds.end : task.endDate;
-                  
+                  // Not strictly used for display but good for internal logic
                   return (
                     <div 
                       key={task.id} 
@@ -424,10 +424,12 @@ export default function GanttTab({ project }: { project: Project }) {
                 </defs>
                 {visibleTasks.map((task, idx) => 
                   task.predecessors.map(predId => {
-                    const predTask = visibleTasks.find(t => t.id === predId);
-                    if (!predTask) return null; // Predecessor might be collapsed/hidden
+                    const predTask = allTasks.find(t => t.id === predId);
+                    if (!predTask) return null;
                     
-                    const predIdx = visibleTasks.indexOf(predTask);
+                    const predIdxInVisible = visibleTasks.findIndex(t => t.id === predId);
+                    if (predIdxInVisible === -1) return null; // Predecessor hidden
+                    
                     const predBounds = computedBounds.get(predTask.id);
                     const predEndDate = predBounds ? predBounds.end : predTask.endDate;
                     
@@ -435,7 +437,7 @@ export default function GanttTab({ project }: { project: Project }) {
                     const taskStartDate = taskBounds ? taskBounds.start : task.startDate;
                     
                     const startX = getPosition(predEndDate);
-                    const startY = predIdx * 40 + 20;
+                    const startY = predIdxInVisible * 40 + 20;
                     const endX = getPosition(taskStartDate);
                     const endY = idx * 40 + 20;
                     
@@ -482,8 +484,8 @@ export default function GanttTab({ project }: { project: Project }) {
                   const hasNoDates = !task.startDate || !task.endDate;
                   const todayStr = new Date().toISOString().split('T')[0];
                   
-                  const startStr = (bounds && isSummary ? bounds.start : task.startDate) || todayStr;
-                  const endStr = (bounds && isSummary ? bounds.end : task.endDate) || todayStr;
+                  const startStr = (isSummary && bounds ? bounds.start : task.startDate) || todayStr;
+                  const endStr = (isSummary && bounds ? bounds.end : task.endDate) || todayStr;
                   
                   const startPos = getPosition(startStr);
                   const endPos = getPosition(endStr) + (hasNoDates ? pixelsPerDay * 3 : pixelsPerDay);
@@ -514,14 +516,14 @@ export default function GanttTab({ project }: { project: Project }) {
                         <div
                           className="absolute top-1.5 z-10"
                           style={{ left: startPos, width }}
-                          title={`${task.name}: ${computedProgress.get(task.id)}%`}
+                          title={`${task.name}: ${Math.round(computedProgress.get(task.id) || 0)}%`}
                         >
                           {/* Background bar (Thick visual) */}
                           <div className="absolute top-0 left-0 right-0 h-3 bg-slate-200 dark:bg-slate-700 rounded-sm overflow-hidden">
                             {/* Progress fill that "grows" like subtasks */}
                             <div 
                               className="h-full bg-slate-800 dark:bg-slate-200 transition-all duration-1000 ease-out shadow-sm relative"
-                              style={{ width: `${computedProgress.get(task.id)}%` }}
+                              style={{ width: `${computedProgress.get(task.id) || 0}%` }}
                             >
                               {/* Highlight for beauty */}
                               <div className="absolute inset-0 bg-white/10" />
@@ -558,7 +560,7 @@ export default function GanttTab({ project }: { project: Project }) {
 
                       {!isSummary && (showAllLabels || isClicked) && (
                         <div 
-                          className="absolute top-3 h-4 flex items-center px-2 z-20 whitespace-nowrap font-bold text-[9px] text-slate-800 pointer-events-none"
+                          className="absolute top-3 h-4 flex items-center px-2 z-20 whitespace-nowrap font-bold text-[9px] text-slate-800 dark:text-slate-200 pointer-events-none"
                           style={{ left: startPos + width + 4 }}
                         >
                           {task.name} {task.responsible ? `• ${task.responsible}` : ''}

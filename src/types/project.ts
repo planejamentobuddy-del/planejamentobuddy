@@ -138,18 +138,71 @@ export function getProjectStatus(tasks: Task[]): 'ok' | 'warning' | 'danger' {
   return 'ok';
 }
 
-export function getEstimatedEndDate(project: Project, tasks: Task[]): string {
+export function getProjectPlannedEnd(tasks: Task[]): string {
+  if (tasks.length === 0) return '';
+  const parentIds = new Set(tasks.filter(t => t.parentId).map(t => t.parentId!));
+  const leaves = tasks.filter(t => !parentIds.has(t.id));
+  const ends = leaves.map(t => t.endDate).filter(Boolean).sort();
+  return ends.length > 0 ? ends[ends.length - 1] : '';
+}
+
+/**
+ * Parses a date string safely, handling both YYYY-MM-DD and DD/MM/YYYY
+ */
+export function safeParseDate(dateStr: string | null | undefined): number {
+  if (!dateStr) return 0;
+  
+  // If it's pure ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0).getTime();
+  }
+  
+  // If it's BR format DD/MM/YYYY
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const [d, m, y] = dateStr.split('/').map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0).getTime();
+  }
+
+  // Fallback for full ISO strings or other formats
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return 0;
+  
+  // Force noon to avoid timezone shift issues in calculations
+  d.setHours(12, 0, 0, 0);
+  return d.getTime();
+}
+
+export function getEstimatedEndDate(project: Project, tasks: Task[], providedSpi?: number): string {
   if (tasks.length === 0) return project.endDate;
   const progress = getProjectProgress(tasks);
   if (progress >= 100) return new Date().toISOString().split('T')[0];
   if (progress === 0) return project.endDate;
+
+  const start = safeParseDate(project.startDate);
+  const plannedEnd = safeParseDate(project.endDate);
+  const plannedDuration = plannedEnd - start;
+
+  // Use provided SPI or calculate a simple one if not available
+  let spi = providedSpi;
+  if (spi === undefined || spi === null) {
+    const elapsed = Date.now() - start;
+    const effectiveProgress = Math.max(0.1, progress); 
+    const linearTotalDuration = Math.max(0, elapsed) / (effectiveProgress / 100);
+    const linearSpi = plannedDuration / linearTotalDuration;
+    spi = linearSpi;
+  }
+
+  // SPI-based estimation: Estimated Duration = Planned Duration / SPI
+  // Cap SPI to avoid infinite or zero dates
+  const safeSpi = Math.max(0.1, Math.min(10, spi || 1));
+  const estimatedDuration = plannedDuration / safeSpi;
   
-  const start = new Date(project.startDate).getTime();
-  const now = Date.now();
-  const elapsed = now - start;
-  const totalEstimated = elapsed / (progress / 100);
-  const estimatedEnd = new Date(start + totalEstimated);
-  return estimatedEnd.toISOString().split('T')[0];
+  const estimatedEnd = new Date(start + estimatedDuration);
+  const y = estimatedEnd.getFullYear();
+  const m = String(estimatedEnd.getMonth() + 1).padStart(2, '0');
+  const d = String(estimatedEnd.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 export function getCurrentWeek(): string {
@@ -175,8 +228,7 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
   if (leaves.length === 0) return new Set();
 
   const toDay = (s: string) => {
-    const d = new Date(s + 'T12:00:00');
-    return Math.round(d.getTime() / 86400000);
+    return Math.round(safeParseDate(s) / 86400000);
   };
 
   // Map ancestors to their leaf task indices

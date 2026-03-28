@@ -1,17 +1,29 @@
-import { useMemo, useState } from 'react';
+import React, { useState, useMemo, createContext, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate, isCriticalPath, getCurrentWeek, calculateSCurve } from '@/types/project';
+import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate, isCriticalPath, getCurrentWeek, calculateSCurve, safeParseDate, getProjectPlannedEnd } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
-import { AlertTriangle, CheckCircle, Clock, TrendingUp, Shield, CalendarClock, Info, HeartPulse, Zap, Milestone, Gauge, Activity, Hammer } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, TrendingUp, Shield, CalendarClock, Info, HeartPulse, Zap, Milestone, Gauge, Activity, Hammer, Edit2, Check, X, HelpCircle, Layers, Target, Clock4 } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { motion } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, Legend, Area, ComposedChart, ReferenceLine } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Input } from '@/components/ui/input';
 
 export default function DashboardTab({ project }: { project: Project }) {
   const [isAdvanced, setIsAdvanced] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isEditingMeta, setIsEditingMeta] = useState(false);
+  const [tempMeta, setTempMeta] = useState(project.endDate);
   const [, setSearchParams] = useSearchParams();
-  const { getTasksForProject, getPlansForProject, getHistoryForProject, getConstraintsForProject } = useProjects();
+  const { getTasksForProject, getPlansForProject, getHistoryForProject, getConstraintsForProject, updateProject } = useProjects();
+  
+  const handleSaveMeta = async () => {
+    await updateProject({ ...project, endDate: tempMeta });
+    setIsEditingMeta(false);
+  };
   
   const tasks = getTasksForProject(project.id);
   const plans = getPlansForProject(project.id);
@@ -19,9 +31,15 @@ export default function DashboardTab({ project }: { project: Project }) {
   const constraints = getConstraintsForProject(project.id);
   
   const progress = getProjectProgress(tasks);
-  const estimated = getEstimatedEndDate(project, tasks);
+// Moved estimated calculation down so it can use 'spi'
   const now = new Date().toISOString().split('T')[0];
-  const delayed = tasks.filter(t => t.endDate < now && t.percentComplete < 100);
+  const delayed = tasks.filter(t => {
+    const endStr = t.endDate;
+    if (!endStr) return false;
+    const end = safeParseDate(endStr);
+    const nowTs = new Date(now + 'T12:00:00').getTime();
+    return end < nowTs && t.percentComplete < 100;
+  });
   
   const currentWeek = getCurrentWeek();
   const weekPlans = plans.filter(p => p.week === currentWeek);
@@ -29,12 +47,11 @@ export default function DashboardTab({ project }: { project: Project }) {
   const ppc = weekPlans.length > 0 ? Math.round((weekCompleted / weekPlans.length) * 100) : null;
   const restrictions = constraints.filter(c => c.status === 'open');
 
-  const delayDays = (() => {
-    const est = new Date(estimated).getTime();
-    const planned = new Date(project.endDate).getTime();
-    const diff = Math.ceil((est - planned) / 86400000);
-    return diff > 0 ? diff : 0;
-  })();
+  const plannedEnd = useMemo(() => {
+    return getProjectPlannedEnd(tasks) || project.endDate;
+  }, [tasks, project.endDate]);
+
+// Moved delayDays calculation down
 
   const curveSData = useMemo(() => calculateSCurve(tasks, project), [tasks, project]);
 
@@ -80,6 +97,13 @@ export default function DashboardTab({ project }: { project: Project }) {
   const healthColor = healthScore >= 80 ? 'text-status-ok' : healthScore >= 60 ? 'text-status-warning' : 'text-status-danger';
   const spiColor = spi >= 1 ? 'text-status-ok' : spi >= 0.9 ? 'text-status-warning' : 'text-status-danger';
 
+  const delayDays = useMemo(() => {
+    const planned = safeParseDate(plannedEnd);
+    const meta = safeParseDate(project.endDate);
+    const diff = Math.ceil((planned - meta) / 86400000);
+    return diff > 0 ? diff : 0;
+  }, [plannedEnd, project.endDate]);
+
   // PPC history data
   const ppcChartData = history.sort((a, b) => a.week.localeCompare(b.week)).map(h => ({
     week: h.weekLabel,
@@ -102,7 +126,7 @@ export default function DashboardTab({ project }: { project: Project }) {
     alerts.push({ text: `PPC da semana em ${ppc}%. Atenção ao cumprimento das metas.`, type: 'warning', onClick: () => setSearchParams({ tab: 'lean', subtab: 'indicadores' }) });
   }
   
-  const expiredRestrictions = constraints.filter(c => c.status === 'open' && c.deadline && c.deadline < now);
+  const expiredRestrictions = constraints.filter(c => c.status === 'open' && c.dueDate && c.dueDate < now);
   if (expiredRestrictions.length > 0) {
     alerts.push({ text: `${expiredRestrictions.length} restrição(ões) com prazo VENCIDO no Lean.`, type: 'danger', onClick: () => setSearchParams({ tab: 'lean', subtab: 'restricoes' }) });
   } else if (restrictions.length > 0) {
@@ -126,7 +150,126 @@ export default function DashboardTab({ project }: { project: Project }) {
               Performance Insights
             </h2>
           </div>
-          <div className="flex gap-1 bg-background/50 p-1 rounded-xl border border-border/40">
+          <div className="flex items-center gap-3">
+          <Sheet open={isHelpOpen} onOpenChange={setIsHelpOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0 rounded-full bg-background border-border/40 text-muted-foreground hover:text-primary transition-all">
+                <HelpCircle className="w-4 h-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+              <SheetHeader className="mb-6">
+                <SheetTitle className="text-2xl font-display font-black flex items-center gap-2">
+                  <div className="p-2 bg-primary/10 rounded-xl">
+                    <Activity className="w-6 h-6 text-primary" />
+                  </div>
+                  Guia de Indicadores
+                </SheetTitle>
+                <SheetDescription className="text-sm font-medium">
+                  Entenda como os índices da Buddy Construtora ajudam na tomada de decisão.
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="space-y-8 pr-2">
+                {/* Saúde da Obra */}
+                <section>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 bg-status-ok/10 rounded-lg">
+                      <HeartPulse className="w-4 h-4 text-status-ok" />
+                    </div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-foreground">Saúde da Obra (0-100)</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                    É a nota geral do projeto. Ela combina <strong>PPC (30%)</strong>, <strong>SPI (35%)</strong>, <strong>Caminho Crítico (20%)</strong> e <strong>Restrições (15%)</strong>.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase">
+                    <div className="bg-muted/30 p-2 rounded-lg border border-border/20">&gt; 80: Excelente</div>
+                    <div className="bg-muted/30 p-2 rounded-lg border border-border/20">60-80: Atenção</div>
+                    <div className="bg-muted/30 p-2 rounded-lg border border-border/20">&lt; 60: Crítico</div>
+                  </div>
+                </section>
+
+                <Separator className="bg-border/40" />
+
+                {/* SPI */}
+                <section>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 bg-primary/10 rounded-lg">
+                      <Gauge className="w-4 h-4 text-primary" />
+                    </div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-foreground">SPI (Schedule Performance Index)</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-2">
+                    Indica a <strong>eficiência do prazo</strong>. Ele compara o progresso real acumulado com o que deveria ter sido feito conforme a Curva S planejada.
+                  </p>
+                  <ul className="space-y-2">
+                    <li className="flex gap-2 text-[11px] text-muted-foreground">
+                      <span className="text-status-ok font-black">≥ 1.0 :</span> Obra adiantada ou no prazo.
+                    </li>
+                    <li className="flex gap-2 text-[11px] text-muted-foreground">
+                      <span className="text-status-danger font-black">&lt; 1.0 :</span> Obra está produzindo menos que o planejado por dia.
+                    </li>
+                  </ul>
+                </section>
+
+                <Separator className="bg-border/40" />
+
+                {/* PPC */}
+                <section>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 bg-blue-600/10 rounded-lg">
+                      <Zap className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-foreground">PPC (Planilha de Planos Concluídos)</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Mede a <strong>confiabilidade do planejamento</strong> semanal (Lean). Indica quantas tarefas prometidas para a semana foram realmente entregues.
+                  </p>
+                </section>
+
+                <Separator className="bg-border/40" />
+
+                {/* Caminho Crítico */}
+                <section>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 bg-status-danger/10 rounded-lg">
+                      <Milestone className="w-4 h-4 text-status-danger" />
+                    </div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-foreground">Caminho Crítico (CPM)</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    É a sequência de tarefas que determina a <strong>data final da obra</strong>. Qualquer atraso nestas tarefas (marcadas em vermelho no Gantt) atrasa o projeto inteiro. No Dashboard, mostramos o % de conclusão deste caminho.
+                  </p>
+                </section>
+
+                <Separator className="bg-border/40" />
+
+                {/* Curva S */}
+                <section>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 bg-primary/10 rounded-lg">
+                      <TrendingUp className="w-4 h-4 text-primary" />
+                    </div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-foreground">Curva S (Planejado vs Real)</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    A linha tracejada (Azul) é o seu <strong>compromisso de entrega</strong> ao longo do tempo. A linha sólida (Laranja) é onde você <strong>realmente está</strong>. O desvio entre elas é o seu fôlego ou atraso.
+                  </p>
+                </section>
+
+                <div className="pt-6">
+                  <div className="p-4 bg-muted/40 rounded-2xl border border-border/40">
+                    <h5 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Dica de Gestão</h5>
+                    <p className="text-[11px] text-muted-foreground italic leading-relaxed">
+                      "Utilize o Modo Gerencial para identificar gargalos no Caminho Crítico antes que eles afetem a data final da Meta Contratual."
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          <div className="bg-muted/50 p-1 rounded-xl flex gap-1 border border-border/40">
             <Button 
               variant={!isAdvanced ? 'secondary' : 'ghost'} 
               size="sm" 
@@ -144,6 +287,7 @@ export default function DashboardTab({ project }: { project: Project }) {
               Modo Gerencial
             </Button>
           </div>
+        </div>
         </div>
 
         {/* KPI Cards Grid */}
@@ -322,22 +466,84 @@ export default function DashboardTab({ project }: { project: Project }) {
             <p className="text-[10px] font-bold text-muted-foreground mt-2 uppercase tracking-tight">{constraints.length - restrictions.length} resolvidas este mês</p>
           </motion.div>
 
-          {/* Previsão */}
+          {/* Previsão e Cronograma */}
           <motion.div className="card-elevated p-5 flex flex-col justify-between">
             <div className="flex items-center gap-2 mb-3">
               <div className="p-1.5 rounded-lg bg-primary/10">
                 <CalendarClock className="w-4 h-4 text-primary" />
               </div>
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fim Previsto</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Prazos e Entrega</span>
             </div>
-            <p className="text-2xl font-display font-black text-foreground">
-              {new Date(estimated + 'T12:00:00').toLocaleDateString('pt-BR')}
-            </p>
-            {delayDays > 0 ? (
-              <p className="text-[10px] text-status-danger font-black mt-2 uppercase bg-status-danger/10 px-2 py-0.5 rounded-full inline-block">+{delayDays} dias de desvio</p>
-            ) : (
-              <p className="text-[10px] text-status-ok font-black mt-2 uppercase bg-status-ok/10 px-2 py-0.5 rounded-full inline-block">No Prazo</p>
-            )}
+            
+            <div className="space-y-3">
+              <div>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Término do Cronograma</span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger><Info className="w-3 h-3 text-muted-foreground/50" /></TooltipTrigger>
+                      <TooltipContent>Data final da última tarefa cadastrada no planejamento (Gantt).</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <p className="text-xl font-display font-black text-foreground">
+                  {new Date(plannedEnd + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </p>
+              </div>
+
+              <div className="pt-2 border-t border-border/40">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Status do Prazo</span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger><TrendingUp className="w-3 h-3 text-primary/50" /></TooltipTrigger>
+                      <TooltipContent>Comparação entre o término do cronograma atual e a meta contratual.</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <p className={`text-sm font-bold ${delayDays > 0 ? 'text-status-danger' : 'text-status-ok'}`}>
+                    {delayDays > 0 ? `${delayDays} dias de atraso` : 'Dentro do Prazo'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2 border-t border-border/20">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tight">Meta Contratual</span>
+                {!isEditingMeta ? (
+                  <button 
+                    onClick={() => setIsEditingMeta(true)}
+                    className="p-1 hover:bg-muted rounded-md transition-colors"
+                  >
+                    <Edit2 className="w-2.5 h-2.5 text-muted-foreground" />
+                  </button>
+                ) : (
+                  <div className="flex gap-1">
+                    <button onClick={handleSaveMeta} className="p-0.5 hover:bg-status-ok/10 rounded-md">
+                      <Check className="w-2.5 h-2.5 text-status-ok" />
+                    </button>
+                    <button onClick={() => setIsEditingMeta(false)} className="p-0.5 hover:bg-status-danger/10 rounded-md">
+                      <X className="w-2.5 h-2.5 text-status-danger" />
+                    </button>
+                  </div>
+                )}
+              </div>
+              {!isEditingMeta ? (
+                <p className="text-[10px] font-bold text-foreground">
+                  {new Date(safeParseDate(project.endDate)).toLocaleDateString('pt-BR')}
+                </p>
+              ) : (
+                <Input 
+                  type="date"
+                  value={tempMeta}
+                  onChange={(e) => setTempMeta(e.target.value)}
+                  className="h-6 text-[10px] mt-1"
+                  autoFocus
+                />
+              )}
+            </div>
           </motion.div>
         </div>
 

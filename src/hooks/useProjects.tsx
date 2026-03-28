@@ -198,6 +198,31 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     return newProj;
   }, [user]);
 
+  const updateProject = useCallback(async (p: Project) => {
+    const original = [...projects];
+    setProjects(prev => prev.map(item => item.id === p.id ? p : item));
+
+    const { error } = await supabase
+      .from('projects')
+      .update({
+        name: p.name,
+        description: p.description,
+        start_date: p.startDate,
+        end_date: p.endDate,
+      })
+      .eq('id', p.id);
+
+    if (error) {
+      setProjects(original);
+      console.error('Error updating project:', error);
+      toast.error('Erro ao atualizar obra.');
+      return false;
+    }
+    
+    toast.success('Obra atualizada com sucesso!');
+    return true;
+  }, [projects]);
+
   const deleteProject = useCallback(async (id: string) => {
     const original = [...projects];
     setProjects(prev => prev.filter(p => p.id !== id));
@@ -560,7 +585,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   return (
     <ProjectsContext.Provider value={{
       projects, loading, tasks, constraints,
-      addProject, deleteProject,
+      addProject, updateProject, deleteProject,
       getTasksForProject, addTask, updateTask, deleteTask, reorderTasks,
       getPlansForProject, addWeeklyPlan, updateWeeklyPlan, deleteWeeklyPlan,
       getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,

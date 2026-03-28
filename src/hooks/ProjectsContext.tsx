@@ -8,6 +8,7 @@ export interface ProjectsContextType {
   constraints: Constraint[];
   plans: WeeklyPlan[];
   addProject: (p: Omit<Project, 'id' | 'createdAt'>) => Promise<Project | null>;
+  updateProject: (p: Project) => Promise<boolean>;
   deleteProject: (id: string) => Promise<void>;
   // Tasks
   getTasksForProject: (projectId: string) => Task[];
