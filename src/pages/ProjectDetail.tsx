@@ -50,10 +50,10 @@ export default function ProjectDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <Tabs value={searchParams.get('tab') || 'dashboard'} onValueChange={(v) => setSearchParams({ tab: v })} className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="bg-card border-b sticky top-0 z-30">
-        <div className="container mx-auto flex items-center gap-4 py-4 px-6">
+      <header className="bg-card border-b sticky top-0 z-30 shadow-sm">
+        <div className="container mx-auto flex items-center gap-4 pt-4 pb-3 px-6">
           <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="shrink-0 rounded-xl hover:bg-muted">
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -100,23 +100,26 @@ export default function ProjectDetail() {
             </Button>
           </div>
         </div>
-      </header>
 
-      {/* Content */}
-      <div className="container mx-auto px-6 py-5">
-        <Tabs value={searchParams.get('tab') || 'dashboard'} onValueChange={(v) => setSearchParams({ tab: v })}>
-          <TabsList className="mb-6 bg-transparent border-0 p-0 h-auto gap-1 flex-wrap">
+        {/* Tabs Bar */}
+        <div className="container mx-auto px-6 pb-3 overflow-x-auto flex [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+          <TabsList className="bg-transparent border-0 p-0 h-auto gap-1 inline-flex w-max">
             {tabs.map(tab => (
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm hover:bg-muted transition-all"
+                className="gap-2 rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted transition-all"
               >
                 <tab.icon className="w-4 h-4" />
                 {tab.label}
               </TabsTrigger>
             ))}
           </TabsList>
+        </div>
+      </header>
+
+      {/* Content */}
+      <div className="container mx-auto px-6 py-5 flex-1 w-full max-w-[1600px]">
 
           <TabsContent value="dashboard"><DashboardTab project={project} /></TabsContent>
           <TabsContent value="planning"><PlanningTab project={project} /></TabsContent>
@@ -125,8 +128,7 @@ export default function ProjectDetail() {
           <TabsContent value="curves"><CurveSTab project={project} /></TabsContent>
           <TabsContent value="lean"><LeanTab project={project} /></TabsContent>
           <TabsContent value="admin"><AdminTab project={project} /></TabsContent>
-        </Tabs>
       </div>
-    </div>
+    </Tabs>
   );
 }
