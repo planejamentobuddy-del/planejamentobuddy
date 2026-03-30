@@ -42,8 +42,8 @@ export default function Index() {
       <header className="border-b bg-card/80 backdrop-blur-md sticky top-0 z-50 shadow-sm">
         <div className="container mx-auto flex items-center justify-between py-4 px-6">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 flex items-center justify-center bg-primary/10 rounded-xl">
-              <Building2 className="w-6 h-6 text-primary" />
+            <div className="w-12 h-12 flex items-center justify-center shrink-0">
+              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div>
               <h1 className="text-lg font-display font-black text-foreground tracking-tight">Buddy Construtora</h1>

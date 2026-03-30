@@ -50,6 +50,8 @@ export type Database = {
           end_date: string
           created_at: string
           created_by: string | null
+          admin_cost_total: number | null
+          admin_cost_received: number | null
         }
         Insert: {
           id?: string
@@ -59,6 +61,8 @@ export type Database = {
           end_date: string
           created_at?: string
           created_by?: string | null
+          admin_cost_total?: number | null
+          admin_cost_received?: number | null
         }
         Update: {
           id?: string
@@ -68,6 +72,8 @@ export type Database = {
           end_date?: string
           created_at?: string
           created_by?: string | null
+          admin_cost_total?: number | null
+          admin_cost_received?: number | null
         }
         Relationships: [
           {

@@ -62,6 +62,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           startDate: p.start_date,
           endDate: p.end_date,
           createdAt: p.created_at,
+          adminCostTotal: p.admin_cost_total || undefined,
+          adminCostReceived: p.admin_cost_received || undefined,
         })));
       }
       
@@ -209,6 +211,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         description: p.description,
         start_date: p.startDate,
         end_date: p.endDate,
+        admin_cost_total: p.adminCostTotal || null,
+        admin_cost_received: p.adminCostReceived || null,
       })
       .eq('id', p.id);
 

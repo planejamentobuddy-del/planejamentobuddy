@@ -5,6 +5,8 @@ export interface Project {
   endDate: string;
   description: string;
   createdAt: string;
+  adminCostTotal?: number;
+  adminCostReceived?: number;
 }
 
 export interface ChecklistItem {
