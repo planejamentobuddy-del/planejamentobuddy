@@ -11,6 +11,7 @@ import KanbanTab from '@/components/project/KanbanTab';
 import LeanTab from '@/components/project/LeanTab';
 import CurveSTab from '@/components/project/CurveSTab';
 import AdminTab from '@/components/project/AdminTab';
+import DiaryTab from '@/components/project/DiaryTab';
 
 const tabs = [
   { value: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
@@ -19,6 +20,7 @@ const tabs = [
   { value: 'kanban', label: 'Kanban', icon: Columns3 },
   { value: 'curves', label: 'Curva S', icon: TrendingUp },
   { value: 'lean', label: 'Lean', icon: Triangle },
+  { value: 'diary', label: 'Diário', icon: FileText },
   { value: 'admin', label: 'Administração', icon: Wallet },
 ];
 
@@ -127,6 +129,7 @@ export default function ProjectDetail() {
           <TabsContent value="kanban"><KanbanTab project={project} /></TabsContent>
           <TabsContent value="curves"><CurveSTab project={project} /></TabsContent>
           <TabsContent value="lean"><LeanTab project={project} /></TabsContent>
+          <TabsContent value="diary"><DiaryTab project={project} /></TabsContent>
           <TabsContent value="admin"><AdminTab project={project} /></TabsContent>
       </div>
     </Tabs>

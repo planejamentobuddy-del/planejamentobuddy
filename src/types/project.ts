@@ -72,6 +72,15 @@ export interface WeeklyHistory {
   closedAt: string;
 }
 
+export interface DailyLog {
+  id: string;
+  projectId: string;
+  date: string;
+  content: string;
+  createdAt: string;
+  createdBy: string | null;
+}
+
 export const DELAY_REASONS = [
   'Falta de material',
   'Mão de obra',

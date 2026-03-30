@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint } from '@/types/project';
+import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, DailyLog } from '@/types/project';
 
 export interface ProjectsContextType {
   projects: Project[];
@@ -7,6 +7,7 @@ export interface ProjectsContextType {
   tasks: Task[];
   constraints: Constraint[];
   plans: WeeklyPlan[];
+  dailyLogs: DailyLog[];
   addProject: (p: Omit<Project, 'id' | 'createdAt'>) => Promise<Project | null>;
   updateProject: (p: Project) => Promise<boolean>;
   deleteProject: (id: string) => Promise<void>;
@@ -28,6 +29,11 @@ export interface ProjectsContextType {
   addConstraint: (c: Omit<Constraint, 'id' | 'createdAt'>) => Promise<Constraint | null>;
   updateConstraint: (c: Constraint) => Promise<void>;
   deleteConstraint: (id: string) => Promise<void>;
+  // Daily Logs
+  getDailyLogsForProject: (projectId: string) => DailyLog[];
+  addDailyLog: (log: Omit<DailyLog, 'id' | 'createdAt'>) => Promise<DailyLog | null>;
+  updateDailyLog: (log: DailyLog) => Promise<void>;
+  deleteDailyLog: (id: string) => Promise<void>;
   closeWeek: (projectId: string) => Promise<void>;
   refresh: () => Promise<void>;
   users: any[];

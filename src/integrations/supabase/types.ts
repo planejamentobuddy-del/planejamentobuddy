@@ -295,6 +295,40 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_logs: {
+        Row: {
+          id: string
+          project_id: string
+          date: string
+          content: string
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          date: string
+          content: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          date?: string
+          content?: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_logs_project_id_fkey"
+            columns: ["project_id"]
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       constraints: {
         Row: {
           id: string

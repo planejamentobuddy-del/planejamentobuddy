@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, getCurrentWeek } from '@/types/project';
+import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, getCurrentWeek, DailyLog } from '@/types/project';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
@@ -14,6 +14,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [history, setHistory] = useState<WeeklyHistory[]>([]);
   const [constraints, setConstraints] = useState<Constraint[]>([]);
+  const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -42,6 +43,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       const { data: planData, error: planErr } = await supabase.from('weekly_plans').select('*');
       const { data: histData, error: histErr } = await supabase.from('weekly_history').select('*').order('closed_at', { ascending: false });
       const { data: constrData, error: constrErr } = await supabase.from('constraints').select('*').order('created_at', { ascending: true });
+      const { data: logData, error: logErr } = await supabase.from('daily_logs').select('*').order('date', { ascending: false });
       const { data: userData, error: userErr } = await supabase.from('profiles').select('id, full_name, email').in('status', ['active', 'pending']);
 
       if (projErr) throw projErr;
@@ -149,6 +151,17 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           lastStatus: c.last_status || '',
           lastStatusDate: c.last_status_date || '',
           statusComments: (Array.isArray(c.status_comments) ? c.status_comments : []) as any,
+        })));
+      }
+
+      if (logData) {
+        setDailyLogs(logData.map(l => ({
+          id: l.id,
+          projectId: l.project_id,
+          date: l.date,
+          content: l.content,
+          createdAt: l.created_at,
+          createdBy: l.created_by,
         })));
       }
 
@@ -586,6 +599,71 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [constraints]);
 
+  const getDailyLogsForProject = useCallback((projectId: string) => 
+    dailyLogs.filter(l => l.projectId === projectId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [dailyLogs]);
+
+  const addDailyLog = useCallback(async (log: Omit<DailyLog, 'id' | 'createdAt'>) => {
+    const { data, error } = await supabase
+      .from('daily_logs')
+      .insert([{
+        project_id: log.projectId,
+        date: log.date,
+        content: log.content,
+        created_by: log.createdBy,
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding daily log:', error);
+      toast.error('Erro ao adicionar relatório diário.');
+      return null;
+    }
+
+    const newLog: DailyLog = {
+      id: data.id,
+      projectId: data.project_id,
+      date: data.date,
+      content: data.content,
+      createdAt: data.created_at,
+      createdBy: data.created_by,
+    };
+    setDailyLogs(prev => [newLog, ...prev]);
+    toast.success('Relatório inserido com sucesso!');
+    return newLog;
+  }, []);
+
+  const updateDailyLog = useCallback(async (log: DailyLog) => {
+    const original = [...dailyLogs];
+    setDailyLogs(prev => prev.map(item => item.id === log.id ? log : item));
+    const { error } = await supabase
+      .from('daily_logs')
+      .update({
+        date: log.date,
+        content: log.content,
+      })
+      .eq('id', log.id);
+
+    if (error) {
+      setDailyLogs(original);
+      console.error('Error updating daily log:', error);
+      toast.error('Erro ao editar relatório diário.');
+    }
+  }, [dailyLogs]);
+
+  const deleteDailyLog = useCallback(async (id: string) => {
+    const original = [...dailyLogs];
+    setDailyLogs(prev => prev.filter(l => l.id !== id));
+    const { error } = await supabase.from('daily_logs').delete().eq('id', id);
+    if (error) {
+      setDailyLogs(original);
+      console.error('Error deleting daily log:', error);
+      toast.error('Erro ao deletar relatório.');
+    } else {
+      toast.success('Relatório excluído.');
+    }
+  }, [dailyLogs]);
+
   return (
     <ProjectsContext.Provider value={{
       projects, loading, tasks, constraints,
@@ -597,6 +675,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       refresh: fetchData,
       users: usersList,
       plans,
+      dailyLogs,
+      getDailyLogsForProject, addDailyLog, updateDailyLog, deleteDailyLog,
     }}>
       {children}
     </ProjectsContext.Provider>
