@@ -10,8 +10,10 @@ import { ptBR } from 'date-fns/locale';
 import {
   Calendar, Plus, Clock, User, FileText,
   Trash2, Edit2, Check, X,
+  Hammer, UserMinus, AlertTriangle, CloudSun
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface DiaryTabProps {
   project: Project;
@@ -22,9 +24,13 @@ export default function DiaryTab({ project }: DiaryTabProps) {
   const { user } = useAuth();
 
   // New entry state
-  const [content, setContent] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [activities, setActivities] = useState('');
+  const [absences, setAbsences] = useState('');
+  const [occurrences, setOccurrences] = useState('');
+  const [weather, setWeather] = useState('');
 
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,17 +42,28 @@ export default function DiaryTab({ project }: DiaryTabProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || !date) return;
+    
+    const combinedContent = [
+      activities.trim() ? `***Atividades Executadas:***\n${activities.trim()}` : '',
+      absences.trim() ? `***Faltas Registradas:***\n${absences.trim()}` : '',
+      occurrences.trim() ? `***Ocorrências:***\n${occurrences.trim()}` : '',
+      weather.trim() ? `***Condições de Tempo:***\n${weather.trim()}` : '',
+    ].filter(Boolean).join('\n\n');
+
+    if (!combinedContent && !date) return;
 
     setIsSubmitting(true);
     await addDailyLog({
       projectId: project.id,
       date,
-      content,
+      content: combinedContent,
       createdBy: user?.id || null,
     });
 
-    setContent('');
+    setActivities('');
+    setAbsences('');
+    setOccurrences('');
+    setWeather('');
     setDate(new Date().toISOString().split('T')[0]);
     setIsSubmitting(false);
   };
@@ -109,19 +126,62 @@ export default function DiaryTab({ project }: DiaryTabProps) {
             </div>
 
             <div className="flex-1">
-              <label className="text-sm font-bold text-muted-foreground mb-1.5 block">Relato do Dia</label>
-              <Textarea
-                placeholder="Descreva as atividades, problemas no clima, falta de materiais, pendências ou ocorrências gerais do dia..."
-                className="min-h-[100px] resize-y"
-                value={content}
-                onChange={e => setContent(e.target.value)}
-                required
-              />
+              <label className="text-sm font-bold text-muted-foreground mb-3 block">Detalhes do Relato</label>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <Hammer className="w-3.5 h-3.5" /> Atividades Executadas
+                  </label>
+                  <Textarea
+                    placeholder="Descreva as atividades do dia..."
+                    className="min-h-[80px] resize-y text-sm"
+                    value={activities}
+                    onChange={e => setActivities(e.target.value)}
+                  />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <UserMinus className="w-3.5 h-3.5" /> Faltas Registradas
+                  </label>
+                  <Textarea
+                    placeholder="Registre quem faltou hoje..."
+                    className="min-h-[80px] resize-y text-sm"
+                    value={absences}
+                    onChange={e => setAbsences(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Ocorrências
+                  </label>
+                  <Textarea
+                    placeholder="Acidentes, atrasos de material..."
+                    className="min-h-[80px] resize-y text-sm"
+                    value={occurrences}
+                    onChange={e => setOccurrences(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <CloudSun className="w-3.5 h-3.5" /> Condições de Tempo
+                  </label>
+                  <Textarea
+                    placeholder="Choveu? Atrapalhou a obra?"
+                    className="min-h-[80px] resize-y text-sm"
+                    value={weather}
+                    onChange={e => setWeather(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex justify-end pt-2">
-            <Button type="submit" disabled={isSubmitting || !content.trim()} className="gap-2 font-bold px-6">
+          <div className="flex justify-end pt-2 border-t mt-4 border-border">
+            <Button type="submit" disabled={isSubmitting || (!activities && !absences && !occurrences && !weather)} className="gap-2 font-bold px-6 mt-4">
               <Plus className="w-4 h-4" />
               {isSubmitting ? 'Salvando...' : 'Salvar Relatório'}
             </Button>
@@ -243,7 +303,15 @@ export default function DiaryTab({ project }: DiaryTabProps) {
                         />
                       ) : (
                         <div className="text-foreground/80 text-sm leading-relaxed whitespace-pre-wrap">
-                          {log.content}
+                          {log.content.split('\n').map((line, i) => {
+                            if (line.startsWith('***') && line.endsWith('***')) {
+                              return <div key={i} className="font-bold italic text-foreground mt-4 mb-1 first:mt-0">{line.replace(/\*\*\*/g, '')}</div>;
+                            }
+                            if (line.startsWith('**') && line.endsWith('**')) {
+                              return <div key={i} className="font-bold text-foreground mt-4 mb-1 first:mt-0">{line.replace(/\*\*/g, '')}</div>;
+                            }
+                            return <React.Fragment key={i}>{line}{i < log.content.split('\n').length - 1 && <br />}</React.Fragment>;
+                          })}
                         </div>
                       )}
 

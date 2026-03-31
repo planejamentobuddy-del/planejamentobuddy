@@ -327,21 +327,40 @@ export default function ReportsTab({ project }: ReportsTabProps) {
 
             <div className="grid grid-cols-2 gap-3 mt-6 pt-4 border-t border-border">
               <Button 
+                size="sm" 
                 variant="outline" 
-                className="w-full gap-2 border-primary/20 hover:bg-primary/5 text-primary hover:text-primary transition-colors hover:border-primary"
-                onClick={() => report.action('pdf')}
+                className="flex-1 font-bold text-xs gap-1.5 border-dashed"
+                onClick={() => {
+                  if (report.id === 'gantt') {
+                    alert("Para exportar o gráfico de linhas do tempo (Gantt) em alta resolução com as cores e detalhes, acesse a aba 'Gantt' e clique no novo botão azul 'Salvar PDF Visual' no canto superior direito.");
+                  } else {
+                    report.action('pdf');
+                  }
+                }}
               >
-                <Download className="w-4 h-4" />
-                PDF
+                <Download className="w-3.5 h-3.5" />
+                {report.id === 'gantt' ? 'PDF Visual' : 'PDF'}
               </Button>
               <Button 
+                size="sm" 
                 variant="outline" 
-                className="w-full gap-2 border-emerald-500/20 hover:bg-emerald-500/5 text-emerald-600 dark:text-emerald-500 transition-colors hover:border-emerald-500"
-                onClick={() => report.action('excel')}
+                className="flex-1 font-bold text-xs gap-1.5"
+                onClick={() => report.action(report.id === 'gantt' ? 'excel' : 'pdf')}
               >
-                <FileSpreadsheet className="w-4 h-4" />
-                Excel
+                <FileText className="w-3.5 h-3.5" />
+                {report.id === 'gantt' ? 'PDF (Tabela)' : 'Excel'}
               </Button>
+              {report.id !== 'gantt' && (
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="flex-1 font-bold text-xs gap-1.5"
+                  onClick={() => report.action('excel')}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  Excel
+                </Button>
+              )}
             </div>
           </div>
         ))}

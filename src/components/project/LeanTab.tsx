@@ -13,40 +13,54 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { toast } from 'sonner';
+import { setISOWeekYear, setISOWeek, startOfISOWeek, endOfISOWeek, getISOWeekYear, getISOWeek, addWeeks } from 'date-fns';
 import StatusCommentLog from './StatusCommentLog';
 
 function getWeekRange(weekStr: string): { start: Date; end: Date; label: string } {
-  // Parse "YYYY-SWW" format
   const match = weekStr.match(/(\d{4})-S(\d{2})/);
   if (!match) return { start: new Date(), end: new Date(), label: weekStr };
+  
   const year = parseInt(match[1]);
   const weekNum = parseInt(match[2]);
-  const jan1 = new Date(year, 0, 1);
-  const dayOffset = (weekNum - 1) * 7 - jan1.getDay() + 1;
-  const start = new Date(year, 0, 1 + dayOffset);
-  const end = new Date(start.getTime() + 7 * 86400000 - 1000); // Fim do Domingo (23:59:59)
+  
+  // Build a date initialized to the middle of the requested ISO year/week
+  let date = new Date(year, 0, 4); // Jan 4th is always in week 1
+  date = setISOWeekYear(date, year);
+  date = setISOWeek(date, weekNum);
+  
+  const start = startOfISOWeek(date);
+  start.setHours(0, 0, 0, 0);
+  
+  const end = endOfISOWeek(date);
+  end.setHours(23, 59, 59, 999);
+  
   const fmt = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   return { start, end, label: `${fmt(start)} — ${fmt(end)}` };
 }
 
 export function getCurrentWeek(): string {
   const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  const dayNum = d.getDay() || 7; // Segunda=1, ..., Domingo=7
-  d.setDate(d.getDate() + 4 - dayNum);
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  return `${d.getFullYear()}-S${weekNo.toString().padStart(2, '0')}`;
+  const year = getISOWeekYear(d);
+  const weekNo = getISOWeek(d);
+  return `${year}-S${weekNo.toString().padStart(2, '0')}`;
 }
 
 function offsetWeek(weekStr: string, offset: number): string {
   const match = weekStr.match(/(\d{4})-S(\d{2})/);
   if (!match) return weekStr;
+  
   const year = parseInt(match[1]);
-  const weekNum = parseInt(match[2]) + offset;
-  if (weekNum < 1) return `${year - 1}-S52`;
-  if (weekNum > 52) return `${year + 1}-S01`;
-  return `${year}-S${weekNum.toString().padStart(2, '0')}`;
+  const weekNum = parseInt(match[2]);
+  
+  let date = new Date(year, 0, 4);
+  date = setISOWeekYear(date, year);
+  date = setISOWeek(date, weekNum);
+  
+  date = addWeeks(date, offset);
+  
+  const newYear = getISOWeekYear(date);
+  const newWeek = getISOWeek(date);
+  return `${newYear}-S${newWeek.toString().padStart(2, '0')}`;
 }
 
 const statusOptions = [
@@ -107,12 +121,19 @@ export default function LeanTab({ project }: { project: Project }) {
 
   const isTaskInWeek = (task: Task) => {
     if (!task.startDate || !task.endDate) return false;
-    // Usar início do dia (00:00) para início e fim do dia (23:59) para término
-    const s = new Date(task.startDate + 'T00:00:00').getTime();
-    const e = new Date(task.endDate + 'T23:59:59').getTime();
+    
+    // Convert YYYY-MM-DD to proper local midnight dates securely
+    const [sy, sm, sd] = task.startDate.split('-').map(Number);
+    const [ey, em, ed] = task.endDate.split('-').map(Number);
+    const startObj = new Date(sy, sm - 1, sd, 0, 0, 0);
+    const endObj = new Date(ey, em - 1, ed, 23, 59, 59);
+    
+    const s = startObj.getTime();
+    const e = endObj.getTime();
     const ws = weekRange.start.getTime();
     const we = weekRange.end.getTime();
-    // Condição de sobreposição: InícioTarefa <= FimSemana E FimTarefa >= InícioSemana
+    
+    // Overlaps if Task Start is Before/Equal to Week End AND Task End is After/Equal to Week Start
     return s <= we && e >= ws;
   };
 

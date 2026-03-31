@@ -2,7 +2,10 @@ import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
 import { Project, Task, getCriticalTaskIds, safeParseDate } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
-import { Calendar, ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, Users, Download } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+import { toast } from 'sonner';
 
 type ViewMode = 'diario' | 'semanal' | 'mensal';
 
@@ -242,14 +245,109 @@ export default function GanttTab({ project }: { project: Project }) {
     }
   }, [todayPos]);
 
+  const handleExportVisualPDF = async () => {
+    const el = document.getElementById('gantt-chart-container');
+    if (!el) return;
+
+    toast.loading('Gerando PDF do cronograma completo... (Isso pode levar alguns segundos)', { id: 'pdf-export' });
+    try {
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        onclone: (doc) => {
+          const clonedEl = doc.getElementById('gantt-chart-container');
+          if (clonedEl) {
+             // Let timeline unroll horizontally
+             const flexTimelineContainer = clonedEl.querySelector('.overflow-x-visible') as HTMLElement;
+             if (flexTimelineContainer) {
+                flexTimelineContainer.style.overflow = 'visible';
+                flexTimelineContainer.style.width = 'max-content';
+             }
+             
+             // Avoid html2canvas bug shifting coordinates based on scroll state
+             const allElements = clonedEl.querySelectorAll('*');
+             allElements.forEach((el: any) => {
+                 if (el.scrollLeft !== undefined) el.scrollLeft = 0;
+                 if (el.scrollTop !== undefined) el.scrollTop = 0;
+             });
+             
+             // Unroll vertical hidden elements (sidebar list, etc) to prevent cropping
+             const hiddenOverflows = clonedEl.querySelectorAll('.overflow-y-hidden, .overflow-hidden, .overflow-x-auto');
+             hiddenOverflows.forEach((el: any) => {
+                el.style.overflow = 'visible';
+             });
+             
+             // The user requested to hide the dependency arrows ONLY in the PDF 
+             // because html2canvas has inherent bugs accurately positioning SVG coordinates over large scaled DOMs.
+             const svgArrows = clonedEl.querySelector('.pdf-hide-arrows') as HTMLElement;
+             if (svgArrows) {
+                 svgArrows.style.display = 'none';
+             }
+             
+             // Remove flex truncation that causes html2canvas to slice text in half vertically
+             const truncates = clonedEl.querySelectorAll('.truncate');
+             truncates.forEach((el: any) => {
+                el.classList.remove('truncate');
+                el.style.whiteSpace = 'nowrap';
+             });
+             
+             clonedEl.style.width = 'max-content';
+             clonedEl.style.height = 'max-content';
+             clonedEl.style.overflow = 'visible';
+             clonedEl.style.backgroundColor = '#ffffff';
+             
+             // Ensure parent flex containers stretch to hold their fully unrolled children
+             const innerFlexes = clonedEl.querySelectorAll('.flex-1');
+             innerFlexes.forEach((el: any) => {
+                el.style.width = 'max-content';
+                el.style.height = 'max-content';
+             });
+          }
+        }
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      
+      // Calculate real PDF dimensions based on CSS pixels (assuming 96 dpi -> 1px = ~0.264583 mm)
+      // Since scale = 2, CSS inner width = canvas.width / 2
+      const pxToMm = 0.2645833333;
+      const cssWidth = canvas.width / 2;
+      const cssHeight = canvas.height / 2;
+      
+      const widthMm = cssWidth * pxToMm;
+      const heightMm = cssHeight * pxToMm;
+      
+      const marginMm = 10;
+      const titleHeightMm = 15;
+      
+      // Creates a dynamic "Giant" custom page size exactly fitting the full continuous graph
+      const pdf = new jsPDF({
+        orientation: widthMm > heightMm ? 'landscape' : 'portrait', 
+        unit: 'mm',
+        format: [widthMm + (marginMm * 2), heightMm + (marginMm * 2) + titleHeightMm]
+      });
+
+      pdf.setFontSize(16);
+      pdf.text(`Cronograma Completo: ${project.name}`, marginMm, marginMm + 6);
+      pdf.addImage(imgData, 'PNG', marginMm, marginMm + titleHeightMm, widthMm, heightMm);
+      
+      pdf.save(`Cronograma_${project.name}_Completo.pdf`);
+      toast.success('Cronograma Completo exportado com sucesso!', { id: 'pdf-export' });
+    } catch(err) {
+      console.error(err);
+      toast.error('Erro ao gerar PDF completo.', { id: 'pdf-export' });
+    }
+  };
+
   return (
     <div className="space-y-5">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
           <h2 className="font-display font-bold text-lg text-foreground">Cronograma (Gantt)</h2>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center flex-wrap gap-3">
           <div className="bg-muted/50 p-1 rounded-xl flex gap-1 border border-border/40">
             <Button 
               variant={sortMode === 'manual' ? 'secondary' : 'ghost'} 
@@ -317,11 +415,16 @@ export default function GanttTab({ project }: { project: Project }) {
             <Users className="w-3.5 h-3.5" />
             Exibir Responsáveis
           </Button>
+
+          <Button onClick={handleExportVisualPDF} size="sm" className="h-8 rounded-lg gap-2 text-xs font-semibold px-4 shadow-sm bg-primary/90 hover:bg-primary text-primary-foreground transition-all">
+            <Download className="w-3.5 h-3.5" />
+            Salvar PDF Visual
+          </Button>
         </div>
       </div>
 
-      <div className="card-elevated overflow-hidden border border-border/30 shadow-sm flex flex-col">
-        <div className="flex flex-1 overflow-hidden min-h-[500px]">
+      <div className="card-elevated overflow-hidden border border-border/30 shadow-sm flex flex-col" id="gantt-chart-container">
+        <div className="flex flex-1 overflow-x-auto min-h-[500px]">
           {/* Sidebar - Activities */}
           <div className="w-80 border-r border-border/40 flex flex-col shrink-0 bg-muted/[0.02] z-10">
             <div className="h-12 border-b border-border/40 flex items-center px-4 font-bold text-[10px] uppercase tracking-widest text-muted-foreground/70 bg-muted/40 backdrop-blur-sm sticky top-0">
@@ -372,7 +475,7 @@ export default function GanttTab({ project }: { project: Project }) {
           </div>
 
           {/* Timeline */}
-          <div ref={timelineRef} className="flex-1 overflow-x-auto overflow-y-auto relative scrollbar-thin scrollbar-thumb-muted-foreground/20">
+          <div ref={timelineRef} className="flex-1 overflow-x-visible overflow-y-visible relative scrollbar-thin scrollbar-thumb-muted-foreground/20">
             <div style={{ width: Math.max(600, timelineWidth), minHeight: '100%' }} className="relative">
               {/* Timeline Header */}
               <div className="sticky top-0 z-20 h-12 border-b border-border/40 bg-background/95 backdrop-blur-sm flex">
@@ -391,9 +494,9 @@ export default function GanttTab({ project }: { project: Project }) {
                     </span>
                     <span className="text-foreground -mt-0.5">
                       {viewMode === 'diario' 
-                        ? tick.getDate() 
+                        ? `${tick.getDate().toString().padStart(2, '0')}/${(tick.getMonth() + 1).toString().padStart(2, '0')}`
                         : viewMode === 'semanal' 
-                          ? `${tick.getDate()}/${tick.getMonth() + 1 >= 10 ? tick.getMonth() + 1 : '0' + (tick.getMonth() + 1)}`
+                          ? `${tick.getDate().toString().padStart(2, '0')}/${(tick.getMonth() + 1).toString().padStart(2, '0')}`
                           : tick.toLocaleDateString('pt-BR', { month: 'long' })
                       }
                     </span>
@@ -416,7 +519,11 @@ export default function GanttTab({ project }: { project: Project }) {
               </div>
 
               {/* Dependency SVG Overlay */}
-              <svg className="absolute top-12 left-0 w-full h-[calc(100%-48px)] pointer-events-none z-0 overflow-visible">
+              <svg 
+                className="absolute top-12 left-0 pointer-events-none z-0 overflow-visible pdf-hide-arrows"
+                width={Math.max(600, timelineWidth)}
+                style={{ height: 'calc(100% - 48px)' }}
+              >
                 <defs>
                   <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(148, 163, 184, 0.5)" />
@@ -429,24 +536,44 @@ export default function GanttTab({ project }: { project: Project }) {
                     
                     const predIdxInVisible = visibleTasks.findIndex(t => t.id === predId);
                     if (predIdxInVisible === -1) return null; // Predecessor hidden
-                    
                     const predBounds = computedBounds.get(predTask.id);
-                    const predEndDate = predBounds ? predBounds.end : predTask.endDate;
-                    
                     const taskBounds = computedBounds.get(task.id);
-                    const taskStartDate = taskBounds ? taskBounds.start : task.startDate;
+
+                    const isPredSummary = hasChildrenMap.get(predTask.id);
+                    const predHasNoDates = !predTask.startDate || !predTask.endDate;
+                    if (predHasNoDates) return null; // Não desenha setas a partir de tarefas sem data
                     
-                    const startX = getPosition(predEndDate);
+                    const isTaskSummary = hasChildrenMap.get(task.id);
+                    const taskHasNoDates = !task.startDate || !task.endDate;
+                    if (taskHasNoDates) return null; // Não desenha setas para tarefas sem data
+
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    
+                    const predStartStr = (isPredSummary && predBounds ? predBounds.start : predTask.startDate) || todayStr;
+                    const predEndStr = (isPredSummary && predBounds ? predBounds.end : predTask.endDate) || todayStr;
+                    const predStartPos = getPosition(predStartStr);
+                    const predEndPos = getPosition(predEndStr) + pixelsPerDay;
+                    const predWidth = isPredSummary ? Math.max(8, predEndPos - predStartPos) : Math.max(24, predEndPos - predStartPos);
+                    
+                    const taskStartStr = (isTaskSummary && taskBounds ? taskBounds.start : task.startDate) || todayStr;
+                    
+                    const startX = predStartPos + predWidth;
                     const startY = predIdxInVisible * 40 + 20;
-                    const endX = getPosition(taskStartDate);
+                    const endX = getPosition(taskStartStr);
                     const endY = idx * 40 + 20;
                     
-                    const midX = startX + (endX - startX) / 2;
+                    // Arrow logic: Always keep the line flowing forward (to the right) cleanly.
+                    // If the successor starts BEFORE the predecessor finishes (overlap),
+                    // the arrow will drop down and point neatly into the body of the successor 
+                    // instead of creating a chaotic backward zig-zag spiderweb.
+                    const visualEndX = Math.max(startX + 18, endX);
+                    
+                    const path = `M ${startX} ${startY} L ${startX + 10} ${startY} L ${startX + 10} ${endY} L ${visualEndX} ${endY}`;
 
                     return (
                       <Fragment key={`${predId}-${task.id}`}>
                         <path 
-                          d={`M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`}
+                          d={path}
                           fill="none"
                           stroke="rgba(148, 163, 184, 0.4)"
                           strokeWidth="1.5"

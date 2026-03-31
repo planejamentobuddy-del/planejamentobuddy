@@ -93,7 +93,51 @@ export default function DashboardTab({ project }: { project: Project }) {
   }, [ppc, spi, criticalPathProgress, restrictions.length]);
 
   const healthColor = healthScore >= 80 ? 'text-status-ok' : healthScore >= 60 ? 'text-status-warning' : 'text-status-danger';
-  const spiColor = spi >= 1 ? 'text-status-ok' : spi >= 0.9 ? 'text-status-warning' : 'text-status-danger';
+  
+  const getSpiInfo = (val: number) => {
+    if (val >= 1.05) return {
+      status: 'Adiantado',
+      color: 'text-emerald-500',
+      bgClass: 'bg-emerald-500/10',
+      iconClass: 'text-emerald-500',
+      message: 'A obra está em ritmo acima do planejado, com desempenho positivo no cronograma.',
+      alertType: null
+    };
+    if (val >= 0.95) return {
+      status: 'No prazo',
+      color: 'text-status-ok',
+      bgClass: 'bg-status-ok/10',
+      iconClass: 'text-status-ok',
+      message: 'A obra está dentro da margem de variação aceitável do cronograma.',
+      alertType: null
+    };
+    if (val >= 0.85) return {
+      status: 'Atenção',
+      color: 'text-status-warning',
+      bgClass: 'bg-status-warning/10',
+      iconClass: 'text-status-warning',
+      message: 'A obra apresenta leve a moderado atraso. Recomenda-se monitoramento e possíveis ajustes de produtividade.',
+      alertType: 'warning'
+    };
+    if (val >= 0.70) return {
+      status: 'Atraso relevante',
+      color: 'text-orange-500', 
+      bgClass: 'bg-orange-500/10',
+      iconClass: 'text-orange-500',
+      message: 'A obra está com atraso significativo, com risco de impacto no prazo final. Avaliar ações corretivas.',
+      alertType: 'warning'
+    };
+    return {
+      status: 'Atraso crítico',
+      color: 'text-status-danger',
+      bgClass: 'bg-status-danger/10',
+      iconClass: 'text-status-danger',
+      message: 'A obra apresenta atraso severo, com alta probabilidade de não cumprimento do cronograma. Ação imediata necessária.',
+      alertType: 'danger'
+    };
+  };
+
+  const spiInfo = getSpiInfo(spi);
 
   const delayDays = useMemo(() => {
     const planned = safeParseDate(plannedEnd);
@@ -115,8 +159,8 @@ export default function DashboardTab({ project }: { project: Project }) {
   // Alerts
   const alerts: { text: string; type: 'warning' | 'danger'; onClick?: () => void }[] = [];
   
-  if (spi < 0.9) {
-    alerts.push({ text: `SPI Crítico (${spi}). Obra em ritmo de atraso severo.`, type: 'danger' });
+  if (spiInfo.alertType) {
+    alerts.push({ text: `SPI ${spiInfo.status} (${spi}). ${spiInfo.message}`, type: spiInfo.alertType as any });
   }
   if (ppc !== null && ppc < 50) {
     alerts.push({ text: `PPC muito baixo (${ppc}%). Baixa confiabilidade do planejamento.`, type: 'danger', onClick: () => setSearchParams({ tab: 'lean', subtab: 'indicadores' }) });
@@ -198,14 +242,23 @@ export default function DashboardTab({ project }: { project: Project }) {
                     <h4 className="font-bold text-sm uppercase tracking-wider text-foreground">SPI (Schedule Performance Index)</h4>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed mb-2">
-                    Indica a <strong>eficiência do prazo</strong>. Ele compara o progresso real acumulado com o que deveria ter sido feito conforme a Curva S planejada.
+                    Indica a <strong>eficiência do prazo</strong>. Ele compara o progresso real acumulado com o que deveria ter sido feito para a data de hoje.
                   </p>
                   <ul className="space-y-2">
                     <li className="flex gap-2 text-[11px] text-muted-foreground">
-                      <span className="text-status-ok font-black">≥ 1.0 :</span> Obra adiantada ou no prazo.
+                      <span className="text-emerald-500 font-black">≥ 1.05 :</span> Adiantado. Obra em ritmo acima do planejado.
                     </li>
                     <li className="flex gap-2 text-[11px] text-muted-foreground">
-                      <span className="text-status-danger font-black">&lt; 1.0 :</span> Obra está produzindo menos que o planejado por dia.
+                      <span className="text-status-ok font-black">0.95 - 1.04 :</span> No prazo. Margem de variação aceitável.
+                    </li>
+                    <li className="flex gap-2 text-[11px] text-muted-foreground">
+                      <span className="text-status-warning font-black">0.85 - 0.94 :</span> Atenção. Leve a moderado atraso no ritmo.
+                    </li>
+                    <li className="flex gap-2 text-[11px] text-muted-foreground">
+                      <span className="text-orange-500 font-black">0.70 - 0.84 :</span> Atraso relevante. Risco moderado de impacto final.
+                    </li>
+                    <li className="flex gap-2 text-[11px] text-muted-foreground">
+                      <span className="text-status-danger font-black">&lt; 0.70 :</span> Atraso crítico. Alta probabilidade de descumprimento, ação imediata necessária.
                     </li>
                   </ul>
                 </section>
@@ -320,24 +373,41 @@ export default function DashboardTab({ project }: { project: Project }) {
           {/* SPI (Advanced Only) */}
           {isAdvanced && (
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              className="card-elevated p-5"
+              className="card-elevated p-5 flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-status-ok/10">
-                    <Gauge className="w-4 h-4 text-status-ok" />
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-lg ${spiInfo.bgClass}`}>
+                      <Gauge className={`w-4 h-4 ${spiInfo.iconClass}`} />
+                    </div>
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Índice SPI</span>
                   </div>
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Índice SPI</span>
+                  <Tooltip>
+                    <TooltipTrigger><Info className="w-3.5 h-3.5 text-muted-foreground/40" /></TooltipTrigger>
+                    <TooltipContent className="max-w-[300px] text-xs space-y-2 p-3">
+                      <p className="font-bold text-sm border-b border-border/20 pb-1 mb-2">{spiInfo.status}</p>
+                      <p>{spiInfo.message}</p>
+                      {spi < 1 && (
+                        <p className="text-muted-foreground italic border-t border-border/20 pt-2 mt-2">
+                          *Atraso estimado em {((1 - spi) * 100).toFixed(1)}%. Você executou apenas o equivalente a {(spi * 100).toFixed(0)}% do volume planejado até a data de hoje.
+                        </p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
-                <Tooltip>
-                  <TooltipTrigger><Info className="w-3.5 h-3.5 text-muted-foreground/40" /></TooltipTrigger>
-                  <TooltipContent className="max-w-[220px] text-xs">
-                    Schedule Performance Index (Executado vs Planejado). {">"}1: Adiantado, {"<"}1: Atrasado.
-                  </TooltipContent>
-                </Tooltip>
+                <p className={`text-4xl font-display font-black ${spiInfo.color}`}>{spi}</p>
+                <p className="text-[10px] font-bold text-muted-foreground mt-2 uppercase tracking-tight">Status: {spiInfo.status}</p>
               </div>
-              <p className={`text-4xl font-display font-black ${spiColor}`}>{spi}</p>
-              <p className="text-[10px] font-bold text-muted-foreground mt-2 uppercase tracking-tight">Ritmo: {spi >= 1 ? 'Produtivo' : 'Lento'}</p>
+              
+              <div className="mt-4 text-[10px] text-muted-foreground/80 leading-relaxed border-t border-border/30 pt-3">
+                {spiInfo.message}
+                {spi < 1 && (
+                  <span className="block mt-1 font-medium opacity-80">
+                    Atraso percentual de ritmo: <strong className={spiInfo.color}>{((1 - spi) * 100).toFixed(1)}%</strong>
+                  </span>
+                )}
+              </div>
             </motion.div>
           )}
 
