@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, DailyLog } from '@/types/project';
+import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, DailyLog, PaymentReceipt } from '@/types/project';
 
 export interface ProjectsContextType {
   projects: Project[];
@@ -8,6 +8,7 @@ export interface ProjectsContextType {
   constraints: Constraint[];
   plans: WeeklyPlan[];
   dailyLogs: DailyLog[];
+  paymentReceipts: PaymentReceipt[];
   addProject: (p: Omit<Project, 'id' | 'createdAt'>) => Promise<Project | null>;
   updateProject: (p: Project) => Promise<boolean>;
   deleteProject: (id: string) => Promise<void>;
@@ -34,6 +35,10 @@ export interface ProjectsContextType {
   addDailyLog: (log: Omit<DailyLog, 'id' | 'createdAt'>) => Promise<DailyLog | null>;
   updateDailyLog: (log: DailyLog) => Promise<void>;
   deleteDailyLog: (id: string) => Promise<void>;
+  // Payment Receipts
+  getReceiptsForProject: (projectId: string) => PaymentReceipt[];
+  addPaymentReceipt: (r: Omit<PaymentReceipt, 'id' | 'createdAt'>) => Promise<PaymentReceipt | null>;
+  deletePaymentReceipt: (id: string) => Promise<void>;
   closeWeek: (projectId: string) => Promise<void>;
   refresh: () => Promise<void>;
   users: any[];

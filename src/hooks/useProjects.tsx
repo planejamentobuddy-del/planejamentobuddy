@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, getCurrentWeek, DailyLog } from '@/types/project';
+import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, getCurrentWeek, DailyLog, PaymentReceipt } from '@/types/project';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
@@ -15,6 +15,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const [history, setHistory] = useState<WeeklyHistory[]>([]);
   const [constraints, setConstraints] = useState<Constraint[]>([]);
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
+  const [paymentReceipts, setPaymentReceipts] = useState<PaymentReceipt[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,6 +45,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       const { data: histData, error: histErr } = await supabase.from('weekly_history').select('*').order('closed_at', { ascending: false });
       const { data: constrData, error: constrErr } = await supabase.from('constraints').select('*').order('created_at', { ascending: true });
       const { data: logData, error: logErr } = await supabase.from('daily_logs').select('*').order('date', { ascending: false });
+      const { data: receiptData } = await supabase.from('payment_receipts').select('*').order('received_at', { ascending: false });
       const { data: userData, error: userErr } = await supabase.from('profiles').select('id, full_name, email').in('status', ['active', 'pending']);
 
       if (projErr) throw projErr;
@@ -162,6 +164,18 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           content: l.content,
           createdAt: l.created_at,
           createdBy: l.created_by,
+        })));
+      }
+
+      if (receiptData) {
+        setPaymentReceipts(receiptData.map((r: any) => ({
+          id: r.id,
+          projectId: r.project_id,
+          amount: r.amount,
+          description: r.description || '',
+          receivedAt: r.received_at,
+          createdAt: r.created_at,
+          createdBy: r.created_by,
         })));
       }
 
@@ -664,6 +678,75 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [dailyLogs]);
 
+  // --- Payment Receipts ---
+  const getReceiptsForProject = useCallback((projectId: string) =>
+    paymentReceipts.filter(r => r.projectId === projectId), [paymentReceipts]);
+
+  const addPaymentReceipt = useCallback(async (r: Omit<PaymentReceipt, 'id' | 'createdAt'>) => {
+    const { data, error } = await supabase
+      .from('payment_receipts')
+      .insert([{
+        project_id: r.projectId,
+        amount: r.amount,
+        description: r.description,
+        received_at: r.receivedAt,
+        created_by: user?.id,
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding payment receipt:', error);
+      toast.error('Erro ao registrar pagamento.');
+      return null;
+    }
+
+    const newReceipt: PaymentReceipt = {
+      id: data.id,
+      projectId: data.project_id,
+      amount: data.amount,
+      description: data.description || '',
+      receivedAt: data.received_at,
+      createdAt: data.created_at,
+      createdBy: data.created_by,
+    };
+    setPaymentReceipts(prev => [newReceipt, ...prev]);
+
+    // Also update project adminCostReceived (sum) optimistically
+    const total = paymentReceipts
+      .filter(x => x.projectId === r.projectId)
+      .reduce((s, x) => s + x.amount, 0) + r.amount;
+    setProjects(prev => prev.map(p =>
+      p.id === r.projectId ? { ...p, adminCostReceived: total } : p
+    ));
+
+    toast.success('Pagamento registrado!');
+    return newReceipt;
+  }, [user, paymentReceipts]);
+
+  const deletePaymentReceipt = useCallback(async (id: string) => {
+    const original = [...paymentReceipts];
+    const receipt = paymentReceipts.find(r => r.id === id);
+    setPaymentReceipts(prev => prev.filter(r => r.id !== id));
+
+    if (receipt) {
+      const total = paymentReceipts
+        .filter(r => r.id !== id && r.projectId === receipt.projectId)
+        .reduce((s, r) => s + r.amount, 0);
+      setProjects(prev => prev.map(p =>
+        p.id === receipt.projectId ? { ...p, adminCostReceived: total } : p
+      ));
+    }
+
+    const { error } = await supabase.from('payment_receipts').delete().eq('id', id);
+    if (error) {
+      setPaymentReceipts(original);
+      toast.error('Erro ao excluir pagamento.');
+    } else {
+      toast.success('Pagamento removido.');
+    }
+  }, [paymentReceipts]);
+
   return (
     <ProjectsContext.Provider value={{
       projects, loading, tasks, constraints,
@@ -677,6 +760,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       plans,
       dailyLogs,
       getDailyLogsForProject, addDailyLog, updateDailyLog, deleteDailyLog,
+      paymentReceipts,
+      getReceiptsForProject, addPaymentReceipt, deletePaymentReceipt,
     }}>
       {children}
     </ProjectsContext.Provider>

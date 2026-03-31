@@ -6,8 +6,19 @@ export interface Project {
   description: string;
   createdAt: string;
   adminCostTotal?: number;
-  adminCostReceived?: number;
+  adminCostReceived?: number; // computed from payment_receipts sum
 }
+
+export interface PaymentReceipt {
+  id: string;
+  projectId: string;
+  amount: number;
+  description: string;
+  receivedAt: string; // date string YYYY-MM-DD
+  createdAt: string;
+  createdBy: string | null;
+}
+
 
 export interface ChecklistItem {
   id: string;

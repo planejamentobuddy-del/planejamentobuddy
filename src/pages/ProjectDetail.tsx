@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,6 +12,7 @@ import LeanTab from '@/components/project/LeanTab';
 import CurveSTab from '@/components/project/CurveSTab';
 import AdminTab from '@/components/project/AdminTab';
 import DiaryTab from '@/components/project/DiaryTab';
+import ReportsTab from '@/components/project/ReportsTab';
 
 const tabs = [
   { value: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
@@ -22,6 +23,7 @@ const tabs = [
   { value: 'lean', label: 'Lean', icon: Triangle },
   { value: 'diary', label: 'Diário', icon: FileText },
   { value: 'admin', label: 'Administração', icon: Wallet },
+  { value: 'reports', label: 'Relatórios', icon: FileSpreadsheet },
 ];
 
 export default function ProjectDetail() {
@@ -131,6 +133,7 @@ export default function ProjectDetail() {
           <TabsContent value="lean"><LeanTab project={project} /></TabsContent>
           <TabsContent value="diary"><DiaryTab project={project} /></TabsContent>
           <TabsContent value="admin"><AdminTab project={project} /></TabsContent>
+          <TabsContent value="reports"><ReportsTab project={project} /></TabsContent>
       </div>
     </Tabs>
   );

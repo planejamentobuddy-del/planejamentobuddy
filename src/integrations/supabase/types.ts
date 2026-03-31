@@ -329,6 +329,43 @@ export type Database = {
           }
         ]
       }
+      payment_receipts: {
+        Row: {
+          id: string
+          project_id: string
+          amount: number
+          description: string | null
+          received_at: string
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          amount: number
+          description?: string | null
+          received_at?: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          amount?: number
+          description?: string | null
+          received_at?: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_receipts_project_id_fkey"
+            columns: ["project_id"]
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       constraints: {
         Row: {
           id: string

@@ -2,7 +2,7 @@ import React, { useState, useMemo, createContext, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate, isCriticalPath, getCurrentWeek, calculateSCurve, safeParseDate, getProjectPlannedEnd } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
-import { AlertTriangle, CheckCircle, Clock, TrendingUp, Shield, CalendarClock, Info, HeartPulse, Zap, Milestone, Gauge, Activity, Hammer, Edit2, Check, X, HelpCircle, Layers, Target, Clock4 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, TrendingUp, Shield, CalendarClock, Info, HeartPulse, Zap, Milestone, Gauge, Activity, Edit2, Check, X, HelpCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -81,9 +81,7 @@ export default function DashboardTab({ project }: { project: Project }) {
     ? Math.round((criticalCompletedCount / criticalTasks.length) * 100) 
     : 100;
 
-  const productivity = weekPlans.length > 0 
-    ? Math.round((weekCompleted / weekPlans.length) * 100) 
-    : 0;
+
 
   const healthScore = useMemo(() => {
     const ppcWeight = (ppc || 0) * 0.3;
@@ -387,29 +385,6 @@ export default function DashboardTab({ project }: { project: Project }) {
             <p className="text-[10px] font-bold text-muted-foreground mt-2 uppercase tracking-tight">{weekPlans.length} tarefas no plano</p>
           </motion.div>
 
-          {/* Produtividade (Advanced Only) */}
-          {isAdvanced && (
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              className="card-elevated p-5"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-orange-500/10">
-                    <Hammer className="w-4 h-4 text-orange-500" />
-                  </div>
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Produção</span>
-                </div>
-                <Tooltip>
-                  <TooltipTrigger><Info className="w-3.5 h-3.5 text-muted-foreground/40" /></TooltipTrigger>
-                  <TooltipContent className="max-w-[180px] text-xs">
-                    Métrica de conclusão de tarefas semanais (inclui itens iniciados).
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <p className="text-4xl font-display font-black text-foreground">{productivity}%</p>
-              <p className="text-[10px] font-bold text-muted-foreground mt-2 uppercase tracking-tight">Comprometimento</p>
-            </motion.div>
-          )}
 
           {/* Caminho Crítico (Advanced Only) */}
           {isAdvanced && (
