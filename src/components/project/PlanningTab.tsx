@@ -4,12 +4,16 @@ import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp } from 'lucide-react';
 import StatusCommentLog from './StatusCommentLog';
+import TeamTab from './TeamTab';
+import AssignmentsTab from './AssignmentsTab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useResizableColumns, ResizeHandle } from '@/hooks/useResizableColumns';
+import { Calendar, Users, CheckSquare } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -72,9 +76,10 @@ function addBusinessDays(startDateStr: string, duration: number): string {
 
 
 export default function PlanningTab({ project }: { project: Project }) {
-  const { getTasksForProject, addTask, updateTask, deleteTask, reorderTasks, users } = useProjects();
+  const { getTasksForProject, addTask, updateTask, deleteTask, reorderTasks, users, getResourcesForProject } = useProjects();
   const { isAdmin } = useAuth();
   const allTasks = getTasksForProject(project.id);
+  const resources = getResourcesForProject(project.id);
 
   const stages = useMemo(() => 
     allTasks.filter(t => !t.parentId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
@@ -550,127 +555,156 @@ export default function PlanningTab({ project }: { project: Project }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <h2 className="font-display font-bold text-lg text-foreground">Planejamento</h2>
+      <Tabs defaultValue="schedule" className="w-full">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-6">
+            <h2 className="font-display font-bold text-xl text-foreground">Planejamento</h2>
+            <TabsList className="bg-muted/50 p-1 rounded-xl h-11">
+              <TabsTrigger value="schedule" className="gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4">
+                <Calendar className="w-4 h-4" /> Cronograma
+              </TabsTrigger>
+              <TabsTrigger value="team" className="gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4">
+                <Users className="w-4 h-4" /> Equipe
+              </TabsTrigger>
+              <TabsTrigger value="assignments" className="gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4">
+                <CheckSquare className="w-4 h-4" /> Tarefas - Obra
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="schedule" className="m-0 border-0 p-0 shadow-none">
+            <Button onClick={handleAddStage} className="gap-2 rounded-xl px-5 shadow-sm">
+              <Plus className="w-4 h-4" /> Adicionar Etapa
+            </Button>
+          </TabsContent>
         </div>
-        <Button onClick={handleAddStage} className="gap-2 rounded-xl px-5 shadow-sm">
-          <Plus className="w-4 h-4" /> Adicionar Etapa
-        </Button>
-      </div>
 
-      <div className="card-elevated overflow-x-auto p-0 border-none shadow-none bg-transparent">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <table className="border-collapse table-fixed text-sm w-full bg-card rounded-xl shadow-sm border border-border/50 overflow-hidden" style={{ minWidth: colWidths.reduce((s, w) => s + w, 0) }}>
-            <colgroup>
-              {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
-            </colgroup>
-            <thead>
-              <tr className="border-b bg-muted/40 border-t border-border/50">
-                {columnHeaders.map((h, i) => (
-                  <th 
-                    key={i} 
-                    style={{ width: colWidths[i] }}
-                    className={`${h.align === 'center' ? 'text-center' : 'text-left'} py-3.5 px-3 font-bold text-[10px] uppercase tracking-wider text-muted-foreground relative border-r border-border/10 last:border-0`}
-                  >
-                    <div className="truncate">{h.label}</div>
-                    <ResizeHandle index={i} onMouseDown={onColResize} />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            
-            {stages.length === 0 ? (
-              <tbody>
-                <tr>
-                  <td colSpan={columnHeaders.length} className="py-20 text-center text-muted-foreground text-sm bg-card">
-                    <div className="flex flex-col items-center gap-2 opacity-60">
-                      <Plus className="w-8 h-8 text-muted-foreground/20" />
-                      <span>Nenhuma etapa cadastrada.</span>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            ) : (
-              <>
-                {/* Project Summary Row (Geral) */}
-                {projectAggregate && (
-                  <tbody className="bg-primary/[0.03] font-bold border-b-2 border-primary/10">
-                    <tr className="hover:bg-primary/[0.05] transition-colors">
-                      <td className="p-0 border-r border-border/10">
-                        <div className="flex items-center gap-3 py-3.5 px-3 min-w-[300px]" style={{ width: colWidths[0] }}>
-                          <div className="bg-primary/15 p-1.5 rounded-lg shrink-0">
-                            <TrendingUp className="w-5 h-5 text-primary" />
-                          </div>
-                          <span className="text-sm font-black text-primary uppercase tracking-tight truncate">RESUMO GERAL DO PROJETO</span>
+        <TabsContent value="schedule" className="m-0 border-0 p-0 shadow-none focus-visible:ring-0">
+          <div className="card-elevated overflow-x-auto p-0 border-none shadow-none bg-transparent">
+            {/* ... table content remains same but wrapped in handleDragEnd/sortable context below ... */}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <table className="border-collapse table-fixed text-sm w-full bg-card rounded-xl shadow-sm border border-border/50 overflow-hidden" style={{ minWidth: colWidths.reduce((s, w) => s + w, 0) }}>
+                <colgroup>
+                  {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+                </colgroup>
+                <thead>
+                  <tr className="border-b bg-muted/40 border-t border-border/50">
+                    {columnHeaders.map((h, i) => (
+                      <th 
+                        key={i} 
+                        style={{ width: colWidths[i] }}
+                        className={`${h.align === 'center' ? 'text-center' : 'text-left'} py-3.5 px-3 font-bold text-[10px] uppercase tracking-wider text-muted-foreground relative border-r border-border/10 last:border-0`}
+                      >
+                        <div className="truncate">{h.label}</div>
+                        <ResizeHandle index={i} onMouseDown={onColResize} />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                
+                {stages.length === 0 ? (
+                  <tbody>
+                    <tr>
+                      <td colSpan={columnHeaders.length} className="py-20 text-center text-muted-foreground text-sm bg-card">
+                        <div className="flex flex-col items-center gap-2 opacity-60">
+                          <Plus className="w-8 h-8 text-muted-foreground/20" />
+                          <span>Nenhuma etapa cadastrada.</span>
                         </div>
                       </td>
-                      <td className="p-0 border-r border-border/10" />
-                      <td className="p-0 border-r border-border/10">
-                        <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[2] }}>
-                          {projectAggregate.startDate ? formatDate(projectAggregate.startDate) : '—'}
-                        </div>
-                      </td>
-                      <td className="p-0 border-r border-border/10">
-                        <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[3] }}>
-                          {projectAggregate.endDate ? formatDate(projectAggregate.endDate) : '—'}
-                        </div>
-                      </td>
-                      <td className="p-0 border-r border-border/10 text-center">
-                        <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[4] }}>
-                          {projectAggregate.duration} dias
-                        </div>
-                      </td>
-                      <td className="p-0 border-r border-border/10">
-                        <div className="px-3 flex items-center gap-2" style={{ width: colWidths[5] }}>
-                          <div className="flex-1 bg-primary/10 h-2 rounded-full overflow-hidden">
-                            <div className="bg-primary h-full transition-all duration-500" style={{ width: `${projectAggregate.percent}%` }} />
-                          </div>
-                          <span className="text-xs text-primary font-bold">{projectAggregate.percent}%</span>
-                        </div>
-                      </td>
-                      <td className="p-0 border-r border-border/10">
-                        <div className="px-3" style={{ width: colWidths[6] }}>
-                          <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
-                        </div>
-                      </td>
-                      <td className="p-0 border-r border-border/10" />
-                      <td className="p-0 border-r border-border/10" />
-                      <td className="p-0 border-r border-border/10" />
-                      <td className="p-0" />
                     </tr>
                   </tbody>
-                )}
+                ) : (
+                  <>
+                    {/* Project Summary Row (Geral) */}
+                    {projectAggregate && (
+                      <tbody className="bg-primary/[0.03] font-bold border-b-2 border-primary/10">
+                        <tr className="hover:bg-primary/[0.05] transition-colors">
+                          <td className="p-0 border-r border-border/10">
+                            <div className="flex items-center gap-3 py-3.5 px-3 min-w-[300px]" style={{ width: colWidths[0] }}>
+                              <div className="bg-primary/15 p-1.5 rounded-lg shrink-0">
+                                <TrendingUp className="w-5 h-5 text-primary" />
+                              </div>
+                              <span className="text-sm font-black text-primary uppercase tracking-tight truncate">RESUMO GERAL DO PROJETO</span>
+                            </div>
+                          </td>
+                          <td className="p-0 border-r border-border/10" />
+                          <td className="p-0 border-r border-border/10">
+                            <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[2] }}>
+                              {projectAggregate.startDate ? formatDate(projectAggregate.startDate) : '—'}
+                            </div>
+                          </td>
+                          <td className="p-0 border-r border-border/10">
+                            <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[3] }}>
+                              {projectAggregate.endDate ? formatDate(projectAggregate.endDate) : '—'}
+                            </div>
+                          </td>
+                          <td className="p-0 border-r border-border/10 text-center">
+                            <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[4] }}>
+                              {projectAggregate.duration} dias
+                            </div>
+                          </td>
+                          <td className="p-0 border-r border-border/10">
+                            <div className="px-3 flex items-center gap-2" style={{ width: colWidths[5] }}>
+                              <div className="flex-1 bg-primary/10 h-2 rounded-full overflow-hidden">
+                                <div className="bg-primary h-full transition-all duration-500" style={{ width: `${projectAggregate.percent}%` }} />
+                              </div>
+                              <span className="text-xs text-primary font-bold">{projectAggregate.percent}%</span>
+                            </div>
+                          </td>
+                          <td className="p-0 border-r border-border/10">
+                            <div className="px-3" style={{ width: colWidths[6] }}>
+                              <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
+                            </div>
+                          </td>
+                          <td className="p-0 border-r border-border/10" />
+                          <td className="p-0 border-r border-border/10" />
+                          <td className="p-0 border-r border-border/10" />
+                          <td className="p-0" />
+                        </tr>
+                      </tbody>
+                    )}
 
-                <SortableContext items={stages.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                  {stages.map((stage, sIdx) => (
-                    <SortableStageRow 
-                      key={stage.id} 
-                      stage={stage} 
-                      subtasks={getSubtasks(stage.id)}
-                      isExpanded={expandedStages.has(stage.id)}
-                      renderRow={(t: Task, isSub: boolean, dragProps?: any) => {
-                        const subIdx = isSub ? getSubtasks(stage.id).findIndex(st => st.id === t.id) : -1;
-                        const number = isSub ? `${sIdx + 1}.${subIdx + 1}` : `${sIdx + 1}`;
-                        return renderRow(t, isSub, number, dragProps);
-                      }}
-                      handleAddSubtask={handleAddSubtask}
-                      columnHeaders={columnHeaders}
-                    />
-                  ))}
-                </SortableContext>
-              </>
-            )}
-          </table>
-        </DndContext>
-      </div>
+                    <SortableContext items={stages.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                      {stages.map((stage, sIdx) => (
+                        <SortableStageRow 
+                          key={stage.id} 
+                          stage={stage} 
+                          subtasks={getSubtasks(stage.id)}
+                          isExpanded={expandedStages.has(stage.id)}
+                          renderRow={(t: Task, isSub: boolean, dragProps?: any) => {
+                            const subIdx = isSub ? getSubtasks(stage.id).findIndex(st => st.id === t.id) : -1;
+                            const number = isSub ? `${sIdx + 1}.${subIdx + 1}` : `${sIdx + 1}`;
+                            return renderRow(t, isSub, number, dragProps);
+                          }}
+                          handleAddSubtask={handleAddSubtask}
+                          columnHeaders={columnHeaders}
+                        />
+                      ))}
+                    </SortableContext>
+                  </>
+                )}
+              </table>
+            </DndContext>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="team" className="m-0 border-0 p-0 shadow-none focus-visible:ring-0">
+          <TeamTab project={project} />
+        </TabsContent>
+
+        <TabsContent value="assignments" className="m-0 border-0 p-0 shadow-none focus-visible:ring-0">
+          <AssignmentsTab project={project} />
+        </TabsContent>
+      </Tabs>
 
       <datalist id="users-list">
-        {users.map(u => <option key={u.id} value={u.full_name} />)}
+        {resources.map(r => <option key={r.id} value={r.name} />)}
+        {users.filter(u => !resources.some(r => r.name === u.full_name)).map(u => (
+          <option key={u.id} value={u.full_name} />
+        ))}
       </datalist>
     </div>
   );

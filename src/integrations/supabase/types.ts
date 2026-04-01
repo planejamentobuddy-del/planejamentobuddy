@@ -84,6 +84,46 @@ export type Database = {
           }
         ]
       }
+      project_resources: {
+        Row: {
+          id: string
+          project_id: string
+          name: string
+          role: string | null
+          monthly_cost: number | null
+          contact: string | null
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          name: string
+          role?: string | null
+          monthly_cost?: number | null
+          contact?: string | null
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          name?: string
+          role?: string | null
+          monthly_cost?: number | null
+          contact?: string | null
+          status?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_resources_project_id_fkey"
+            columns: ["project_id"]
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       tasks: {
         Row: {
           id: string

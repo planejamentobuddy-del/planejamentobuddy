@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, getCurrentWeek, DailyLog, PaymentReceipt } from '@/types/project';
+import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, getCurrentWeek, DailyLog, PaymentReceipt, ProjectResource } from '@/types/project';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
@@ -16,6 +16,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const [constraints, setConstraints] = useState<Constraint[]>([]);
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [paymentReceipts, setPaymentReceipts] = useState<PaymentReceipt[]>([]);
+  const [resources, setResources] = useState<ProjectResource[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,6 +30,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         setPlans([]);
         setHistory([]);
         setConstraints([]);
+        setResources([]);
         setLoading(false);
       }
       return;
@@ -46,6 +48,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       const { data: constrData, error: constrErr } = await supabase.from('constraints').select('*').order('created_at', { ascending: true });
       const { data: logData, error: logErr } = await supabase.from('daily_logs').select('*').order('date', { ascending: false });
       const { data: receiptData } = await supabase.from('payment_receipts').select('*').order('received_at', { ascending: false });
+      const { data: resData } = await supabase.from('project_resources').select('*').order('name', { ascending: true });
       const { data: userData, error: userErr } = await supabase.from('profiles').select('id, full_name, email').in('status', ['active', 'pending']);
 
       if (projErr) throw projErr;
@@ -176,6 +179,19 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           receivedAt: r.received_at,
           createdAt: r.created_at,
           createdBy: r.created_by,
+        })));
+      }
+
+      if (resData) {
+        setResources(resData.map((r: any) => ({
+          id: r.id,
+          projectId: r.project_id,
+          name: r.name,
+          role: r.role || '',
+          monthlyCost: r.monthly_cost || 0,
+          contact: r.contact || '',
+          status: r.status as any,
+          createdAt: r.created_at,
         })));
       }
 
@@ -747,6 +763,79 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [paymentReceipts]);
 
+  // --- Project Resources ---
+  const getResourcesForProject = useCallback((projectId: string) =>
+    resources.filter(r => r.projectId === projectId), [resources]);
+
+  const addResource = useCallback(async (r: Omit<ProjectResource, 'id' | 'createdAt'>) => {
+    const { data, error } = await supabase
+      .from('project_resources')
+      .insert([{
+        project_id: r.projectId,
+        name: r.name,
+        role: r.role,
+        monthly_cost: r.monthlyCost,
+        contact: r.contact,
+        status: r.status,
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding resource:', error);
+      toast.error('Erro ao adicionar membro à equipe.');
+      return null;
+    }
+
+    const newRes: ProjectResource = {
+      id: data.id,
+      projectId: data.project_id,
+      name: data.name,
+      role: data.role || '',
+      monthlyCost: data.monthly_cost || 0,
+      contact: data.contact || '',
+      status: data.status as any,
+      createdAt: data.created_at,
+    };
+    setResources(prev => [...prev, newRes]);
+    toast.success('Membro adicionado à equipe!');
+    return newRes;
+  }, []);
+
+  const updateResource = useCallback(async (r: ProjectResource) => {
+    const original = [...resources];
+    setResources(prev => prev.map(item => item.id === r.id ? r : item));
+
+    const { error } = await supabase
+      .from('project_resources')
+      .update({
+        name: r.name,
+        role: r.role,
+        monthly_cost: r.monthlyCost,
+        contact: r.contact,
+        status: r.status,
+      })
+      .eq('id', r.id);
+
+    if (error) {
+      setResources(original);
+      console.error('Error updating resource:', error);
+      toast.error('Erro ao editar membro.');
+    }
+  }, [resources]);
+
+  const deleteResource = useCallback(async (id: string) => {
+    const original = [...resources];
+    setResources(prev => prev.filter(r => r.id !== id));
+    const { error } = await supabase.from('project_resources').delete().eq('id', id);
+    if (error) {
+      setResources(original);
+      toast.error('Erro ao excluir membro.');
+    } else {
+      toast.success('Membro removido da equipe.');
+    }
+  }, [resources]);
+
   return (
     <ProjectsContext.Provider value={{
       projects, loading, tasks, constraints,
@@ -762,6 +851,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       getDailyLogsForProject, addDailyLog, updateDailyLog, deleteDailyLog,
       paymentReceipts,
       getReceiptsForProject, addPaymentReceipt, deletePaymentReceipt,
+      resources,
+      getResourcesForProject, addResource, updateResource, deleteResource,
     }}>
       {children}
     </ProjectsContext.Provider>

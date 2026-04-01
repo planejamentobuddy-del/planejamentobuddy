@@ -9,6 +9,17 @@ export interface Project {
   adminCostReceived?: number; // computed from payment_receipts sum
 }
 
+export interface ProjectResource {
+  id: string;
+  projectId: string;
+  name: string;
+  role?: string;
+  monthlyCost?: number;
+  contact?: string;
+  status: 'active' | 'inactive';
+  createdAt: string;
+}
+
 export interface PaymentReceipt {
   id: string;
   projectId: string;
