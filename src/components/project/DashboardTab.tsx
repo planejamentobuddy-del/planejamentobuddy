@@ -599,75 +599,6 @@ export default function DashboardTab({ project }: { project: Project }) {
           </motion.div>
         </div>
 
-        {/* Reschedule Metrics Card */}
-        {totalReschedules > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="card-elevated p-5 border-l-4 border-l-amber-500"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-amber-500/10">
-                  <CalendarClock className="w-4 h-4 text-amber-500" />
-                </div>
-                <h3 className="font-display font-bold text-base">Reprogramações</h3>
-              </div>
-              <span className="text-xs font-bold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
-                {totalReschedules} ajuste{totalReschedules !== 1 ? 's' : ''} total
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="bg-muted/30 rounded-xl p-3">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Tarefas Afetadas</p>
-                <p className="text-2xl font-display font-black text-foreground">{rescheduledTasks.length}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  de {tasks.filter(t => !t.parentId).length > 0 ? tasks.filter(t => t.parentId).length : tasks.length} tarefas
-                </p>
-              </div>
-              <div className="bg-muted/30 rounded-xl p-3">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Média por Tarefa</p>
-                <p className="text-2xl font-display font-black text-amber-600">
-                  {rescheduledTasks.length > 0
-                    ? (totalReschedules / rescheduledTasks.length).toFixed(1)
-                    : '—'}
-                </p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">reprogramações/tarefa</p>
-              </div>
-            </div>
-
-            {topRescheduled.length > 0 && (
-              <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Mais Reprogramadas</p>
-                <div className="space-y-2">
-                  {topRescheduled.map((t, i) => (
-                    <div key={t.id} className="flex items-center gap-3">
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
-                        i === 0 ? 'bg-amber-500 text-white' :
-                        i === 1 ? 'bg-amber-500/50 text-amber-700' :
-                        'bg-muted text-muted-foreground'
-                      }`}>{i + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-foreground truncate">{t.name}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-amber-500 rounded-full"
-                              style={{ width: `${Math.min(100, ((t.rescheduleCount || 0) / Math.max(1, topRescheduled[0].rescheduleCount || 1)) * 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] font-black text-amber-600 shrink-0">{t.rescheduleCount}x</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </motion.div>
-        )}
-
         {/* Alert Banners */}
         {alerts.length > 0 && (
           <div className="space-y-2">
@@ -798,6 +729,75 @@ export default function DashboardTab({ project }: { project: Project }) {
             )}
           </div>
         </div>
+
+        {/* Reschedule Metrics Card */}
+        {totalReschedules > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="card-elevated p-5 border-l-4 border-l-amber-500"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-500/10">
+                  <CalendarClock className="w-4 h-4 text-amber-500" />
+                </div>
+                <h3 className="font-display font-bold text-base">Reprogramações</h3>
+              </div>
+              <span className="text-xs font-bold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
+                {totalReschedules} ajuste{totalReschedules !== 1 ? 's' : ''} total
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-muted/30 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Tarefas Afetadas</p>
+                <p className="text-2xl font-display font-black text-foreground">{rescheduledTasks.length}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  de {tasks.filter(t => !t.parentId).length > 0 ? tasks.filter(t => t.parentId).length : tasks.length} tarefas
+                </p>
+              </div>
+              <div className="bg-muted/30 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Média por Tarefa</p>
+                <p className="text-2xl font-display font-black text-amber-600">
+                  {rescheduledTasks.length > 0
+                    ? (totalReschedules / rescheduledTasks.length).toFixed(1)
+                    : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">reprogramações/tarefa</p>
+              </div>
+            </div>
+
+            {topRescheduled.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Mais Reprogramadas</p>
+                <div className="space-y-2">
+                  {topRescheduled.map((t, i) => (
+                    <div key={t.id} className="flex items-center gap-3">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                        i === 0 ? 'bg-amber-500 text-white' :
+                        i === 1 ? 'bg-amber-500/50 text-amber-700' :
+                        'bg-muted text-muted-foreground'
+                      }`}>{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-foreground truncate">{t.name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-amber-500 rounded-full"
+                              style={{ width: `${Math.min(100, ((t.rescheduleCount || 0) / Math.max(1, topRescheduled[0].rescheduleCount || 1)) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-black text-amber-600 shrink-0">{t.rescheduleCount}x</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
       </div>
     </TooltipProvider>
   );
