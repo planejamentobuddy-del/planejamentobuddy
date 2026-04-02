@@ -112,6 +112,9 @@ export default function MyTasks() {
             <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="rounded-full">
               <ArrowLeft className="w-5 h-5" />
             </Button>
+            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain" />
+            </div>
             <div>
               <h1 className="text-xl font-display font-bold text-slate-900 leading-tight">Minhas Atribuições</h1>
               <p className="text-xs text-slate-500 font-medium">Tarefas e restrições sob sua responsabilidade</p>
@@ -164,9 +167,14 @@ export default function MyTasks() {
                       <div className="flex items-start gap-4">
                         <button 
                           onClick={() => handleToggleTask(task)}
-                          className={`shrink-0 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${task.status === 'completed' ? 'bg-status-ok border-status-ok text-white' : 'border-slate-300 hover:border-primary'}`}
+                          className="shrink-0 flex flex-col items-center gap-1 group"
                         >
-                          {task.status === 'completed' && <CheckCircle2 className="w-4 h-4" />}
+                          <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${task.status === 'completed' ? 'bg-status-ok border-status-ok text-white' : 'border-slate-300 group-hover:border-primary/50'}`}>
+                            {task.status === 'completed' && <CheckCircle2 className="w-4 h-4" />}
+                          </div>
+                          <span className={`text-[8px] font-bold uppercase tracking-wider transition-colors ${task.status === 'completed' ? 'text-status-ok' : 'text-slate-400 group-hover:text-primary'}`}>
+                            {task.status === 'completed' ? 'Feito' : 'Marcar Feito'}
+                          </span>
                         </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
@@ -243,9 +251,12 @@ export default function MyTasks() {
                         <div className="flex items-start gap-4">
                           <button 
                             onClick={() => handleToggleConstraint(c)}
-                            className={`mt-1 transition-colors ${c.status === 'closed' ? 'text-green-500 hover:text-green-600' : 'text-slate-300 hover:text-primary'}`}
+                            className={`mt-1 flex flex-col items-center gap-1 group transition-colors ${c.status === 'closed' ? 'text-green-500' : 'text-slate-300 hover:text-primary'}`}
                           >
                             {c.status === 'closed' ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
+                            <span className={`text-[8px] font-bold uppercase tracking-wider ${c.status === 'closed' ? 'text-green-500' : 'text-slate-400 group-hover:text-primary'}`}>
+                              {c.status === 'closed' ? 'Feito' : 'Marcar Feito'}
+                            </span>
                           </button>
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
