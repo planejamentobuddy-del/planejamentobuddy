@@ -133,6 +133,11 @@ export type Database = {
           description: string | null
           start_date: string
           end_date: string
+          planned_start: string | null
+          planned_end: string | null
+          current_start: string | null
+          current_end: string | null
+          reschedule_count: number
           duration: number
           percent_complete: number
           responsible: string | null
@@ -156,6 +161,11 @@ export type Database = {
           description?: string | null
           start_date: string
           end_date: string
+          planned_start?: string | null
+          planned_end?: string | null
+          current_start?: string | null
+          current_end?: string | null
+          reschedule_count?: number
           duration?: number
           percent_complete?: number
           responsible?: string | null
@@ -178,6 +188,11 @@ export type Database = {
           description?: string | null
           start_date?: string
           end_date?: string
+          planned_start?: string | null
+          planned_end?: string | null
+          current_start?: string | null
+          current_end?: string | null
+          reschedule_count?: number
           duration?: number
           percent_complete?: number
           responsible?: string | null
@@ -209,6 +224,67 @@ export type Database = {
             foreignKeyName: "tasks_assignee_id_fkey"
             columns: ["assignee_id"]
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      task_reschedules: {
+        Row: {
+          id: string
+          task_id: string
+          project_id: string
+          rescheduled_at: string
+          rescheduled_by: string | null
+          rescheduled_by_name: string | null
+          reason_category: string
+          reason_detail: string | null
+          previous_start: string
+          previous_end: string
+          new_start: string
+          new_end: string
+          is_cascade: boolean
+        }
+        Insert: {
+          id?: string
+          task_id: string
+          project_id: string
+          rescheduled_at?: string
+          rescheduled_by?: string | null
+          rescheduled_by_name?: string | null
+          reason_category: string
+          reason_detail?: string | null
+          previous_start: string
+          previous_end: string
+          new_start: string
+          new_end: string
+          is_cascade?: boolean
+        }
+        Update: {
+          id?: string
+          task_id?: string
+          project_id?: string
+          rescheduled_at?: string
+          rescheduled_by?: string | null
+          rescheduled_by_name?: string | null
+          reason_category?: string
+          reason_detail?: string | null
+          previous_start?: string
+          previous_end?: string
+          new_start?: string
+          new_end?: string
+          is_cascade?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_reschedules_task_id_fkey"
+            columns: ["task_id"]
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reschedules_project_id_fkey"
+            columns: ["project_id"]
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           }
         ]

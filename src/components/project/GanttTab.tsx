@@ -626,16 +626,26 @@ export default function GanttTab({ project }: { project: Project }) {
                   const barColor = critical
                     ? 'bg-status-danger text-white'
                     : task.status === 'completed'
-                      ? 'bg-status-ok text-white'         
+                      ? 'bg-status-ok text-white'
                       : task.status === 'in_progress'
-                      ? 'bg-blue-600 text-white shadow-sm'         
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : task.status === 'rescheduled'
+                      ? 'bg-amber-500 text-white shadow-sm'
                         : task.status === 'delayed'
-                          ? 'bg-status-danger/70 text-white shadow-inner'        
-                          : 'bg-muted/80 text-muted-foreground'; 
+                          ? 'bg-status-danger/70 text-white shadow-inner'
+                          : 'bg-muted/80 text-muted-foreground';
 
                   const textColor = task.status === 'not_started' ? 'text-muted-foreground' : 'text-white';
                   const isClicked = clickedBars.has(task.id);
-                  
+
+                  // Baseline ghost bar (only for non-summary rescheduled tasks)
+                  const hasBaseline = !isSummary &&
+                    task.plannedStart && task.plannedEnd &&
+                    (task.plannedStart !== task.startDate || task.plannedEnd !== task.endDate);
+                  const baselineStartPos = hasBaseline ? getPosition(task.plannedStart!) : 0;
+                  const baselineEndPos = hasBaseline ? getPosition(task.plannedEnd!) + pixelsPerDay : 0;
+                  const baselineWidth = hasBaseline ? Math.max(8, baselineEndPos - baselineStartPos) : 0;
+
                   return (
                     <div key={task.id} className="h-10 relative group transition-colors hover:bg-muted/10 border-b border-border/30">
                       {isSummary ? (
@@ -646,10 +656,10 @@ export default function GanttTab({ project }: { project: Project }) {
                           title={`${task.name}: ${Math.round(computedProgress.get(task.id) || 0)}%`}
                         >
                           {/* Background bar (Thick visual) */}
-                          <div className="absolute top-0 left-0 right-0 h-3 bg-slate-200 dark:bg-slate-700 rounded-sm overflow-hidden">
+                          <div className={`absolute top-0 left-0 right-0 h-3 rounded-sm overflow-hidden ${critical ? 'bg-status-danger/20' : 'bg-slate-200 dark:bg-slate-700'}`}>
                             {/* Progress fill that "grows" like subtasks */}
                             <div 
-                              className="h-full bg-slate-800 dark:bg-slate-200 transition-all duration-1000 ease-out shadow-sm relative"
+                              className={`h-full transition-all duration-1000 ease-out shadow-sm relative ${critical ? 'bg-status-danger' : 'bg-slate-800 dark:bg-slate-200'}`}
                               style={{ width: `${computedProgress.get(task.id) || 0}%` }}
                             >
                               {/* Highlight for beauty */}
@@ -659,30 +669,40 @@ export default function GanttTab({ project }: { project: Project }) {
                           
                           {/* Left Point (Downwards bracket edge) */}
                           <div 
-                            className="absolute top-2 left-0 w-0 h-0 border-l-[10px] border-r-[0px] border-t-[10px] border-transparent border-l-slate-800 dark:border-l-slate-200" 
+                            className={`absolute top-2 left-0 w-0 h-0 border-l-[10px] border-r-[0px] border-t-[10px] border-transparent ${critical ? 'border-l-status-danger' : 'border-l-slate-800 dark:border-l-slate-200'}`} 
                           />
                           
                           {/* Right Point (Downwards bracket edge) */}
                           <div 
-                            className="absolute top-2 right-0 w-0 h-0 border-l-[0px] border-r-[10px] border-t-[10px] border-transparent border-r-slate-800 dark:border-r-slate-200" 
+                            className={`absolute top-2 right-0 w-0 h-0 border-l-[0px] border-r-[10px] border-t-[10px] border-transparent ${critical ? 'border-r-status-danger' : 'border-r-slate-800 dark:border-r-slate-200'}`} 
                           />
                         </div>
                       ) : (
-                        // Regular Task Bar
-                        <div
-                          className={`absolute top-2.5 h-5 rounded-lg flex items-center px-3 z-10 font-black text-[9px] cursor-pointer hover:brightness-110 ${hasNoDates ? 'bg-muted-foreground/10 border-2 border-dashed border-muted-foreground/30 text-muted-foreground/50' : `${barColor} ${textColor}`}`}
-                          style={{ left: startPos, width }}
-                          title={hasNoDates ? `${task.name}: Sem data definida` : `${task.name}: ${task.percentComplete}%`}
-                          onClick={(e) => toggleBarClick(task.id, e)}
-                        >
-                          {!hasNoDates && task.status === 'in_progress' && task.percentComplete > 0 && (
-                            <div 
-                              className="absolute inset-0 bg-white/20 pointer-events-none rounded-lg"
-                              style={{ width: `${task.percentComplete}%` }}
+                        <>
+                          {/* Baseline ghost bar (shown behind main bar for rescheduled tasks) */}
+                          {hasBaseline && (
+                            <div
+                              className="absolute top-3 h-4 rounded-md z-[5] border border-dashed border-muted-foreground/30 bg-muted/25 pointer-events-none"
+                              style={{ left: baselineStartPos, width: baselineWidth }}
+                              title={`Planejado original: ${new Date(task.plannedStart! + 'T12:00:00').toLocaleDateString('pt-BR')} → ${new Date(task.plannedEnd! + 'T12:00:00').toLocaleDateString('pt-BR')}`}
                             />
                           )}
-                          <span className="relative z-10">{hasNoDates ? 'SEM DATA' : `${task.percentComplete}%`}</span>
-                        </div>
+                          {/* Regular Task Bar */}
+                          <div
+                            className={`absolute top-2.5 h-5 rounded-lg flex items-center px-3 z-10 font-black text-[9px] cursor-pointer hover:brightness-110 ${hasNoDates ? 'bg-muted-foreground/10 border-2 border-dashed border-muted-foreground/30 text-muted-foreground/50' : `${barColor} ${textColor}`}`}
+                            style={{ left: startPos, width }}
+                            title={hasNoDates ? `${task.name}: Sem data definida` : `${task.name}: ${task.percentComplete}%`}
+                            onClick={(e) => toggleBarClick(task.id, e)}
+                          >
+                            {!hasNoDates && task.status === 'in_progress' && task.percentComplete > 0 && (
+                              <div 
+                                className="absolute inset-0 bg-white/20 pointer-events-none rounded-lg"
+                                style={{ width: `${task.percentComplete}%` }}
+                              />
+                            )}
+                            <span className="relative z-10">{hasNoDates ? 'SEM DATA' : `${task.percentComplete}%`}</span>
+                          </div>
+                        </>
                       )}
 
                       {!isSummary && (showAllLabels || isClicked) && (
@@ -727,6 +747,14 @@ export default function GanttTab({ project }: { project: Project }) {
         <div className="flex items-center gap-3">
           <div className="w-5 h-4 rounded-md bg-status-danger/70 shadow-sm" />
           <span className="uppercase tracking-widest text-[9px]">Atrasado Plano</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-4 rounded-md bg-amber-500 shadow-sm" />
+          <span className="text-amber-600 uppercase tracking-widest text-[9px]">Reprogramada</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-4 rounded-md border border-dashed border-muted-foreground/30 bg-muted/25" />
+          <span className="uppercase tracking-widest text-[9px]">Baseline Original</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="w-5 h-4 rounded-md bg-status-danger animate-pulse shadow-md" />

@@ -2,10 +2,12 @@ import { useState, useMemo, Fragment, useEffect } from 'react';
 import { Project, Task, TaskStatus, getProjectProgress, StatusComment, safeParseDate } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History } from 'lucide-react';
 import StatusCommentLog from './StatusCommentLog';
 import TeamTab from './TeamTab';
 import AssignmentsTab from './AssignmentsTab';
+import { RescheduleModal } from './RescheduleModal';
+import { RescheduleHistoryModal } from './RescheduleHistoryModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,13 +39,14 @@ const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
   { value: 'in_progress', label: 'Em andamento', color: 'bg-blue-600/10 text-blue-600 border border-blue-600/20' },
   { value: 'completed', label: 'Concluído', color: 'bg-status-ok/10 text-status-ok border border-status-ok/20' },
   { value: 'delayed', label: 'Atrasado', color: 'bg-status-danger/10 text-status-danger border border-status-danger/20' },
+  { value: 'rescheduled', label: 'Reprogramada', color: 'bg-amber-500/10 text-amber-600 border border-amber-500/20' },
 ];
 
 function isOverdue(task: Task): boolean {
   if (task.percentComplete >= 100) return false;
   const now = new Date().toISOString().split('T')[0];
   const nowTs = safeParseDate(now);
-  const endTs = safeParseDate(task.endDate);
+  const endTs = safeParseDate(task.currentEnd || task.endDate);
   return endTs < nowTs;
 }
 
@@ -81,6 +84,11 @@ export default function PlanningTab({ project }: { project: Project }) {
   const allTasks = getTasksForProject(project.id);
   const resources = getResourcesForProject(project.id);
 
+  // Reschedule modal state
+  const [rescheduleTask, setRescheduleTask] = useState<Task | null>(null);
+  const [historyTask, setHistoryTask] = useState<Task | null>(null);
+  const [showOnlyRescheduled, setShowOnlyRescheduled] = useState(false);
+
   const stages = useMemo(() => 
     allTasks.filter(t => !t.parentId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
   , [allTasks]);
@@ -107,15 +115,15 @@ export default function PlanningTab({ project }: { project: Project }) {
   const columnHeaders = [
     { label: 'Etapa / Atividade', align: 'left', width: 300 },
     { label: 'Responsável', align: 'left', width: 140 },
-    { label: 'Início', align: 'left', width: 110 },
-    { label: 'Término', align: 'left', width: 110 },
+    { label: 'Início', align: 'left', width: 120 },
+    { label: 'Término', align: 'left', width: 120 },
     { label: 'Duração', align: 'center', width: 80 },
     { label: '% Execução', align: 'left', width: 140 },
-    { label: 'Status', align: 'left', width: 140 },
+    { label: 'Status', align: 'left', width: 150 },
     { label: 'Predecessoras', align: 'left', width: 160 },
     { label: 'Sucessoras', align: 'left', width: 160 },
     { label: 'Observações', align: 'left', width: 200 },
-    { label: 'Ações', align: 'center', width: 100 },
+    { label: 'Ações', align: 'center', width: 130 },
   ];
 
   const { widths: colWidths, onMouseDown: onColResize } = useResizableColumns(
@@ -361,6 +369,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     const statusBorderColor = effectiveStatus === 'completed' ? 'border-l-status-ok' :
                              effectiveStatus === 'in_progress' ? 'border-l-blue-600' :
                              effectiveStatus === 'delayed' ? 'border-l-status-danger' :
+                             effectiveStatus === 'rescheduled' ? 'border-l-amber-500' :
                              'border-l-muted';
 
     return (
@@ -419,12 +428,19 @@ export default function PlanningTab({ project }: { project: Project }) {
           {isStage && agg ? (
             <div className="px-1.5 py-1 font-medium">{formatDate(agg.startDate)}</div>
           ) : (
-            <Input 
-              type="date" 
-              className="h-8 text-xs border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30" 
-              value={task.startDate} 
-              onChange={e => handleChange(task, 'startDate', e.target.value)} 
-            />
+            <div className="space-y-0.5">
+              <Input
+                type="date"
+                className="h-8 text-xs border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
+                value={task.startDate}
+                onChange={e => handleChange(task, 'startDate', e.target.value)}
+              />
+              {task.plannedStart && task.plannedStart !== task.startDate && (
+                <div className="px-1 text-[10px] text-muted-foreground/50 font-mono">
+                  Orig: {formatDate(task.plannedStart)}
+                </div>
+              )}
+            </div>
           )}
         </td>
 
@@ -433,12 +449,19 @@ export default function PlanningTab({ project }: { project: Project }) {
           {isStage && agg ? (
             <div className="px-1.5 py-1 font-medium">{formatDate(agg.endDate)}</div>
           ) : (
-            <Input 
-              type="date" 
-              className="h-8 text-xs border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30" 
-              value={task.endDate} 
-              onChange={e => handleChange(task, 'endDate', e.target.value)} 
-            />
+            <div className="space-y-0.5">
+              <Input
+                type="date"
+                className="h-8 text-xs border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
+                value={task.endDate}
+                onChange={e => handleChange(task, 'endDate', e.target.value)}
+              />
+              {task.plannedEnd && task.plannedEnd !== task.endDate && (
+                <div className="px-1 text-[10px] text-muted-foreground/50 font-mono">
+                  Orig: {formatDate(task.plannedEnd)}
+                </div>
+              )}
+            </div>
           )}
         </td>
 
@@ -483,18 +506,25 @@ export default function PlanningTab({ project }: { project: Project }) {
 
         {/* 7. Status */}
         <td className="py-2.5 px-3 border-r border-border/40">
-          <Select 
-            value={isStage && agg ? effectiveStatus : task.status} 
-            onValueChange={v => handleChange(task, 'status', v as TaskStatus)}
-          >
-            <SelectTrigger className="h-8 w-full text-xs border-0 bg-transparent px-1 hover:bg-primary/5 transition-colors group">
-              <StatusBadge status={isStage && agg ? effectiveStatus : task.status} />
-              <ChevronDown className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-50 transition-opacity" />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="space-y-1">
+            <Select
+              value={isStage && agg ? effectiveStatus : task.status}
+              onValueChange={v => handleChange(task, 'status', v as TaskStatus)}
+            >
+              <SelectTrigger className="h-8 w-full text-xs border-0 bg-transparent px-1 hover:bg-primary/5 transition-colors group">
+                <StatusBadge status={isStage && agg ? effectiveStatus : task.status} />
+                <ChevronDown className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-50 transition-opacity" />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {!isStage && (task.rescheduleCount || 0) > 0 && (
+              <div className="px-1 text-[10px] text-amber-600/80 font-semibold">
+                Reprog. {task.rescheduleCount}x
+              </div>
+            )}
+          </div>
         </td>
 
         {/* 8. Predecessoras */}
@@ -541,6 +571,28 @@ export default function PlanningTab({ project }: { project: Project }) {
                 <Plus className="w-3.5 h-3.5" />
               </Button>
             )}
+            {!isStage && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-amber-500"
+                onClick={() => setRescheduleTask(task)}
+                title="Reprogramar tarefa"
+              >
+                <CalendarClock className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            {!isStage && (task.rescheduleCount || 0) > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                onClick={() => setHistoryTask(task)}
+                title="Ver histórico de reprogramações"
+              >
+                <History className="w-3.5 h-3.5" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleDuplicate(task)} title="Duplicar">
               <Copy className="w-3.5 h-3.5" />
             </Button>
@@ -555,6 +607,19 @@ export default function PlanningTab({ project }: { project: Project }) {
 
   return (
     <div className="space-y-5">
+      {/* Reschedule Modals */}
+      <RescheduleModal
+        task={rescheduleTask}
+        isOpen={!!rescheduleTask}
+        onClose={() => setRescheduleTask(null)}
+        projectId={project.id}
+      />
+      <RescheduleHistoryModal
+        task={historyTask}
+        isOpen={!!historyTask}
+        onClose={() => setHistoryTask(null)}
+      />
+
       <Tabs defaultValue="schedule" className="w-full">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-6">
@@ -579,6 +644,28 @@ export default function PlanningTab({ project }: { project: Project }) {
         </div>
 
         <TabsContent value="schedule" className="m-0 border-0 p-0 shadow-none focus-visible:ring-0">
+          {/* Filter bar */}
+          <div className="flex items-center gap-3 mb-3">
+            <button
+              onClick={() => setShowOnlyRescheduled(v => !v)}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                showOnlyRescheduled
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
+                  : 'bg-muted/50 border-border/40 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <CalendarClock className="w-3.5 h-3.5" />
+              {showOnlyRescheduled ? 'Mostrando apenas reprogramadas' : 'Mostrar apenas reprogramadas'}
+            </button>
+            {showOnlyRescheduled && (
+              <span className="text-xs text-muted-foreground">
+                {stages.filter(s =>
+                  getSubtasks(s.id).some(t => (t.rescheduleCount || 0) > 0)
+                ).length} etapa(s) com reprogramações
+              </span>
+            )}
+          </div>
+
           <div className="card-elevated overflow-x-auto p-0 border-none shadow-none bg-transparent">
             {/* ... table content remains same but wrapped in handleDragEnd/sortable context below ... */}
             <DndContext
@@ -668,21 +755,30 @@ export default function PlanningTab({ project }: { project: Project }) {
                     )}
 
                     <SortableContext items={stages.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                      {stages.map((stage, sIdx) => (
-                        <SortableStageRow 
-                          key={stage.id} 
-                          stage={stage} 
-                          subtasks={getSubtasks(stage.id)}
-                          isExpanded={expandedStages.has(stage.id)}
-                          renderRow={(t: Task, isSub: boolean, dragProps?: any) => {
-                            const subIdx = isSub ? getSubtasks(stage.id).findIndex(st => st.id === t.id) : -1;
-                            const number = isSub ? `${sIdx + 1}.${subIdx + 1}` : `${sIdx + 1}`;
-                            return renderRow(t, isSub, number, dragProps);
-                          }}
-                          handleAddSubtask={handleAddSubtask}
-                          columnHeaders={columnHeaders}
-                        />
-                      ))}
+                      {stages
+                        .filter(stage =>
+                          !showOnlyRescheduled ||
+                          getSubtasks(stage.id).some(t => (t.rescheduleCount || 0) > 0)
+                        )
+                        .map((stage, sIdx) => (
+                          <SortableStageRow
+                            key={stage.id}
+                            stage={stage}
+                            subtasks={
+                              showOnlyRescheduled
+                                ? getSubtasks(stage.id).filter(t => (t.rescheduleCount || 0) > 0)
+                                : getSubtasks(stage.id)
+                            }
+                            isExpanded={expandedStages.has(stage.id)}
+                            renderRow={(t: Task, isSub: boolean, dragProps?: any) => {
+                              const subIdx = isSub ? getSubtasks(stage.id).findIndex(st => st.id === t.id) : -1;
+                              const number = isSub ? `${sIdx + 1}.${subIdx + 1}` : `${sIdx + 1}`;
+                              return renderRow(t, isSub, number, dragProps);
+                            }}
+                            handleAddSubtask={handleAddSubtask}
+                            columnHeaders={columnHeaders}
+                          />
+                        ))}
                     </SortableContext>
                   </>
                 )}

@@ -78,9 +78,10 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         const today = new Date().toISOString().split('T')[0];
         setTasks(taskData.map(t => {
           let st = t.status as any;
-          if (st !== 'completed' && t.end_date && t.end_date < today) {
+          const effectiveEnd = (t as any).current_end || t.end_date;
+          if (st !== 'completed' && st !== 'rescheduled' && effectiveEnd && effectiveEnd < today) {
             st = 'delayed';
-          } else if (st === 'delayed' && t.end_date && t.end_date >= today) {
+          } else if (st === 'delayed' && effectiveEnd && effectiveEnd >= today) {
             st = 'in_progress';
           }
           return {
@@ -88,8 +89,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
             projectId: t.project_id,
             parentId: t.parent_id || undefined,
             name: t.name,
-            startDate: t.start_date || '',
-            endDate: t.end_date || '',
+            startDate: (t as any).current_start || t.start_date || '',
+            endDate: (t as any).current_end || t.end_date || '',
             duration: t.duration || 0,
             percentComplete: t.percent_complete || 0,
             responsible: t.responsible || '',
@@ -103,6 +104,12 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
             statusComments: (Array.isArray(t.status_comments) ? t.status_comments : []) as any,
             checklists: (Array.isArray(t.checklists) ? t.checklists : []) as unknown as ChecklistItem[],
             orderIndex: (t as any).order_index || 0,
+            // Reschedule fields
+            plannedStart: (t as any).planned_start || t.start_date || '',
+            plannedEnd: (t as any).planned_end || t.end_date || '',
+            currentStart: (t as any).current_start || t.start_date || '',
+            currentEnd: (t as any).current_end || t.end_date || '',
+            rescheduleCount: (t as any).reschedule_count || 0,
           };
         }).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0) || a.startDate.localeCompare(b.startDate)));
       }

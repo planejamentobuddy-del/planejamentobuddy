@@ -63,9 +63,32 @@ export interface Task {
   statusComments?: StatusComment[];
   checklists?: ChecklistItem[];
   orderIndex?: number;
+  // Baseline (never modified after first set)
+  plannedStart?: string;       // YYYY-MM-DD
+  plannedEnd?: string;         // YYYY-MM-DD
+  // Current scheduled dates (source of truth for display)
+  currentStart?: string;       // YYYY-MM-DD
+  currentEnd?: string;         // YYYY-MM-DD
+  rescheduleCount?: number;
+  reschedules?: TaskReschedule[];
 }
 
-export type TaskStatus = 'not_started' | 'in_progress' | 'completed' | 'delayed';
+export type TaskStatus = 'not_started' | 'in_progress' | 'completed' | 'delayed' | 'rescheduled';
+
+export interface TaskReschedule {
+  id: string;
+  taskId: string;
+  projectId: string;
+  rescheduledAt: string;       // ISO timestamp
+  rescheduledByName: string;
+  reasonCategory: string;      // one of DELAY_REASONS
+  reasonDetail?: string;
+  previousStart: string;       // YYYY-MM-DD
+  previousEnd: string;         // YYYY-MM-DD
+  newStart: string;            // YYYY-MM-DD
+  newEnd: string;              // YYYY-MM-DD
+  isCascade: boolean;
+}
 
 export interface WeeklyPlan {
   id: string;
@@ -255,16 +278,17 @@ export function getCurrentWeek(): string {
 export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
   if (allTasks.length === 0) return new Set();
 
-  // Only consider leaf tasks (non-parent) for the network
+  // 1. Setup Network (Consider only leaf tasks for CPM math)
   const parentIds = new Set(allTasks.filter(t => t.parentId).map(t => t.parentId!));
   const leaves = allTasks.filter(t => !parentIds.has(t.id));
   if (leaves.length === 0) return new Set();
 
-  const toDay = (s: string) => {
-    return Math.round(safeParseDate(s) / 86400000);
-  };
+  const toDay = (s: string) => Math.round(safeParseDate(s) / 86400000);
+  
+  const idToIdx = new Map<string, number>();
+  leaves.forEach((t, i) => idToIdx.set(t.id, i));
 
-  // Map ancestors to their leaf task indices
+  // Map ancestors to their leaf task indices for dependency expansion
   const ancestorToLeaves = new Map<string, number[]>();
   parentIds.forEach(pId => ancestorToLeaves.set(pId, []));
   leaves.forEach((task, leafIdx) => {
@@ -277,10 +301,6 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
   });
 
   const n = leaves.length;
-  const idToIdx = new Map<string, number>();
-  leaves.forEach((t, i) => idToIdx.set(t.id, i));
-
-  // Build Adjacency
   const predIndices: number[][] = leaves.map(t => {
     const indices = new Set<number>();
     (t.predecessors || []).forEach(pid => {
@@ -297,11 +317,10 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
     preds.forEach(pi => succIndices[pi].push(i));
   });
 
-  // 1. Topological Sort (Kahn's algorithm)
+  // 2. Topological Sort (Kahn's)
   const inDegree = predIndices.map(p => p.length);
   const queue: number[] = [];
   inDegree.forEach((deg, i) => { if (deg === 0) queue.push(i); });
-
   const sorted: number[] = [];
   while (queue.length > 0) {
     const u = queue.shift()!;
@@ -312,63 +331,63 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
     });
   }
 
-  // Detect Cycles (Safety)
   if (sorted.length < n) {
-    console.error("[CPM] Circular dependency detected! Critical path might be incomplete.");
+    console.error("[CPM] Ciclo detectado nas dependências!");
+    return new Set();
   }
 
-  const dateToNum = (s: string) => new Date(s + 'T12:00:00').getTime() / 86400000;
-  const projectStartNum = allTasks.length > 0 
-    ? Math.min(...allTasks.filter(t => t.startDate).map(t => dateToNum(t.startDate)))
-    : 0;
-
+  // 3. Forward Pass (ES, EF)
   const es = new Array(n).fill(0);
   const ef = new Array(n).fill(0);
-  const dur = leaves.map(t => Math.max(1, t.duration));
+  const dur = leaves.map(t => Math.max(1, toDay(t.endDate) - toDay(t.startDate)));
+  
+  // Use project start as global offset 0
+  const projectStart = Math.min(...leaves.map(t => toDay(t.startDate)));
 
-  // 2. Forward Pass
   sorted.forEach(i => {
-    const taskES = dateToNum(leaves[i].startDate) - projectStartNum;
+    const manualStart = toDay(leaves[i].startDate) - projectStart;
     if (predIndices[i].length > 0) {
-      es[i] = Math.max(taskES, ...predIndices[i].map(pi => ef[pi]));
+      // ES is the maximum EF of all predecessors
+      es[i] = Math.max(...predIndices[i].map(pi => ef[pi]));
+      // But it cannot be earlier than the manual scheduled start if there is a gap
+      // To keep it "connected", CPM usually assumes ES = max(pred.EF)
+      // However, to match the visuals, we use the scheduled start
+      es[i] = Math.max(es[i], manualStart);
     } else {
-      es[i] = taskES; 
+      es[i] = manualStart;
     }
     ef[i] = es[i] + dur[i];
   });
 
-  // 3. Backward Pass
-  const projectDuration = Math.max(0, ...ef);
-  const lf = new Array(n).fill(projectDuration);
+  // 4. Backward Pass (LS, LF)
+  const projectFinish = Math.max(0, ...ef);
+  const lf = new Array(n).fill(projectFinish);
   const ls = new Array(n).fill(0);
 
   [...sorted].reverse().forEach(i => {
     if (succIndices[i].length > 0) {
+      // LF is the minimum LS of all successors
       lf[i] = Math.min(...succIndices[i].map(si => ls[si]));
     } else {
-      lf[i] = projectDuration;
+      // For tasks with no successors, LF is the project finish
+      lf[i] = projectFinish;
     }
     ls[i] = lf[i] - dur[i];
   });
 
-  // 4. Results & Debugging
+  // 5. Results & Logic Propagation
   const critical = new Set<string>();
   const allTasksMap = new Map<string, Task>();
   allTasks.forEach(t => allTasksMap.set(t.id, t));
 
-  console.groupCollapsed(`[CPM Debug] Project Duration: ${projectDuration} days`);
   for (let i = 0; i < n; i++) {
     const float = ls[i] - es[i];
-    const leaf = leaves[i];
-    
-    console.log(
-      `Task: ${leaf.name.padEnd(25)} | ES: ${es[i].toString().padStart(3)} | EF: ${ef[i].toString().padStart(3)} | ` +
-      `LS: ${ls[i].toString().padStart(3)} | LF: ${lf[i].toString().padStart(3)} | Float: ${float.toString().padStart(3)}`
-    );
-
-    if (float <= 0) {
-      critical.add(leaf.id);
-      let currP = leaf.parentId;
+    // Tolerance of 0.1 days for rounding
+    if (float <= 0.1) {
+      critical.add(leaves[i].id);
+      
+      // Propagate critical status to parent hierarchy
+      let currP = leaves[i].parentId;
       while (currP) {
         if (critical.has(currP)) break;
         critical.add(currP);
@@ -376,7 +395,6 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
       }
     }
   }
-  console.groupEnd();
 
   return critical;
 }
