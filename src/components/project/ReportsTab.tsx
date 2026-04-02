@@ -325,43 +325,58 @@ export default function ReportsTab({ project }: ReportsTabProps) {
               {report.extra && report.extra}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mt-6 pt-4 border-t border-border">
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="flex-1 font-bold text-xs gap-1.5 border-dashed"
-                onClick={() => {
-                  if (report.id === 'gantt') {
-                    alert("Para exportar o gráfico de linhas do tempo (Gantt) em alta resolução com as cores e detalhes, acesse a aba 'Gantt' e clique no novo botão azul 'Salvar PDF Visual' no canto superior direito.");
-                  } else {
-                    report.action('pdf');
-                  }
-                }}
-              >
-                <Download className="w-3.5 h-3.5" />
-                {report.id === 'gantt' ? 'PDF Visual' : 'PDF'}
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="flex-1 font-bold text-xs gap-1.5"
-                onClick={() => report.action(report.id === 'gantt' ? 'excel' : 'pdf')}
-              >
-                <FileText className="w-3.5 h-3.5" />
-                {report.id === 'gantt' ? 'PDF (Tabela)' : 'Excel'}
-              </Button>
-              {report.id !== 'gantt' && (
+            {report.id === 'gantt' ? (
+              <div className="grid grid-cols-3 gap-2 mt-6 pt-4 border-t border-border">
                 <Button 
                   size="sm" 
                   variant="outline" 
-                  className="flex-1 font-bold text-xs gap-1.5"
+                  className="font-bold text-[10px] gap-1 px-1 border-dashed"
+                  onClick={() => alert("Para exportar o gráfico de linhas do tempo (Gantt) em alta resolução com as cores e detalhes, acesse a aba 'Gantt' e clique no novo botão azul 'Salvar PDF Visual' no canto superior direito.")}
+                >
+                  <Download className="w-3 h-3" />
+                  Visual
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="font-bold text-[10px] gap-1 px-1"
+                  onClick={() => report.action('pdf')}
+                >
+                  <FileText className="w-3 h-3" />
+                  Tabela
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="font-bold text-[10px] gap-1 px-1"
+                  onClick={() => report.action('excel')}
+                >
+                  <FileSpreadsheet className="w-3 h-3" />
+                  Excel
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 mt-6 pt-4 border-t border-border">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="font-bold text-xs gap-1.5"
+                  onClick={() => report.action('pdf')}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  PDF
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="font-bold text-xs gap-1.5"
                   onClick={() => report.action('excel')}
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" />
                   Excel
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
-import { Project, Task, getCriticalTaskIds, safeParseDate } from '@/types/project';
+import { Project, Task, getCriticalTaskIds, safeParseDate, calculateSCurve } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Calendar, ChevronDown, ChevronRight, Users, Download } from 'lucide-react';
@@ -30,10 +30,23 @@ export default function GanttTab({ project }: { project: Project }) {
   const [showAllLabels, setShowAllLabels] = useState(false);
   const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
   const [clickedBars, setClickedBars] = useState<Set<string>>(new Set());
+  const [todayHovered, setTodayHovered] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
 
   // CPM critical path set
   const criticalSet = useMemo(() => getCriticalTaskIds(allTasks), [allTasks]);
+
+  // S-Curve: planned vs actual progress up to today
+  const { plannedToday, actualToday } = useMemo(() => {
+    const curve = calculateSCurve(allTasks, project);
+    if (curve.length === 0) return { plannedToday: 0, actualToday: 0 };
+    const todayTs = new Date().setHours(12, 0, 0, 0);
+    // Find the point at or just before today
+    const points = curve.filter(p => p.timestamp <= todayTs);
+    if (points.length === 0) return { plannedToday: 0, actualToday: curve[curve.length - 1]?.realizado ?? 0 };
+    const latest = points[points.length - 1];
+    return { plannedToday: latest.planejado, actualToday: latest.realizado };
+  }, [allTasks, project]);
 
   const { visibleTasks, hasChildrenMap, depthMap, computedBounds, computedProgress, wbsMap } = useMemo(() => {
     const map = new Map<string | undefined, Task[]>();
@@ -586,21 +599,96 @@ export default function GanttTab({ project }: { project: Project }) {
                 )}
               </svg>
 
-              {/* Vertical Today Line */}
-              {todayPos >= 0 && todayPos <= timelineWidth && (
-                <div 
-                  className="absolute top-12 bottom-0 z-20 pointer-events-none"
-                  style={{ left: todayPos }}
-                >
-                  <div className="absolute top-0 -translate-x-1/2 flex flex-col items-center">
-                    <div className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-md whitespace-nowrap">
-                      Hoje
+              {/* Vertical Today Line — Enhanced with S-Curve tooltip */}
+              {todayPos >= 0 && todayPos <= timelineWidth && (() => {
+                const diff = actualToday - plannedToday;
+                const isAhead = diff > 1;
+                const isBehind = diff < -1;
+                const statusLabel = isAhead ? `Adiantado ${diff.toFixed(0)}%` : isBehind ? `Atrasado ${Math.abs(diff).toFixed(0)}%` : 'No Prazo';
+                const statusColor = isAhead ? 'bg-emerald-500' : isBehind ? 'bg-red-500' : 'bg-blue-500';
+                const statusTextColor = isAhead ? 'text-emerald-400' : isBehind ? 'text-red-400' : 'text-blue-400';
+                const statusEmoji = isAhead ? '🟢' : isBehind ? '🔴' : '✅';
+
+                return (
+                  <div
+                    className="absolute top-12 bottom-0 z-20 cursor-pointer"
+                    style={{ left: todayPos, width: '30px', marginLeft: '-15px' }}
+                    onMouseEnter={() => setTodayHovered(true)}
+                    onMouseLeave={() => setTodayHovered(false)}
+                  >
+                    {/* Header badge (Always visible) */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                      <div className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-md whitespace-nowrap">
+                        Hoje
+                      </div>
+                      <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-red-500" />
                     </div>
-                    <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-red-500" />
+
+                    {/* Vertical line (Always visible) */}
+                    <div className="absolute top-5 bottom-0 left-1/2 -translate-x-1/2 w-[2px] bg-red-500/70" />
+
+                    {/* Content visible only on hover */}
+                    {todayHovered && (
+                      <>
+                        {/* Status pill on the line */}
+                        <div className="absolute top-7 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                          <div className={`text-white text-[8px] px-2 py-0.5 rounded-full font-bold shadow-lg whitespace-nowrap ${statusColor}`}>
+                            {statusEmoji} {statusLabel}
+                          </div>
+                        </div>
+
+                        {/* Planned vs Actual markers on the line */}
+                        <div
+                          className="absolute left-1/2 flex flex-col gap-0.5"
+                          style={{ top: '60px', transform: 'translateX(6px)' }}
+                        >
+                          {/* Planned marker */}
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            <div className="w-2.5 h-0.5 bg-slate-400" />
+                            <span className="text-[8px] text-slate-400 font-bold">P {plannedToday}%</span>
+                          </div>
+                          {/* Actual marker */}
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            <div className={`w-2.5 h-0.5 ${statusColor}`} />
+                            <span className={`text-[8px] font-bold ${statusTextColor}`}>R {actualToday}%</span>
+                          </div>
+                        </div>
+
+                        {/* Hover tooltip */}
+                        <div
+                          className="absolute top-16 left-6 z-50 bg-popover border border-border/60 rounded-2xl shadow-2xl p-4 w-52 space-y-3 pointer-events-none"
+                        >
+                          <p className="text-xs font-bold text-foreground uppercase tracking-widest border-b border-border/40 pb-2">Performance hoje</p>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
+                                Planejado
+                              </span>
+                              <span className="font-bold text-foreground tabular-nums">{plannedToday}%</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full inline-block ${statusColor}`} />
+                                Realizado
+                              </span>
+                              <span className={`font-bold tabular-nums ${statusTextColor}`}>{actualToday}%</span>
+                            </div>
+                            <div className="h-px bg-border/40" />
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Diferença</span>
+                              <span className={`font-black tabular-nums ${statusTextColor}`}>{diff > 0 ? '+' : ''}{diff.toFixed(0)}%</span>
+                            </div>
+                          </div>
+                          <div className={`text-[11px] font-bold text-center py-1.5 rounded-lg ${statusColor} text-white`}>
+                            {statusEmoji} {statusLabel}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <div className="absolute top-5 bottom-0 left-1/2 -translate-x-1/2 w-[2px] bg-red-500/70" />
-                </div>
-              )}
+                );
+              })()}
 
               {/* Rows and Bars */}
               <div className="relative pt-0">

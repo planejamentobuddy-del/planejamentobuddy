@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet, FileSpreadsheet, Sun } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,8 +13,10 @@ import CurveSTab from '@/components/project/CurveSTab';
 import AdminTab from '@/components/project/AdminTab';
 import DiaryTab from '@/components/project/DiaryTab';
 import ReportsTab from '@/components/project/ReportsTab';
+import TodayTab from '@/components/project/TodayTab';
 
 const tabs = [
+  { value: 'hoje', label: 'Hoje', icon: Sun },
   { value: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
   { value: 'planning', label: 'Planejamento', icon: TableProperties },
   { value: 'gantt', label: 'Gantt', icon: GanttChart },
@@ -109,14 +111,25 @@ export default function ProjectDetail() {
         <div className="container mx-auto px-6 pb-3 overflow-x-auto flex [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
           <TabsList className="bg-transparent border-0 p-0 h-auto gap-1 inline-flex w-max">
             {tabs.map(tab => (
-              <TabsTrigger
-                key={tab.value}
-                value={tab.value}
-                className="gap-2 rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted transition-all"
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-              </TabsTrigger>
+              tab.value === 'hoje' ? (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-amber-600 dark:text-amber-400 border border-amber-400/30 bg-amber-500/8 data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-300 data-[state=active]:border-amber-500/50 data-[state=active]:shadow-none hover:bg-amber-500/15 transition-all"
+                >
+                  <tab.icon className="w-4 h-4" />
+                  {tab.label}
+                </TabsTrigger>
+              ) : (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="gap-2 rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted transition-all"
+                >
+                  <tab.icon className="w-4 h-4" />
+                  {tab.label}
+                </TabsTrigger>
+              )
             ))}
           </TabsList>
         </div>
@@ -125,6 +138,7 @@ export default function ProjectDetail() {
       {/* Content */}
       <div className="container mx-auto px-6 py-5 flex-1 w-full max-w-[1600px]">
 
+          <TabsContent value="hoje"><TodayTab project={project} /></TabsContent>
           <TabsContent value="dashboard"><DashboardTab project={project} /></TabsContent>
           <TabsContent value="planning"><PlanningTab project={project} /></TabsContent>
           <TabsContent value="gantt"><GanttTab project={project} /></TabsContent>
