@@ -394,8 +394,36 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       setTasks(original);
       console.error('[updateTask] Supabase error:', error);
       toast.error(`Erro ao salvar: ${error.message || 'Verifique os campos'}`);
+      return;
     }
-  }, [tasks]);
+
+    // ── Auto-sync LEAN: when a planning task is completed, mark all linked
+    //    weekly plans as completed too (unless already completed). ──
+    if (finalStatus === 'completed') {
+      const linkedPlans = plans.filter(
+        p => p.taskId === task.id && p.status !== 'completed'
+      );
+      if (linkedPlans.length > 0) {
+        // Optimistic local update
+        setPlans(prev =>
+          prev.map(p =>
+            p.taskId === task.id && p.status !== 'completed'
+              ? { ...p, status: 'completed' as any }
+              : p
+          )
+        );
+        // Persist to Supabase
+        await Promise.all(
+          linkedPlans.map(p =>
+            supabase
+              .from('weekly_plans')
+              .update({ status: 'completed' })
+              .eq('id', p.id)
+          )
+        );
+      }
+    }
+  }, [tasks, plans]);
 
   const reorderTasks = useCallback(async (updates: { id: string, orderIndex: number }[]) => {
     const original = [...tasks];

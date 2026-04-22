@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
-import { Project, Task, getCriticalTaskIds, safeParseDate, calculateSCurve } from '@/types/project';
+import { Project, Task, getCriticalTaskIds, safeParseDate, calculateSCurve, getProjectProgress } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
-import { Calendar, ChevronDown, ChevronRight, Users, Download } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, Users, Download, ZoomIn, ZoomOut } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
@@ -31,7 +31,14 @@ export default function GanttTab({ project }: { project: Project }) {
   const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
   const [clickedBars, setClickedBars] = useState<Set<string>>(new Set());
   const [todayHovered, setTodayHovered] = useState(false);
+  const [filterStart, setFilterStart] = useState('');
+  const [filterEnd, setFilterEnd] = useState('');
+  const [activePreset, setActivePreset] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const minimapRef = useRef<HTMLDivElement>(null);
+  const [scrollFraction, setScrollFraction] = useState(0);
+  const pixelsPerDay = viewMode === 'diario' ? 45 : viewMode === 'semanal' ? 12 : 4;
+  const hasFilter = filterStart !== '' || filterEnd !== '';
 
   // CPM critical path set
   const criticalSet = useMemo(() => getCriticalTaskIds(allTasks), [allTasks]);
@@ -163,6 +170,22 @@ export default function GanttTab({ project }: { project: Project }) {
     return { visibleTasks: visible, hasChildrenMap, depthMap: depth, computedBounds: bounds, computedProgress: progress, wbsMap };
   }, [allTasks, collapsedTasks, sortMode]);
 
+  // Project-level summary bar (OBRA)
+  const projectSummary = useMemo(() => {
+    if (allTasks.length === 0) return null;
+    const leafTasks = allTasks.filter(t => !hasChildrenMap.get(t.id));
+    if (leafTasks.length === 0) return null;
+    const starts = leafTasks.map(t => safeParseDate(t.startDate)).filter(v => v > 0);
+    const ends   = leafTasks.map(t => safeParseDate(t.endDate)).filter(v => v > 0);
+    if (starts.length === 0 || ends.length === 0) return null;
+    const startStr = new Date(Math.min(...starts)).toISOString().split('T')[0];
+    const endStr   = new Date(Math.max(...ends)).toISOString().split('T')[0];
+    const totalProgress = getProjectProgress(allTasks);
+    return { startStr, endStr, totalProgress };
+  }, [allTasks, hasChildrenMap]);
+
+  const filteredTasks = visibleTasks;
+
   const toggleCollapse = (taskId: string) => {
     setCollapsedTasks(prev => {
       const next = new Set(prev);
@@ -192,12 +215,20 @@ export default function GanttTab({ project }: { project: Project }) {
       return { minDate: s.getTime(), maxDate: e.getTime(), totalDays: 30, ticks: [] };
     }
 
-    const taskDates = allTasks.flatMap(t => {
+    let taskDates = allTasks.flatMap(t => {
       const b = computedBounds.get(t.id) || { start: t.startDate, end: t.endDate };
       return [safeParseDate(b.start), safeParseDate(b.end)];
-    });
-    let start = Math.min(...taskDates, safeParseDate(project.startDate));
-    let end = Math.max(...taskDates, safeParseDate(project.endDate));
+    }).filter(d => d > 0);
+
+    if (taskDates.length === 0) {
+      taskDates = [safeParseDate(project.startDate), safeParseDate(project.endDate)].filter(d => d > 0);
+      if (taskDates.length === 0) taskDates = [Date.now()];
+    }
+    const validProjectStart = safeParseDate(project.startDate);
+    const validProjectEnd = safeParseDate(project.endDate);
+    
+    let start = Math.min(...taskDates, validProjectStart > 0 ? validProjectStart : taskDates[0]);
+    let end = Math.max(...taskDates, validProjectEnd > 0 ? validProjectEnd : taskDates[0]);
 
     // Add padding to timeline (1 week before, 4 weeks after)
     const startDate = new Date(start);
@@ -239,7 +270,6 @@ export default function GanttTab({ project }: { project: Project }) {
     };
   }, [allTasks, computedBounds, project, viewMode]);
 
-  const pixelsPerDay = viewMode === 'diario' ? 60 : viewMode === 'semanal' ? 12 : 4;
   const timelineWidth = totalDays * pixelsPerDay;
   const tickWidth = viewMode === 'diario' ? pixelsPerDay : viewMode === 'semanal' ? pixelsPerDay * 7 : pixelsPerDay * 30;
 
@@ -382,6 +412,7 @@ export default function GanttTab({ project }: { project: Project }) {
             </Button>
           </div>
 
+          {/* View Mode Discrete Buttons */}
           <div className="bg-muted/50 p-1 rounded-xl flex gap-1 border border-border/40">
             <Button 
               variant={viewMode === 'diario' ? 'secondary' : 'ghost'} 
@@ -389,7 +420,7 @@ export default function GanttTab({ project }: { project: Project }) {
               className={`text-xs h-8 px-4 rounded-lg transition-all ${viewMode === 'diario' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => setViewMode('diario')}
             >
-              Diário
+              Dia
             </Button>
             <Button 
               variant={viewMode === 'semanal' ? 'secondary' : 'ghost'} 
@@ -397,7 +428,7 @@ export default function GanttTab({ project }: { project: Project }) {
               className={`text-xs h-8 px-4 rounded-lg transition-all ${viewMode === 'semanal' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => setViewMode('semanal')}
             >
-              Semanal
+              Semana
             </Button>
             <Button 
               variant={viewMode === 'mensal' ? 'secondary' : 'ghost'} 
@@ -405,11 +436,11 @@ export default function GanttTab({ project }: { project: Project }) {
               className={`text-xs h-8 px-4 rounded-lg transition-all ${viewMode === 'mensal' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => setViewMode('mensal')}
             >
-              Mensal
+              Mês
             </Button>
           </div>
-          
-          <Button 
+
+          <Button
             variant={showCriticalPath ? 'secondary' : 'outline'} 
             size="sm" 
             className={`h-8 rounded-lg gap-2 text-xs font-semibold px-4 transition-all ${showCriticalPath ? 'bg-destructive/10 border-destructive/30 text-destructive' : 'text-muted-foreground hover:text-foreground'}`}
@@ -444,10 +475,26 @@ export default function GanttTab({ project }: { project: Project }) {
               Atividade
             </div>
             <div className="flex-1 overflow-y-hidden">
-              {visibleTasks.length === 0 ? (
-                <div className="p-8 text-center text-xs text-muted-foreground italic">Nenhuma tarefa visível</div>
+              {/* OBRA Summary Row — always pinned at top */}
+              {projectSummary && (
+                <div className="h-10 flex items-center px-4 border-b-2 border-primary/30 bg-primary/[0.05] shrink-0">
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="w-4 shrink-0" />
+                    <span className="text-[11px] font-black text-primary uppercase tracking-tight flex-1 truncate">
+                      {project.name}
+                    </span>
+                    <span className="text-[10px] font-black text-primary tabular-nums shrink-0">
+                      {projectSummary.totalProgress}%
+                    </span>
+                  </div>
+                </div>
+              )}
+              {filteredTasks.length === 0 ? (
+                <div className="p-8 text-center text-xs text-muted-foreground italic">
+                  {hasFilter ? 'Nenhuma atividade no período selecionado.' : 'Nenhuma tarefa visível'}
+                </div>
               ) : (
-                visibleTasks.map(task => {
+                filteredTasks.map(task => {
                   const depth = depthMap.get(task.id) || 0;
                   const hasChildren = hasChildrenMap.get(task.id) || false;
                   const isCollapsed = collapsedTasks.has(task.id);
@@ -488,7 +535,15 @@ export default function GanttTab({ project }: { project: Project }) {
           </div>
 
           {/* Timeline */}
-          <div ref={timelineRef} className="flex-1 overflow-x-visible overflow-y-visible relative scrollbar-thin scrollbar-thumb-muted-foreground/20">
+          <div
+            ref={timelineRef}
+            className="flex-1 overflow-x-auto overflow-y-visible relative scrollbar-thin scrollbar-thumb-muted-foreground/20"
+            onScroll={e => {
+              const el = e.currentTarget;
+              const maxScroll = el.scrollWidth - el.clientWidth;
+              if (maxScroll > 0) setScrollFraction(el.scrollLeft / maxScroll);
+            }}
+          >
             <div style={{ width: Math.max(600, timelineWidth), minHeight: '100%' }} className="relative">
               {/* Timeline Header */}
               <div className="sticky top-0 z-20 h-12 border-b border-border/40 bg-background/95 backdrop-blur-sm flex">
@@ -496,7 +551,7 @@ export default function GanttTab({ project }: { project: Project }) {
                   <div 
                     key={i} 
                     style={{ width: tickWidth }} 
-                    className="border-r border-border/10 h-12 flex flex-col justify-center px-3 text-[10px] font-bold shrink-0"
+                    className="border-r border-border/10 h-12 flex flex-col justify-center items-center px-1 text-[10px] font-bold shrink-0 overflow-hidden"
                   >
                     <span className="text-muted-foreground/60 uppercase tracking-tighter">
                       {viewMode === 'mensal' 
@@ -542,23 +597,23 @@ export default function GanttTab({ project }: { project: Project }) {
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(148, 163, 184, 0.5)" />
                   </marker>
                 </defs>
-                {visibleTasks.map((task, idx) => 
+                {filteredTasks.map((task, idx) => 
                   task.predecessors.map(predId => {
                     const predTask = allTasks.find(t => t.id === predId);
                     if (!predTask) return null;
                     
-                    const predIdxInVisible = visibleTasks.findIndex(t => t.id === predId);
-                    if (predIdxInVisible === -1) return null; // Predecessor hidden
+                    const predIdxInFiltered = filteredTasks.findIndex(t => t.id === predId);
+                    if (predIdxInFiltered === -1) return null; // Predecessor hidden
                     const predBounds = computedBounds.get(predTask.id);
                     const taskBounds = computedBounds.get(task.id);
 
                     const isPredSummary = hasChildrenMap.get(predTask.id);
                     const predHasNoDates = !predTask.startDate || !predTask.endDate;
-                    if (predHasNoDates) return null; // Não desenha setas a partir de tarefas sem data
+                    if (predHasNoDates) return null;
                     
                     const isTaskSummary = hasChildrenMap.get(task.id);
                     const taskHasNoDates = !task.startDate || !task.endDate;
-                    if (taskHasNoDates) return null; // Não desenha setas para tarefas sem data
+                    if (taskHasNoDates) return null;
 
                     const todayStr = new Date().toISOString().split('T')[0];
                     
@@ -570,10 +625,12 @@ export default function GanttTab({ project }: { project: Project }) {
                     
                     const taskStartStr = (isTaskSummary && taskBounds ? taskBounds.start : task.startDate) || todayStr;
                     
+                    // +40 offset accounts for the OBRA summary row above all task rows
+                    const obraOffset = projectSummary ? 40 : 0;
                     const startX = predStartPos + predWidth;
-                    const startY = predIdxInVisible * 40 + 20;
+                    const startY = predIdxInFiltered * 40 + 20 + obraOffset;
                     const endX = getPosition(taskStartStr);
-                    const endY = idx * 40 + 20;
+                    const endY = idx * 40 + 20 + obraOffset;
                     
                     // Arrow logic: Always keep the line flowing forward (to the right) cleanly.
                     // If the successor starts BEFORE the predecessor finishes (overlap),
@@ -611,21 +668,21 @@ export default function GanttTab({ project }: { project: Project }) {
 
                 return (
                   <div
-                    className="absolute top-12 bottom-0 z-20 cursor-pointer"
+                    className="absolute top-0 bottom-0 z-30 cursor-pointer"
                     style={{ left: todayPos, width: '30px', marginLeft: '-15px' }}
                     onMouseEnter={() => setTodayHovered(true)}
                     onMouseLeave={() => setTodayHovered(false)}
                   >
-                    {/* Header badge (Always visible) */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                    {/* Header badge — floats inside sticky header area (z-30 > header z-20) */}
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col items-center z-30 pointer-events-none">
                       <div className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-md whitespace-nowrap">
                         Hoje
                       </div>
                       <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-red-500" />
                     </div>
 
-                    {/* Vertical line (Always visible) */}
-                    <div className="absolute top-5 bottom-0 left-1/2 -translate-x-1/2 w-[2px] bg-red-500/70" />
+                    {/* Vertical line — starts exactly at the rows area, below the header */}
+                    <div className="absolute top-12 bottom-0 left-1/2 -translate-x-1/2 w-[2px] bg-red-500/70" />
 
                     {/* Content visible only on hover */}
                     {todayHovered && (
@@ -692,7 +749,37 @@ export default function GanttTab({ project }: { project: Project }) {
 
               {/* Rows and Bars */}
               <div className="relative pt-0">
-                {visibleTasks.map((task, idx) => {
+                {/* OBRA project-level bar */}
+                {projectSummary && (() => {
+                  const obraStartPos = getPosition(projectSummary.startStr);
+                  const obraEndPos   = getPosition(projectSummary.endStr) + pixelsPerDay;
+                  const obraWidth    = Math.max(8, obraEndPos - obraStartPos);
+                  return (
+                    <div className="h-10 relative border-b-2 border-primary/30 bg-primary/[0.05]">
+                      <div className="absolute top-1 z-10" style={{ left: obraStartPos, width: obraWidth }}>
+                        {/* Progress track */}
+                        <div className="absolute top-0 left-0 right-0 h-4 rounded-sm overflow-hidden bg-primary/15">
+                          <div
+                            className="h-full bg-primary transition-all duration-1000 ease-out relative"
+                            style={{ width: `${projectSummary.totalProgress}%` }}
+                          >
+                            <div className="absolute inset-0 bg-white/15" />
+                          </div>
+                        </div>
+                        {/* Left bracket tip */}
+                        <div className="absolute top-3 left-0 w-0 h-0 border-l-[12px] border-r-0 border-t-[12px] border-transparent border-l-primary" />
+                        {/* Right bracket tip */}
+                        <div className="absolute top-3 right-0 w-0 h-0 border-r-[12px] border-l-0 border-t-[12px] border-transparent border-r-primary" />
+                        {/* Percentage label */}
+                        <div className="absolute top-0.5 flex items-center whitespace-nowrap" style={{ left: obraWidth + 6 }}>
+                          <span className="text-[10px] font-black text-primary tabular-nums">{projectSummary.totalProgress}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {filteredTasks.map((task, idx) => {
                   const isSummary = hasChildrenMap.get(task.id);
                   const bounds = computedBounds.get(task.id);
                   
@@ -764,7 +851,18 @@ export default function GanttTab({ project }: { project: Project }) {
                           <div 
                             className={`absolute top-2 right-0 w-0 h-0 border-l-[0px] border-r-[10px] border-t-[10px] border-transparent ${critical ? 'border-r-status-danger' : 'border-r-slate-800 dark:border-r-slate-200'}`} 
                           />
+
+                          {/* Percentage label — always visible, positioned to the right of the bar */}
+                          <div
+                            className={`absolute top-0 flex items-center whitespace-nowrap pointer-events-none`}
+                            style={{ left: width + 6 }}
+                          >
+                            <span className={`text-[10px] font-black tabular-nums ${critical ? 'text-status-danger' : 'text-slate-700 dark:text-slate-300'}`}>
+                              {Math.round(computedProgress.get(task.id) || 0)}%
+                            </span>
+                          </div>
                         </div>
+
                       ) : (
                         <>
                           {/* Baseline ghost bar (shown behind main bar for rescheduled tasks) */}
@@ -807,6 +905,93 @@ export default function GanttTab({ project }: { project: Project }) {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ── Minimap Navigation Bar ── */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest">Navegação do Cronograma</span>
+          <span className="text-[9px] font-semibold text-muted-foreground/50 tabular-nums">
+            {new Date(minDate).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })} → {new Date(maxDate).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })}
+          </span>
+        </div>
+
+        {/* Minimap track */}
+        <div
+          ref={minimapRef}
+          className="relative h-7 rounded-lg bg-muted/30 border border-border/40 overflow-hidden cursor-pointer select-none"
+          onClick={e => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const fraction = (e.clientX - rect.left) / rect.width;
+            if (timelineRef.current) {
+              const maxScroll = timelineRef.current.scrollWidth - timelineRef.current.clientWidth;
+              timelineRef.current.scrollLeft = fraction * maxScroll;
+              setScrollFraction(fraction);
+            }
+          }}
+        >
+          {/* Task mini-bars */}
+          {allTasks.filter(t => !hasChildrenMap.get(t.id) && t.startDate && t.endDate).map(t => {
+            const s = safeParseDate(t.startDate);
+            const e = safeParseDate(t.endDate);
+            const span = maxDate - minDate;
+            const left = ((s - minDate) / span) * 100;
+            const width = Math.max(0.3, ((e - s) / span) * 100);
+            const color =
+              t.status === 'completed' ? 'bg-status-ok' :
+              t.status === 'in_progress' ? 'bg-blue-500' :
+              t.status === 'rescheduled' ? 'bg-amber-400' :
+              t.status === 'delayed' ? 'bg-status-danger' :
+              'bg-slate-400/60';
+            return (
+              <div
+                key={t.id}
+                className={`absolute top-2.5 h-2 rounded-full opacity-60 ${color}`}
+                style={{ left: `${left}%`, width: `${width}%`, minWidth: 2 }}
+              />
+            );
+          })}
+
+          {/* Today mark */}
+          {(() => {
+            const todayTs = new Date().setHours(12,0,0,0);
+            if (todayTs < minDate || todayTs > maxDate) return null;
+            const frac = (todayTs - minDate) / (maxDate - minDate);
+            return <div className="absolute top-0 bottom-0 w-[2px] bg-red-500/70" style={{ left: `${frac * 100}%` }} />;
+          })()}
+
+          {/* Viewport handle */}
+          {timelineRef.current && (() => {
+            const el = timelineRef.current;
+            const ratio = el.clientWidth / Math.max(1, el.scrollWidth);
+            const handleW = Math.max(4, ratio * 100);
+            const handleLeft = scrollFraction * (100 - handleW);
+            return (
+              <div
+                className="absolute top-0 bottom-0 rounded-lg border-2 border-primary/60 bg-primary/10 cursor-grab active:cursor-grabbing"
+                style={{ left: `${handleLeft}%`, width: `${handleW}%` }}
+                onMouseDown={e => {
+                  e.stopPropagation();
+                  const startX = e.clientX;
+                  const startFrac = scrollFraction;
+                  const mmRect = minimapRef.current!.getBoundingClientRect();
+                  const onMove = (mv: MouseEvent) => {
+                    const delta = (mv.clientX - startX) / mmRect.width;
+                    const newFrac = Math.max(0, Math.min(1, startFrac + delta / (1 - handleW / 100)));
+                    setScrollFraction(newFrac);
+                    if (timelineRef.current) {
+                      const maxScroll = timelineRef.current.scrollWidth - timelineRef.current.clientWidth;
+                      timelineRef.current.scrollLeft = newFrac * maxScroll;
+                    }
+                  };
+                  const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                  window.addEventListener('mousemove', onMove);
+                  window.addEventListener('mouseup', onUp);
+                }}
+              />
+            );
+          })()}
         </div>
       </div>
 

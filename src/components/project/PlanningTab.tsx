@@ -298,22 +298,55 @@ export default function PlanningTab({ project }: { project: Project }) {
     }
     await updateTask(updated);
 
-    // ── Propagate to successors: cascade date changes ──
+    // ── Propagate to successors: cascade date changes through the entire chain ──
     if (field === 'endDate' || field === 'duration' || field === 'startDate' || field === 'predecessors') {
       const finalEndDate = updated.endDate;
       if (!finalEndDate) return;
-      
-      const successors = allTasks.filter(t => t.predecessors.includes(task.id));
-      for (const succ of successors) {
-        const succStart = addBusinessDays(finalEndDate, 2);
-        const succEnd = addBusinessDays(succStart, succ.duration || 1);
-        
-        if (succStart && succEnd && (succStart !== succ.startDate || succEnd !== succ.endDate)) {
-          await updateTask({
-            ...succ,
-            startDate: succStart,
-            endDate: succEnd,
-          });
+
+      // BFS queue: each entry holds the predecessor ID and its new end date
+      // We use a map to track the new end dates for already-processed tasks,
+      // so that tasks with multiple predecessors pick the latest end date.
+      const newEndByTaskId = new Map<string, string>();
+      newEndByTaskId.set(task.id, finalEndDate);
+
+      const queue: Array<{ predId: string; predNewEnd: string }> = [
+        { predId: task.id, predNewEnd: finalEndDate },
+      ];
+      const visited = new Set<string>();
+      visited.add(task.id);
+
+      while (queue.length > 0) {
+        const { predId, predNewEnd } = queue.shift()!;
+
+        // Find all tasks that list predId as a predecessor
+        const successors = allTasks.filter(t => t.predecessors.includes(predId) && t.id !== task.id);
+
+        for (const succ of successors) {
+          // If this successor has multiple predecessors, we need the latest end among all of them
+          const latestPredEnd = succ.predecessors.reduce((latest, pid) => {
+            const pEnd = newEndByTaskId.get(pid) ?? (allTasks.find(t => t.id === pid)?.endDate ?? '');
+            return pEnd > latest ? pEnd : latest;
+          }, '');
+
+          const succStart = addBusinessDays(latestPredEnd || predNewEnd, 2);
+          const succEnd = addBusinessDays(succStart, succ.duration || 1);
+
+          if (succStart && succEnd && (succStart !== succ.startDate || succEnd !== succ.endDate)) {
+            await updateTask({
+              ...succ,
+              startDate: succStart,
+              endDate: succEnd,
+            });
+          }
+
+          // Track the new end date so downstream successors can use it
+          newEndByTaskId.set(succ.id, succEnd);
+
+          // Continue down the chain (even if dates didn't change, in case further tasks depend on it)
+          if (!visited.has(succ.id)) {
+            visited.add(succ.id);
+            queue.push({ predId: succ.id, predNewEnd: succEnd });
+          }
         }
       }
     }

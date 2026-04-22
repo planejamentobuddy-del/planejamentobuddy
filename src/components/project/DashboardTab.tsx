@@ -1,8 +1,9 @@
 import React, { useState, useMemo, createContext, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate, isCriticalPath, getCurrentWeek, calculateSCurve, safeParseDate, getProjectPlannedEnd } from '@/types/project';
+import { Project, Task, getProjectProgress, getProjectStatus, getEstimatedEndDate, isCriticalPath, getCurrentWeek, calculateSCurve, safeParseDate, getProjectPlannedEnd } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
-import { AlertTriangle, CheckCircle, Clock, TrendingUp, Shield, CalendarClock, Info, HeartPulse, Zap, Milestone, Gauge, Activity, Edit2, Check, X, HelpCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, TrendingUp, Shield, CalendarClock, Info, HeartPulse, Zap, Milestone, Gauge, Activity, Edit2, Check, X, HelpCircle, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { RescheduleHistoryModal } from './RescheduleHistoryModal';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -16,6 +17,8 @@ export default function DashboardTab({ project }: { project: Project }) {
   const [isAdvanced, setIsAdvanced] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isEditingMeta, setIsEditingMeta] = useState(false);
+  const [historyTask, setHistoryTask] = useState<Task | null>(null);
+  const [showAllRescheduled, setShowAllRescheduled] = useState(false);
   const [tempMeta, setTempMeta] = useState(project.endDate);
   const [, setSearchParams] = useSearchParams();
   const { getTasksForProject, getPlansForProject, getHistoryForProject, getConstraintsForProject, updateProject } = useProjects();
@@ -146,6 +149,16 @@ export default function DashboardTab({ project }: { project: Project }) {
     return diff > 0 ? diff : 0;
   }, [plannedEnd, project.endDate]);
 
+  // Verifica se hoje já passou da meta contratual e a obra ainda não foi concluída
+  const overdueByDays = useMemo(() => {
+    if (progress >= 100) return 0;
+    const meta = safeParseDate(project.endDate);
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const diff = Math.ceil((today.getTime() - meta) / 86400000);
+    return diff > 0 ? diff : 0;
+  }, [project.endDate, progress]);
+
   // PPC history data
   const ppcChartData = history.sort((a, b) => a.week.localeCompare(b.week)).map(h => ({
     week: h.weekLabel,
@@ -157,8 +170,17 @@ export default function DashboardTab({ project }: { project: Project }) {
     : '';
 
   // Alerts
-  const alerts: { text: string; type: 'warning' | 'danger'; onClick?: () => void }[] = [];
-  
+  const alerts: { text: string; type: 'warning' | 'danger'; critical?: boolean; onClick?: () => void }[] = [];
+
+  // Alerta máximo: obra fora do prazo contratual
+  if (overdueByDays > 0) {
+    alerts.push({
+      text: `⚠️ OBRA ATRASADA — ${overdueByDays} dia${overdueByDays !== 1 ? 's' : ''} além da Meta Contratual (${new Date(safeParseDate(project.endDate)).toLocaleDateString('pt-BR')}). Execução atual: ${progress}% concluído.`,
+      type: 'danger',
+      critical: true,
+    });
+  }
+
   if (spiInfo.alertType) {
     alerts.push({ text: `SPI ${spiInfo.status} (${spi}). ${spiInfo.message}`, type: spiInfo.alertType as any });
   }
@@ -554,9 +576,22 @@ export default function DashboardTab({ project }: { project: Project }) {
                   </TooltipProvider>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <p className={`text-sm font-bold ${delayDays > 0 ? 'text-status-danger' : 'text-status-ok'}`}>
-                    {delayDays > 0 ? `${delayDays} dias de atraso` : 'Dentro do Prazo'}
-                  </p>
+                  {overdueByDays > 0 ? (
+                    <div className="flex flex-col gap-0.5">
+                      <p className="text-sm font-black text-status-danger animate-pulse">
+                        🚨 Obra Atrasada
+                      </p>
+                      <p className="text-[10px] font-bold text-status-danger/80">
+                        {overdueByDays} dia{overdueByDays !== 1 ? 's' : ''} além da meta
+                      </p>
+                    </div>
+                  ) : delayDays > 0 ? (
+                    <p className="text-sm font-bold text-status-danger">
+                      {delayDays} dias de atraso
+                    </p>
+                  ) : (
+                    <p className="text-sm font-bold text-status-ok">Dentro do Prazo</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -609,14 +644,23 @@ export default function DashboardTab({ project }: { project: Project }) {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1 * i }}
                 onClick={alert.onClick}
-                className={`flex items-center gap-3 px-6 py-4 rounded-2xl border ${alert.onClick ? 'cursor-pointer hover:scale-[1.01] transition-transform' : ''} ${
-                  alert.type === 'danger'
+                className={`flex items-center gap-3 px-6 py-4 rounded-2xl border ${
+                  alert.onClick ? 'cursor-pointer hover:scale-[1.01] transition-transform' : ''
+                } ${
+                  alert.critical
+                    ? 'bg-destructive/15 border-destructive/50 shadow-[0_0_0_1px_hsl(var(--destructive)/0.3)] ring-1 ring-destructive/20'
+                    : alert.type === 'danger'
                     ? 'bg-destructive/10 border-destructive/20'
                     : 'bg-status-warning/10 border-status-warning/20'
                 }`}
               >
-                <AlertTriangle className={`w-5 h-5 shrink-0 ${alert.type === 'danger' ? 'text-destructive' : 'text-status-warning'}`} />
-                <span className="text-sm font-bold text-foreground leading-tight">{alert.text}</span>
+                <AlertTriangle className={`w-5 h-5 shrink-0 ${
+                  alert.critical ? 'text-destructive animate-pulse' :
+                  alert.type === 'danger' ? 'text-destructive' : 'text-status-warning'
+                }`} />
+                <span className={`text-sm font-bold leading-tight ${
+                  alert.critical ? 'text-destructive' : 'text-foreground'
+                }`}>{alert.text}</span>
               </motion.div>
             ))}
           </div>
@@ -768,36 +812,72 @@ export default function DashboardTab({ project }: { project: Project }) {
               </div>
             </div>
 
-            {topRescheduled.length > 0 && (
+            {rescheduledTasks.length > 0 && (
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Mais Reprogramadas</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Tarefas Reprogramadas</p>
+                  <span className="text-[10px] text-muted-foreground italic">Clique em 🕐 para ver o histórico</span>
+                </div>
                 <div className="space-y-2">
-                  {topRescheduled.map((t, i) => (
-                    <div key={t.id} className="flex items-center gap-3">
+                  {(showAllRescheduled ? rescheduledTasks : topRescheduled).map((t, i) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center gap-3 group hover:bg-amber-500/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors cursor-default"
+                    >
                       <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
                         i === 0 ? 'bg-amber-500 text-white' :
                         i === 1 ? 'bg-amber-500/50 text-amber-700' :
-                        'bg-muted text-muted-foreground'
+                        i === 2 ? 'bg-muted text-muted-foreground' :
+                        'bg-muted/50 text-muted-foreground/60'
                       }`}>{i + 1}</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-foreground truncate">{t.name}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-amber-500 rounded-full"
-                              style={{ width: `${Math.min(100, ((t.rescheduleCount || 0) / Math.max(1, topRescheduled[0].rescheduleCount || 1)) * 100)}%` }}
+                              className="h-full bg-amber-500 rounded-full transition-all"
+                              style={{ width: `${Math.min(100, ((t.rescheduleCount || 0) / Math.max(1, topRescheduled[0]?.rescheduleCount || 1)) * 100)}%` }}
                             />
                           </div>
                           <span className="text-[10px] font-black text-amber-600 shrink-0">{t.rescheduleCount}x</span>
                         </div>
                       </div>
+                      {/* History button */}
+                      <button
+                        onClick={() => setHistoryTask(t)}
+                        title="Ver histórico de reprogramações"
+                        className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-amber-600 hover:bg-amber-500/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                      >
+                        <History className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ))}
                 </div>
+
+                {/* Show all / collapse toggle */}
+                {rescheduledTasks.length > 3 && (
+                  <button
+                    onClick={() => setShowAllRescheduled(v => !v)}
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 text-[11px] font-bold text-muted-foreground hover:text-amber-600 transition-colors py-1.5 rounded-lg hover:bg-amber-500/5"
+                  >
+                    {showAllRescheduled ? (
+                      <><ChevronUp className="w-3.5 h-3.5" /> Mostrar menos</>
+                    ) : (
+                      <><ChevronDown className="w-3.5 h-3.5" /> Ver todas ({rescheduledTasks.length} tarefas)</>
+                    )}
+                  </button>
+                )}
               </div>
             )}
           </motion.div>
         )}
+
+        {/* Reschedule History Modal */}
+        <RescheduleHistoryModal
+          task={historyTask}
+          isOpen={!!historyTask}
+          onClose={() => setHistoryTask(null)}
+        />
       </div>
     </TooltipProvider>
   );
