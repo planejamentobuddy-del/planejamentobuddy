@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,12 +19,22 @@ const statusConfig = {
 };
 
 export default function Index() {
-  const { projects, addProject, getTasksForProject, loading, tasks, constraints, plans } = useProjects();
+  const { projects, addProject, deleteProject, getTasksForProject, loading, tasks, constraints, plans } = useProjects();
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', startDate: '', endDate: '', description: '' });
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    await deleteProject(deleteConfirm);
+    setDeleting(false);
+    setDeleteConfirm(null);
+  };
 
   const handleCreate = async () => {
     if (!form.name || !form.startDate || !form.endDate) return;
@@ -149,6 +160,7 @@ export default function Index() {
                   key={project.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ delay: i * 0.05 }}
                   className="card-elevated p-6 cursor-pointer group hover:border-primary/40 relative overflow-hidden"
                   onClick={() => navigate(`/obra/${project.id}`)}
@@ -159,9 +171,18 @@ export default function Index() {
                     <h3 className="font-display font-black text-foreground text-xl leading-tight group-hover:text-primary transition-colors">
                       {project.name}
                     </h3>
-                    <span className={`text-[10px] px-2.5 py-1 rounded-lg font-black uppercase tracking-widest ${cfg.class}`}>
-                       {cfg.label}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-2.5 py-1 rounded-lg font-black uppercase tracking-widest ${cfg.class}`}>
+                         {cfg.label}
+                      </span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm(project.id); }}
+                        className="opacity-0 group-hover:opacity-100 transition-all duration-200 w-7 h-7 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-600 hover:scale-110"
+                        title="Excluir obra"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <div className="mb-6 relative z-10">
                     <div className="flex justify-between text-xs font-bold mb-2 uppercase tracking-tighter">
@@ -191,6 +212,31 @@ export default function Index() {
           </div>
         )}
       </main>
+
+      {/* Confirmação de exclusão */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(v) => !v && setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-lg flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-500" />
+              Excluir Obra?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Esta ação é <strong>irreversível</strong>. Todos os dados da obra serão excluídos permanentemente, incluindo tarefas, cronograma, planejamento Lean, diário de obras e histórico.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 text-white focus:ring-red-600"
+            >
+              {deleting ? 'Excluindo...' : 'Sim, excluir obra'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
