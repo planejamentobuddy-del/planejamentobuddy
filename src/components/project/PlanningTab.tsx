@@ -408,7 +408,13 @@ export default function PlanningTab({ project }: { project: Project }) {
     return (
       <tr
         key={task.id}
-        className={`border-b border-border/50 transition-colors border-l-4 ${statusBorderColor} ${effectiveOverdue ? 'bg-destructive/[0.02]' : 'hover:bg-muted/30'}`}
+        className={`border-b border-border/50 transition-colors border-l-4 ${statusBorderColor} ${
+          effectiveOverdue
+            ? 'bg-destructive/[0.02]'
+            : isStage
+              ? 'bg-primary/[0.05] hover:bg-primary/[0.08]'
+              : 'hover:bg-muted/30'
+        }`}
       >
         {/* 1. Etapa / Atividade */}
         <td className="py-2.5 px-3 border-r border-border/40 min-w-0">
