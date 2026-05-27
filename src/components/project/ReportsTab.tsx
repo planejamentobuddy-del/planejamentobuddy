@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { Project, getProjectProgress } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
-import { exportToExcel, exportToPdf, formatCurrency, formatDate } from '@/lib/exportUtils';
+import {
+  exportToExcel, exportToPdf, formatCurrency, formatDate,
+  exportHierarchicalToPdf, exportHierarchicalToExcel, HierarchicalRow
+} from '@/lib/exportUtils';
 import { 
   FileText, TableProperties, GanttChart, 
   Triangle, Wallet, Download, FileSpreadsheet,
@@ -44,77 +47,138 @@ export default function ReportsTab({ project }: ReportsTabProps) {
     'in_progress': 'Em Andamento',
     'completed': 'Concluído',
     'delayed': 'Atrasado',
+    'rescheduled': 'Reprogramada',
     'open': 'Aberta',
     'closed': 'Resolvida'
   };
 
+  // ── Helper: monta linhas hierárquicas (etapas + subetapas em ordem) ─────────
+  const buildHierarchicalRows = (
+    withPredecessors = false
+  ): HierarchicalRow[] => {
+    const stages = tasks
+      .filter(t => !t.parentId)
+      .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+    const rows: HierarchicalRow[] = [];
+
+    stages.forEach((stage, sIdx) => {
+      const subs = tasks
+        .filter(t => t.parentId === stage.id)
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+      // Agrega datas e progresso da etapa a partir das subetapas
+      const subStarts = subs.map(t => t.startDate).filter(Boolean).sort();
+      const subEnds   = subs.map(t => t.endDate).filter(Boolean).sort();
+      const aggStart  = subStarts[0] || stage.startDate;
+      const aggEnd    = subEnds[subEnds.length - 1] || stage.endDate;
+
+      const totalDur  = subs.reduce((s, t) => s + Math.max(1, t.duration), 0);
+      const weightedP = subs.reduce((s, t) => s + t.percentComplete * Math.max(1, t.duration), 0);
+      const aggPct    = subs.length > 0 && totalDur > 0
+        ? Math.round(weightedP / totalDur)
+        : stage.percentComplete;
+
+      // Linha de ETAPA — destaque visual com "■" no Excel
+      const stageRow: HierarchicalRow = {
+        _isStage: true,
+        'Nº':           `${sIdx + 1}`,
+        'Nome':         `■ ${stage.name.toUpperCase()}`,
+        'Início':       formatDate(subs.length > 0 ? aggStart : stage.startDate),
+        'Fim':          formatDate(subs.length > 0 ? aggEnd   : stage.endDate),
+        'Duração (d)':  subs.length > 0
+          ? String(subs.reduce((s, t) => s + (t.duration || 0), 0))
+          : String(stage.duration || 0),
+        'Progresso':    `${aggPct}%`,
+        'Responsável':  stage.responsible || '-',
+        'Status':       statusMap[stage.status] || stage.status,
+      };
+      if (withPredecessors) {
+        stageRow['Predecessoras'] = '-';
+      }
+      rows.push(stageRow);
+
+      // Linhas de SUBETAPA — recuadas com "  └ "
+      subs.forEach((sub, tIdx) => {
+        const predNames = (sub.predecessors || [])
+          .map(pid => tasks.find(t => t.id === pid)?.name || pid)
+          .join(', ') || '-';
+
+        const subRow: HierarchicalRow = {
+          _isStage:      false,
+          'Nº':          `  ${sIdx + 1}.${tIdx + 1}`,
+          'Nome':        `   \u2514 ${sub.name}`,
+          'Início':      formatDate(sub.startDate),
+          'Fim':         formatDate(sub.endDate),
+          'Duração (d)': String(sub.duration || 0),
+          'Progresso':   `${sub.percentComplete}%`,
+          'Responsável': sub.responsible || '-',
+          'Status':      statusMap[sub.status] || sub.status,
+        };
+        if (withPredecessors) {
+          subRow['Predecessoras'] = predNames;
+        }
+        rows.push(subRow);
+      });
+    });
+
+    return rows;
+  };
+
   // --- PLANEJAMENTO ---
-  const handleExportPlanejamento = (format: 'pdf' | 'excel') => {
-    const data = tasks.map(t => ({
-      Nome: t.name,
-      'Início': formatDate(t.startDate),
-      'Fim': formatDate(t.endDate),
-      'Duração (dias)': t.duration,
-      'Progresso': `${t.percentComplete}%`,
-      'Responsável': t.responsible || '-',
-      'Status': statusMap[t.status] || t.status
-    }));
+  const handleExportPlanejamento = (fmt: 'pdf' | 'excel') => {
+    const rows = buildHierarchicalRows(true);
 
     const cols = [
-      { header: 'Nome', key: 'Nome', width: 'auto' },
-      { header: 'Início', key: 'Início', width: 20 },
-      { header: 'Fim', key: 'Fim', width: 20 },
-      { header: 'Duração', key: 'Duração (dias)', width: 15 },
-      { header: 'Progresso', key: 'Progresso', width: 20 },
-      { header: 'Responsável', key: 'Responsável', width: 30 },
-      { header: 'Status', key: 'Status', width: 25 },
+      { header: 'Nº',           key: 'Nº',           width: 10  },
+      { header: 'Nome',         key: 'Nome',          width: 60  },
+      { header: 'Início',       key: 'Início',        width: 22  },
+      { header: 'Fim',          key: 'Fim',           width: 22  },
+      { header: 'Dur. (d)',     key: 'Duração (d)',   width: 14  },
+      { header: 'Progresso',    key: 'Progresso',     width: 18  },
+      { header: 'Responsável',  key: 'Responsável',   width: 30  },
+      { header: 'Status',       key: 'Status',        width: 25  },
+      { header: 'Predecessoras',key: 'Predecessoras', width: 45  },
     ] as any;
 
-    if (format === 'excel') {
-      exportToExcel(`Planejamento_${project.name}`, 'Planejamento', data, cols);
+    if (fmt === 'excel') {
+      exportHierarchicalToExcel(`Planejamento_${project.name}`, 'Planejamento', rows, cols);
     } else {
-      exportToPdf(
-        `Planejamento_${project.name}`, 
+      exportHierarchicalToPdf(
+        `Planejamento_${project.name}`,
         'Relatório de Planejamento de Tarefas',
         { name: project.name },
-        data, cols
+        rows, cols,
+        { orientation: 'landscape' }
       );
     }
   };
 
-  // --- GANTT ---
-  const handleExportGantt = (format: 'pdf' | 'excel') => {
-    // Gantt usually emphasizes dependencies and timeline
-    const data = tasks.map(t => {
-      const parent = t.parentId ? tasks.find(pt => pt.id === t.parentId)?.name : '-';
-      return {
-        'Macroetapa': parent,
-        'Tarefa': t.name,
-        'Início': formatDate(t.startDate),
-        'Fim': formatDate(t.endDate),
-        'Predecessoras': t.predecessors?.length > 0 ? t.predecessors.length + ' dep.' : '-',
-        'Progresso': `${t.percentComplete}%`,
-        'Status': statusMap[t.status] || t.status
-      };
-    });
+  // --- GANTT / CRONOGRAMA ---
+  const handleExportGantt = (fmt: 'pdf' | 'excel') => {
+    const rows = buildHierarchicalRows(true);
 
     const cols = [
-      { header: 'Macroetapa', key: 'Macroetapa', width: 35 },
-      { header: 'Tarefa', key: 'Tarefa', width: 40 },
-      { header: 'Início', key: 'Início', width: 20 },
-      { header: 'Fim', key: 'Fim', width: 20 },
-      { header: 'Progresso', key: 'Progresso', width: 20 },
-      { header: 'Status', key: 'Status', width: 25 },
+      { header: 'Nº',           key: 'Nº',           width: 10  },
+      { header: 'Etapa / Atividade', key: 'Nome',    width: 65  },
+      { header: 'Início',       key: 'Início',        width: 22  },
+      { header: 'Fim',          key: 'Fim',           width: 22  },
+      { header: 'Dur. (d)',     key: 'Duração (d)',   width: 14  },
+      { header: 'Progresso',    key: 'Progresso',     width: 18  },
+      { header: 'Responsável',  key: 'Responsável',   width: 30  },
+      { header: 'Status',       key: 'Status',        width: 25  },
+      { header: 'Predecessoras',key: 'Predecessoras', width: 45  },
     ] as any;
 
-    if (format === 'excel') {
-      exportToExcel(`Gantt_${project.name}`, 'Gantt', data, cols);
+    if (fmt === 'excel') {
+      exportHierarchicalToExcel(`Gantt_${project.name}`, 'Cronograma', rows, cols);
     } else {
-      exportToPdf(
-        `Gantt_Cronograma_${project.name}`, 
+      exportHierarchicalToPdf(
+        `Gantt_Cronograma_${project.name}`,
         'Relatório de Cronograma (Gantt)',
         { name: project.name },
-        data, cols
+        rows, cols,
+        { orientation: 'landscape' }
       );
     }
   };
