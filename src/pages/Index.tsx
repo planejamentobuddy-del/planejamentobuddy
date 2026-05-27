@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2 } from 'lucide-react';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
-import { getProjectProgress, getProjectStatus, getEstimatedEndDate } from '@/types/project';
+import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate } from '@/types/project';
 
 const statusConfig = {
   ok: { emoji: '✓', label: 'No Prazo', class: 'status-badge-ok' },
@@ -19,7 +19,7 @@ const statusConfig = {
 };
 
 export default function Index() {
-  const { projects, addProject, deleteProject, getTasksForProject, loading, tasks, constraints, plans } = useProjects();
+  const { projects, addProject, updateProject, deleteProject, getTasksForProject, loading, tasks, constraints, plans } = useProjects();
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -27,6 +27,40 @@ export default function Index() {
   const [form, setForm] = useState({ name: '', startDate: '', endDate: '', description: '' });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editProject, setEditProject] = useState<Project | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', startDate: '', endDate: '', description: '' });
+
+  const startEditing = (project: Project) => {
+    setEditProject(project);
+    setEditForm({
+      name: project.name,
+      startDate: project.startDate,
+      endDate: project.endDate,
+      description: project.description || '',
+    });
+  };
+
+  const closeEditDialog = () => {
+    setEditProject(null);
+    setEditForm({ name: '', startDate: '', endDate: '', description: '' });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editProject) return;
+    if (!editForm.name || !editForm.startDate || !editForm.endDate) return;
+    setSubmitting(true);
+    const success = await updateProject({
+      ...editProject,
+      name: editForm.name,
+      startDate: editForm.startDate,
+      endDate: editForm.endDate,
+      description: editForm.description,
+    });
+    setSubmitting(false);
+    if (success) {
+      closeEditDialog();
+    }
+  };
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
@@ -176,6 +210,13 @@ export default function Index() {
                          {cfg.label}
                       </span>
                       <button
+                        onClick={(e) => { e.stopPropagation(); startEditing(project); }}
+                        className="opacity-0 group-hover:opacity-100 transition-all duration-200 w-7 h-7 flex items-center justify-center rounded-lg bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary-foreground hover:scale-110"
+                        title="Editar obra"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
                         onClick={(e) => { e.stopPropagation(); setDeleteConfirm(project.id); }}
                         className="opacity-0 group-hover:opacity-100 transition-all duration-200 w-7 h-7 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-600 hover:scale-110"
                         title="Excluir obra"
@@ -237,6 +278,54 @@ export default function Index() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edição de obra */}
+      <Dialog open={!!editProject} onOpenChange={(v) => !v && closeEditDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">Editar Obra</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label>Nome da obra</Label>
+              <Input 
+                value={editForm.name} 
+                onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} 
+                placeholder="Ex: Residencial Alfa" 
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Data de início</Label>
+                <Input 
+                  type="date" 
+                  value={editForm.startDate} 
+                  onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))} 
+                />
+              </div>
+              <div>
+                <Label>Previsão de término</Label>
+                <Input 
+                  type="date" 
+                  value={editForm.endDate} 
+                  onChange={e => setEditForm(f => ({ ...f, endDate: e.target.value }))} 
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Descrição</Label>
+              <Textarea 
+                value={editForm.description} 
+                onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} 
+                placeholder="Descrição da obra" 
+              />
+            </div>
+            <Button onClick={handleSaveEdit} className="w-full" disabled={submitting}>
+              {submitting ? 'Salvando...' : 'Salvar Alterações'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
