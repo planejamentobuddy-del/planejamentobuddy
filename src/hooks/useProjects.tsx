@@ -895,7 +895,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ProjectsContext.Provider value={{
-      projects, loading, tasks, resources,
+      projects, loading, tasks, constraints, resources,
       addProject,
       updateProject,
       archiveProject,
