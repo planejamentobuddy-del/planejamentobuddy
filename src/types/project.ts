@@ -7,6 +7,7 @@ export interface Project {
   createdAt: string;
   adminCostTotal?: number;
   adminCostReceived?: number; // computed from payment_receipts sum
+  status?: 'active' | 'archived';
 }
 
 export interface ProjectResource {

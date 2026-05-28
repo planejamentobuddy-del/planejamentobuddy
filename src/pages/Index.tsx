@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil } from 'lucide-react';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -19,7 +19,7 @@ const statusConfig = {
 };
 
 export default function Index() {
-  const { projects, addProject, updateProject, deleteProject, getTasksForProject, loading, tasks, constraints, plans } = useProjects();
+  const { projects, addProject, updateProject, deleteProject, archiveProject, getTasksForProject, loading, tasks, constraints, plans } = useProjects();
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -29,6 +29,14 @@ export default function Index() {
   const [deleting, setDeleting] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editForm, setEditForm] = useState({ name: '', startDate: '', endDate: '', description: '' });
+  const [showArchived, setShowArchived] = useState(false);
+
+  const activeProjects = projects.filter(p => p.status !== 'archived');
+  const archivedProjects = projects.filter(p => p.status === 'archived');
+  const displayedProjects = showArchived ? archivedProjects : activeProjects;
+  
+  const activeTasks = tasks.filter(t => activeProjects.some(p => p.id === t.projectId));
+  const generalProgress = getProjectProgress(activeTasks);
 
   const startEditing = (project: Project) => {
     setEditProject(project);
@@ -184,11 +192,14 @@ export default function Index() {
               <div className="flex-1 bg-background/50 rounded-full h-4 overflow-hidden shadow-inner border border-primary/10">
                 <div 
                   className="h-full rounded-full bg-blue-600 transition-all duration-1000 ease-out shadow-sm"
-                  style={{ width: `${getProjectProgress(tasks)}%` }} 
+                  style={{ width: `${generalProgress}%` }} 
                 />
               </div>
-              <span className="font-black text-3xl text-blue-600">{getProjectProgress(tasks)}%</span>
+              <span className="font-black text-3xl text-blue-600">{generalProgress}%</span>
             </div>
+            <Button variant="outline" className="gap-2 bg-background/50 border-primary/20 text-primary hover:bg-primary/10" onClick={() => navigate('/relatorio-geral')}>
+              <Printer className="w-4 h-4" /> Relatório
+            </Button>
           </div>
         )}
 
@@ -203,8 +214,21 @@ export default function Index() {
             <p className="text-muted-foreground mb-6">Clique em "+ Nova Obra" para começar</p>
           </motion.div>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project, i) => {
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-semibold text-lg text-foreground/80">{showArchived ? 'Obras Arquivadas' : 'Obras Ativas'}</h3>
+              {archivedProjects.length > 0 && (
+                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => setShowArchived(!showArchived)}>
+                  {showArchived ? <Building2 className="w-4 h-4"/> : <Archive className="w-4 h-4"/>}
+                  {showArchived ? 'Ver Obras Ativas' : 'Ver Obras Arquivadas'}
+                </Button>
+              )}
+            </div>
+            {displayedProjects.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">Nenhuma obra encontrada nesta visualização.</div>
+            ) : (
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {displayedProjects.map((project, i) => {
               const tasks = getTasksForProject(project.id);
               const progress = getProjectProgress(tasks);
               const status = getProjectStatus(tasks);
@@ -236,6 +260,13 @@ export default function Index() {
                         title="Editar obra"
                       >
                         <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); archiveProject(project.id, project.status === 'archived' ? 'active' : 'archived'); }}
+                        className="opacity-0 group-hover:opacity-100 transition-all duration-200 w-7 h-7 flex items-center justify-center rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 hover:text-orange-600 hover:scale-110"
+                        title={project.status === 'archived' ? "Restaurar obra" : "Arquivar obra"}
+                      >
+                        {project.status === 'archived' ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); setDeleteConfirm(project.id); }}
@@ -272,6 +303,8 @@ export default function Index() {
               );
             })}
           </div>
+          )}
+          </>
         )}
       </main>
 

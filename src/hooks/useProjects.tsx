@@ -71,6 +71,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           createdAt: p.created_at,
           adminCostTotal: p.admin_cost_total || undefined,
           adminCostReceived: p.admin_cost_received || undefined,
+          status: p.status || 'active',
         })));
       }
       
@@ -244,11 +245,32 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       startDate: data.start_date,
       endDate: data.end_date,
       createdAt: data.created_at,
+      status: 'active',
     };
     setProjects(prev => [newProj, ...prev]);
     toast.success('Obra criada com sucesso!');
     return newProj;
   }, [user]);
+
+  const archiveProject = useCallback(async (id: string, status: 'active' | 'archived') => {
+    const original = [...projects];
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+
+    const { error } = await supabase
+      .from('projects')
+      .update({ status })
+      .eq('id', id);
+
+    if (error) {
+      setProjects(original);
+      console.error('Error archiving project:', error);
+      toast.error('Erro ao alterar status da obra.');
+      return false;
+    }
+    
+    toast.success(status === 'archived' ? 'Obra arquivada com sucesso!' : 'Obra restaurada com sucesso!');
+    return true;
+  }, [projects]);
 
   const updateProject = useCallback(async (p: Project) => {
     const original = [...projects];
@@ -873,8 +895,11 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ProjectsContext.Provider value={{
-      projects, loading, tasks, constraints,
-      addProject, updateProject, deleteProject,
+      projects, loading, tasks, resources,
+      addProject,
+      updateProject,
+      archiveProject,
+      deleteProject,
       getTasksForProject, addTask, updateTask, deleteTask, reorderTasks,
       getPlansForProject, addWeeklyPlan, updateWeeklyPlan, deleteWeeklyPlan,
       getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,
@@ -886,7 +911,6 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       getDailyLogsForProject, addDailyLog, updateDailyLog, deleteDailyLog,
       paymentReceipts,
       getReceiptsForProject, addPaymentReceipt, deletePaymentReceipt,
-      resources,
       getResourcesForProject, addResource, updateResource, deleteResource,
     }}>
       {children}
