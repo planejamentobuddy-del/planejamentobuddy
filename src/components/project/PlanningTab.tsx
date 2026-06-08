@@ -14,6 +14,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useResizableColumns, ResizeHandle } from '@/hooks/useResizableColumns';
 import { Calendar, Users, CheckSquare } from 'lucide-react';
 import {
@@ -75,6 +77,78 @@ function addBusinessDays(startDateStr: string, duration: number): string {
     if (day !== 0 && day !== 6) added++;
   }
   return d.toISOString().split('T')[0];
+}
+
+// ── Searchable Predecessor Picker ──────────────────────────────────────────
+function PredecessorPicker({
+  task,
+  allTaskOptions,
+  allTasks,
+  onChange,
+}: {
+  task: Task;
+  allTaskOptions: { id: string; name: string }[];
+  allTasks: Task[];
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const selectedId = task.predecessors[0] || null;
+  const selectedName = selectedId
+    ? (allTaskOptions.find(t => t.id === selectedId)?.name ?? allTasks.find(t => t.id === selectedId)?.name ?? '—')
+    : '—';
+
+  const filtered = allTaskOptions.filter(t =>
+    t.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="h-8 w-full text-xs text-left flex items-center gap-1 px-1.5 rounded hover:bg-primary/5 transition-colors truncate"
+          title={selectedName}
+        >
+          <span className="truncate flex-1">{selectedName}</span>
+          <ChevronDown className="w-3 h-3 shrink-0 opacity-30" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-0" align="start" side="bottom">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Pesquisar tarefa..."
+            value={search}
+            onValueChange={setSearch}
+            className="text-xs h-9"
+          />
+          <CommandList>
+            <CommandEmpty className="text-xs py-3 text-center text-muted-foreground">Nenhuma tarefa encontrada.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="_none"
+                onSelect={() => { onChange('_none'); setOpen(false); setSearch(''); }}
+                className="text-xs text-muted-foreground"
+              >
+                — Sem predecessora
+              </CommandItem>
+              {filtered.map(t => (
+                <CommandItem
+                  key={t.id}
+                  value={t.id}
+                  onSelect={() => { onChange(t.id); setOpen(false); setSearch(''); }}
+                  className={`text-xs ${selectedId === t.id ? 'bg-primary/10 text-primary font-semibold' : ''}`}
+                >
+                  <span className="truncate">{t.name}</span>
+                  {selectedId === t.id && <span className="ml-auto text-primary">✓</span>}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 
@@ -573,21 +647,12 @@ export default function PlanningTab({ project }: { project: Project }) {
 
         {/* 8. Predecessoras */}
         <td className="py-2.5 px-3 border-r border-border/40">
-          <Select
-            value={task.predecessors[0] || '_none'}
-            onValueChange={v => handleChange(task, 'predecessors', v === '_none' ? [] : [v])}
-          >
-            <SelectTrigger className="h-8 w-full text-xs border-0 bg-transparent px-1 hover:bg-primary/5 transition-colors">
-              <SelectValue placeholder="—" />
-              <ChevronDown className="w-3 h-3 ml-auto opacity-30" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">—</SelectItem>
-              {allTaskOptions.filter(t => t.id !== task.id).map(t => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PredecessorPicker
+            task={task}
+            allTaskOptions={allTaskOptions.filter(t => t.id !== task.id)}
+            allTasks={allTasks}
+            onChange={(v) => handleChange(task, 'predecessors', v === '_none' ? [] : [v])}
+          />
         </td>
 
         {/* 9. Sucessoras */}
