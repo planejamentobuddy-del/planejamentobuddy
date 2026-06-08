@@ -13,6 +13,7 @@ export interface ProjectsContextType {
   addProject: (p: Omit<Project, 'id' | 'createdAt'>) => Promise<Project | null>;
   updateProject: (p: Project) => Promise<boolean>;
   archiveProject: (id: string, status: 'active' | 'archived') => Promise<boolean>;
+  duplicateProject: (id: string) => Promise<Project | null>;
   deleteProject: (id: string) => Promise<void>;
   // Tasks
   getTasksForProject: (projectId: string) => Task[];

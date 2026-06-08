@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer } from 'lucide-react';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -19,7 +19,7 @@ const statusConfig = {
 };
 
 export default function Index() {
-  const { projects, addProject, updateProject, deleteProject, archiveProject, getTasksForProject, loading, tasks, constraints, plans } = useProjects();
+  const { projects, addProject, updateProject, deleteProject, archiveProject, duplicateProject, getTasksForProject, loading, tasks, constraints, plans } = useProjects();
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -260,6 +260,13 @@ export default function Index() {
                         title="Editar obra"
                       >
                         <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); duplicateProject(project.id); }}
+                        className="opacity-0 group-hover:opacity-100 transition-all duration-200 w-7 h-7 flex items-center justify-center rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-600 hover:text-green-700 hover:scale-110"
+                        title="Duplicar obra"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); archiveProject(project.id, project.status === 'archived' ? 'active' : 'archived'); }}

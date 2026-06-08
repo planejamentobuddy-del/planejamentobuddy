@@ -2,7 +2,7 @@ import { useState, useMemo, Fragment, useEffect } from 'react';
 import { Project, Task, TaskStatus, getProjectProgress, StatusComment, safeParseDate } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import StatusCommentLog from './StatusCommentLog';
 import TeamTab from './TeamTab';
 import AssignmentsTab from './AssignmentsTab';
@@ -138,6 +138,11 @@ export default function PlanningTab({ project }: { project: Project }) {
       return next;
     });
   };
+
+  const expandAll = () => setExpandedStages(new Set(stages.map(s => s.id)));
+  const collapseAll = () => setExpandedStages(new Set());
+  const allExpanded = stages.length > 0 && stages.every(s => expandedStages.has(s.id));
+  const allCollapsed = stages.length > 0 && stages.every(s => !expandedStages.has(s.id));
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -676,9 +681,27 @@ export default function PlanningTab({ project }: { project: Project }) {
             </TabsList>
           </div>
           <TabsContent value="schedule" className="m-0 border-0 p-0 shadow-none">
-            <Button onClick={handleAddStage} className="gap-2 rounded-xl px-5 shadow-sm">
-              <Plus className="w-4 h-4" /> Adicionar Etapa
-            </Button>
+            <div className="flex items-center gap-2">
+              {stages.length > 0 && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={allExpanded ? collapseAll : expandAll}
+                    className="gap-2 rounded-xl text-muted-foreground hover:text-foreground"
+                    title={allExpanded ? 'Recolher todas' : 'Expandir todas'}
+                  >
+                    {allExpanded
+                      ? <><ChevronsDownUp className="w-4 h-4" /> Recolher tudo</>
+                      : <><ChevronsUpDown className="w-4 h-4" /> Expandir tudo</>
+                    }
+                  </Button>
+                </>
+              )}
+              <Button onClick={handleAddStage} className="gap-2 rounded-xl px-5 shadow-sm">
+                <Plus className="w-4 h-4" /> Adicionar Etapa
+              </Button>
+            </div>
           </TabsContent>
         </div>
 

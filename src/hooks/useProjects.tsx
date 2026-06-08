@@ -312,6 +312,91 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [projects]);
 
+  const duplicateProject = useCallback(async (id: string) => {
+    const original = projects.find(p => p.id === id);
+    if (!original) return null;
+
+    const { data: newProjData, error: projErr } = await supabase
+      .from('projects')
+      .insert([{
+        name: `${original.name} (cópia)`,
+        description: original.description,
+        start_date: original.startDate,
+        end_date: original.endDate,
+        created_by: user?.id,
+      }])
+      .select()
+      .single();
+
+    if (projErr || !newProjData) {
+      toast.error('Erro ao duplicar obra.');
+      return null;
+    }
+
+    const newProj: Project = {
+      id: newProjData.id,
+      name: newProjData.name,
+      description: newProjData.description || '',
+      startDate: newProjData.start_date,
+      endDate: newProjData.end_date,
+      createdAt: newProjData.created_at,
+      status: 'active',
+    };
+    setProjects(prev => [newProj, ...prev]);
+
+    // Duplicate tasks: stages first, then their subtasks
+    const projectTasks = tasks.filter(t => t.projectId === id);
+    const taskStages = projectTasks.filter(t => !t.parentId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+    for (const stage of taskStages) {
+      const { data: newStage, error: stageErr } = await supabase
+        .from('tasks')
+        .insert([{
+          project_id: newProj.id,
+          name: stage.name,
+          start_date: stage.startDate,
+          end_date: stage.endDate,
+          duration: stage.duration,
+          percent_complete: 0,
+          responsible: stage.responsible,
+          predecessors: [],
+          has_restriction: false,
+          restriction_type: '',
+          status: 'not_started',
+          observations: stage.observations,
+          order_index: stage.orderIndex || 0,
+        }])
+        .select()
+        .single();
+
+      if (!stageErr && newStage) {
+        const subtasks = projectTasks.filter(t => t.parentId === stage.id).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+        for (const sub of subtasks) {
+          await supabase.from('tasks').insert([{
+            project_id: newProj.id,
+            parent_id: newStage.id,
+            name: sub.name,
+            start_date: sub.startDate,
+            end_date: sub.endDate,
+            duration: sub.duration,
+            percent_complete: 0,
+            responsible: sub.responsible,
+            predecessors: [],
+            has_restriction: false,
+            restriction_type: '',
+            status: 'not_started',
+            observations: sub.observations,
+            order_index: sub.orderIndex || 0,
+          }]);
+        }
+      }
+    }
+
+    toast.success('Obra duplicada com sucesso!');
+    setTimeout(() => fetchData(), 600);
+    return newProj;
+  }, [projects, tasks, user, fetchData]);
+
   const getTasksForProject = useCallback((projectId: string) => 
     tasks.filter(t => t.projectId === projectId), [tasks]);
   
@@ -899,6 +984,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       addProject,
       updateProject,
       archiveProject,
+      duplicateProject,
       deleteProject,
       getTasksForProject, addTask, updateTask, deleteTask, reorderTasks,
       getPlansForProject, addWeeklyPlan, updateWeeklyPlan, deleteWeeklyPlan,
