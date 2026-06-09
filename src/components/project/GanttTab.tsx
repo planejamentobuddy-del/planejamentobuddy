@@ -644,10 +644,10 @@ export default function GanttTab({ project }: { project: Project }) {
           <div className="flex flex-row flex-1 relative" style={{ minWidth: 'max-content' }}>
             
             {/* Sidebar Column (Atividades) */}
-            <div className="w-80 shrink-0 border-r border-border/60 bg-background dark:bg-card z-40 sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+            <div className="w-80 shrink-0 border-r border-border bg-background dark:bg-card z-40 sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
               {/* Sticky Title */}
               <div 
-                className="h-12 border-b border-border/60 flex items-center px-4 font-bold text-[10px] uppercase tracking-widest text-muted-foreground/70 bg-muted/95 dark:bg-card/95 backdrop-blur-sm sticky top-0 z-50"
+                className="h-12 border-b border-border flex items-center px-4 font-bold text-[10px] uppercase tracking-widest text-muted-foreground/70 bg-muted/95 dark:bg-card/95 backdrop-blur-sm sticky top-0 z-50"
                 style={{ height: '48px' }}
               >
                 Atividade
@@ -667,7 +667,7 @@ export default function GanttTab({ project }: { project: Project }) {
                   return (
                      <div 
                       key={row.id} 
-                      className="h-10 flex flex-col justify-center px-4 border-b border-border/60 hover:bg-muted/10 bg-background dark:bg-card transition-colors group shrink-0"
+                      className="h-10 flex flex-col justify-center px-4 border-b border-border/90 hover:bg-muted/10 bg-background dark:bg-card transition-colors group shrink-0"
                       style={{ height: '40px' }}
                     >
                       <div 
@@ -707,14 +707,14 @@ export default function GanttTab({ project }: { project: Project }) {
             >
               {/* Timeline Header */}
               <div 
-                className="sticky top-0 z-30 h-12 border-b border-border/70 bg-background dark:bg-card flex shrink-0"
+                className="sticky top-0 z-30 h-12 border-b border-border bg-background dark:bg-card flex shrink-0"
                 style={{ height: '48px', minHeight: '48px', maxHeight: '48px' }}
               >
                 {useMemo(() => ticks.map((tick, i) => (
                   <div 
                     key={i} 
                     style={{ width: tickWidth, height: '48px', minHeight: '48px', maxHeight: '48px' }} 
-                    className="border-r border-border/60 h-12 flex flex-col justify-center items-center px-1 text-[10px] font-bold shrink-0 overflow-hidden"
+                    className="border-r border-border/90 h-12 flex flex-col justify-center items-center px-1 text-[10px] font-bold shrink-0 overflow-hidden"
                   >
                     <span className="text-muted-foreground/60 uppercase tracking-tighter">
                       {viewMode === 'mensal' 
@@ -743,7 +743,7 @@ export default function GanttTab({ project }: { project: Project }) {
                     <div 
                       key={i} 
                       style={{ width: tickWidth }} 
-                      className={`border-r border-border/60 h-full ${isWeekend && viewMode === 'diario' ? 'bg-muted/30' : ''}`} 
+                      className={`border-r border-border/90 h-full ${isWeekend && viewMode === 'diario' ? 'bg-muted/30' : ''}`} 
                     />
                   );
                 }), [ticks, tickWidth, viewMode])}
@@ -980,7 +980,7 @@ export default function GanttTab({ project }: { project: Project }) {
                   return (
                     <div 
                       key={row.id} 
-                      className="h-10 relative group transition-colors hover:bg-muted/10 border-b border-border/60 shrink-0"
+                      className="h-10 relative group transition-colors hover:bg-muted/10 border-b border-border/90 shrink-0"
                       style={{ height: '40px', minHeight: '40px', maxHeight: '40px' }}
                     >
                       {type === 'frente' && frente ? (

@@ -534,7 +534,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     return (
       <tr
         key={task.id}
-        className={`border-b border-border/50 transition-colors border-l-4 ${statusBorderColor} ${
+        className={`border-b border-border/80 transition-colors border-l-4 ${statusBorderColor} ${
           effectiveOverdue
             ? 'bg-destructive/[0.02]'
             : isStage
@@ -543,7 +543,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         }`}
       >
         {/* 1. Etapa / Atividade */}
-        <td className="py-2.5 px-3 border-r border-border/40 min-w-0">
+        <td className="py-2.5 px-3 border-r border-border/70 min-w-0">
           <div className="flex items-center gap-1.5 overflow-hidden">
             {isStage && (
               <div 
@@ -584,7 +584,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         </td>
 
         {/* 2. Responsável */}
-        <td className="py-2.5 px-3 border-r border-border/40">
+        <td className="py-2.5 px-3 border-r border-border/70">
           <Input
             list="users-list"
             className="h-8 text-sm border-0 border-b border-transparent bg-transparent px-1.5 focus-visible:ring-0 focus-visible:border-primary hover:border-border/60 transition-colors"
@@ -599,7 +599,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         </td>
 
         {/* 3. Início */}
-        <td className="py-2.5 px-3 text-sm text-muted-foreground border-r border-border/40">
+        <td className="py-2.5 px-3 text-sm text-muted-foreground border-r border-border/70">
           {isStage && agg ? (
             <div className="px-1.5 py-1 font-medium">{formatDate(agg.startDate)}</div>
           ) : (
@@ -624,7 +624,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         </td>
 
         {/* 4. Término */}
-        <td className="py-2.5 px-3 text-sm text-muted-foreground border-r border-border/40">
+        <td className="py-2.5 px-3 text-sm text-muted-foreground border-r border-border/70">
           {isStage && agg ? (
             <div className="px-1.5 py-1 font-medium">{formatDate(agg.endDate)}</div>
           ) : (
@@ -649,7 +649,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         </td>
 
         {/* 5. Duração */}
-        <td className="py-2.5 px-3 text-center border-r border-border/40 font-medium">
+        <td className="py-2.5 px-3 text-center border-r border-border/70 font-medium">
           {isStage && agg ? (
             <span className="text-sm">{agg.duration}</span>
           ) : (
@@ -668,7 +668,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         </td>
 
         {/* 6. % Execução */}
-        <td className="py-2.5 px-3 border-r border-border/40">
+        <td className="py-2.5 px-3 border-r border-border/70">
           <div className="flex items-center gap-2 min-w-[120px]">
             {isStage && agg ? (
               <>
@@ -693,7 +693,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         </td>
 
         {/* Frentes */}
-        <td className="py-2.5 px-3 border-r border-border/40 text-center font-medium">
+        <td className="py-2.5 px-3 border-r border-border/70 text-center font-medium">
           {!isStage && (
             <div className="flex items-center justify-center gap-1.5">
               <span className="text-xs font-semibold">
@@ -725,7 +725,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         </td>
 
         {/* 7. Status */}
-        <td className="py-2.5 px-3 border-r border-border/40">
+        <td className="py-2.5 px-3 border-r border-border/70">
           <div className="space-y-1">
             <Select
               value={isStage && agg ? effectiveStatus : task.status}
@@ -748,7 +748,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         </td>
 
         {/* 8. Predecessoras */}
-        <td className="py-2.5 px-3 border-r border-border/40">
+        <td className="py-2.5 px-3 border-r border-border/70">
           <PredecessorPicker
             task={task}
             allTaskOptions={allTaskOptions.filter(t => t.id !== task.id)}
@@ -758,14 +758,14 @@ export default function PlanningTab({ project }: { project: Project }) {
         </td>
 
         {/* 9. Sucessoras */}
-        <td className="py-2.5 px-3 text-xs text-muted-foreground border-r border-border/40">
+        <td className="py-2.5 px-3 text-xs text-muted-foreground border-r border-border/70">
           <div className="truncate w-full px-1" title={allTasks.filter(t => t.predecessors.includes(task.id)).map(t => t.name).join(', ') || '—'}>
             {allTasks.filter(t => t.predecessors.includes(task.id)).map(t => t.name).join(', ') || '—'}
           </div>
         </td>
 
         {/* 11. Observações */}
-        <td className="py-2.5 px-3 border-r border-border/40">
+        <td className="py-2.5 px-3 border-r border-border/70">
           <Input
             className="h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30"
             defaultValue={task.observations || ''}
@@ -937,17 +937,17 @@ export default function PlanningTab({ project }: { project: Project }) {
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
             >
-              <table className="border-collapse table-fixed text-sm w-full bg-card rounded-xl shadow-sm border border-border/50 overflow-hidden" style={{ minWidth: colWidths.reduce((s, w) => s + w, 0) }}>
+              <table className="border-collapse table-fixed text-sm w-full bg-card rounded-xl shadow-sm border border-border/80 overflow-hidden" style={{ minWidth: colWidths.reduce((s, w) => s + w, 0) }}>
                 <colgroup>
                   {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
                 </colgroup>
                 <thead>
-                  <tr className="border-b bg-muted/40 border-t border-border/50">
+                  <tr className="border-b bg-muted/40 border-t border-border/80">
                     {columnHeaders.map((h, i) => (
                       <th 
                         key={i} 
                         style={{ width: colWidths[i] }}
-                        className={`${h.align === 'center' ? 'text-center' : 'text-left'} py-3.5 px-3 font-bold text-[10px] uppercase tracking-wider text-muted-foreground relative border-r border-border/10 last:border-0`}
+                        className={`${h.align === 'center' ? 'text-center' : 'text-left'} py-3.5 px-3 font-bold text-[10px] uppercase tracking-wider text-muted-foreground relative border-r border-border/40 last:border-0`}
                       >
                         <div className="truncate">{h.label}</div>
                         <ResizeHandle index={i} onMouseDown={onColResize} />
@@ -973,7 +973,7 @@ export default function PlanningTab({ project }: { project: Project }) {
                     {projectAggregate && (
                       <tbody className="bg-primary/[0.03] font-bold border-b-2 border-primary/10">
                         <tr className="hover:bg-primary/[0.05] transition-colors">
-                          <td className="p-0 border-r border-border/10">
+                          <td className="p-0 border-r border-border/40">
                             <div className="flex items-center gap-3 py-3.5 px-3 min-w-[300px]" style={{ width: colWidths[0] }}>
                               <div className="bg-primary/15 p-1.5 rounded-lg shrink-0">
                                 <TrendingUp className="w-5 h-5 text-primary" />
@@ -981,13 +981,13 @@ export default function PlanningTab({ project }: { project: Project }) {
                               <span className="text-sm font-black text-primary uppercase tracking-tight truncate">RESUMO GERAL DO PROJETO</span>
                             </div>
                           </td>
-                          <td className="p-0 border-r border-border/10" />
-                          <td className="p-0 border-r border-border/10">
+                          <td className="p-0 border-r border-border/40" />
+                          <td className="p-0 border-r border-border/40">
                             <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[2] }}>
                               {projectAggregate.startDate ? formatDate(projectAggregate.startDate) : '—'}
                             </div>
                           </td>
-                          <td className="p-0 border-r border-border/10">
+                          <td className="p-0 border-r border-border/40">
                             <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[3] }}>
                               {projectAggregate.endDate ? formatDate(projectAggregate.endDate) : '—'}
                             </div>
@@ -997,7 +997,7 @@ export default function PlanningTab({ project }: { project: Project }) {
                               {projectAggregate.duration} dias
                             </div>
                           </td>
-                          <td className="p-0 border-r border-border/10">
+                          <td className="p-0 border-r border-border/40">
                             <div className="px-3 flex items-center gap-2" style={{ width: colWidths[5] }}>
                               <div className="flex-1 bg-primary/10 h-2 rounded-full overflow-hidden">
                                 <div className="bg-primary h-full transition-all duration-500" style={{ width: `${projectAggregate.percent}%` }} />
@@ -1012,14 +1012,14 @@ export default function PlanningTab({ project }: { project: Project }) {
                             </div>
                           </td>
                           {/* Status */}
-                          <td className="p-0 border-r border-border/10">
+                          <td className="p-0 border-r border-border/40">
                             <div className="px-3" style={{ width: colWidths[7] }}>
                               <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
                             </div>
                           </td>
-                          <td className="p-0 border-r border-border/10" />
-                          <td className="p-0 border-r border-border/10" />
-                          <td className="p-0 border-r border-border/10" />
+                          <td className="p-0 border-r border-border/40" />
+                          <td className="p-0 border-r border-border/40" />
+                          <td className="p-0 border-r border-border/40" />
                           <td className="p-0" />
                         </tr>
                       </tbody>
@@ -1110,7 +1110,7 @@ const SortableStageRow = React.memo(function SortableStageRow({
         <Fragment key={sub.id}>
           {renderRow(sub, true)}
           {expandedFrentes.has(sub.id) && sub.frentes && sub.frentes.map((frente: any) => (
-            <tr key={frente.id} className="bg-muted/10 border-b border-border/30 hover:bg-muted/15 transition-colors">
+            <tr key={frente.id} className="bg-muted/10 border-b border-border/60 hover:bg-muted/15 transition-colors">
               <td className="py-2 px-3 pl-14 text-xs font-semibold text-foreground/75 flex items-center gap-1.5 min-w-0 truncate">
                 <span className="text-muted-foreground/45 shrink-0">↳</span>
                 <span className="truncate">👷 {frente.name}</span>
