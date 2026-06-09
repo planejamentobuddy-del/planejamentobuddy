@@ -930,7 +930,7 @@ export default function PlanningTab({ project }: { project: Project }) {
             </div>
           </div>
 
-          <div className="card-elevated overflow-x-auto p-0 border-none shadow-none bg-transparent">
+          <div className="overflow-x-auto p-0 w-full">
             {/* ... table content remains same but wrapped in handleDragEnd/sortable context below ... */}
             <DndContext
               sensors={sensors}
@@ -1096,12 +1096,12 @@ const SortableStageRow = React.memo(function SortableStageRow({
     isDragging,
   } = useSortable({ id: stage.id });
 
-  const style = {
+  const style = transform ? {
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? 50 : 0,
     position: 'relative' as const,
-  };
+  } : undefined;
 
   return (
     <tbody ref={setNodeRef} style={style} className={isDragging ? 'shadow-2xl ring-2 ring-primary border-primary rounded-lg overflow-hidden brightness-105 transition-none z-50 pointer-events-none' : ''}>

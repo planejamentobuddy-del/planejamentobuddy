@@ -487,7 +487,7 @@ export default function GanttTab({ project }: { project: Project }) {
   return (
     <div className="space-y-5">
       <div 
-        className={`card-elevated overflow-hidden border border-border/30 shadow-sm flex flex-col transition-all duration-300 bg-background dark:bg-card ${
+        className={`rounded-[var(--radius)] overflow-hidden border border-border/30 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col transition-all duration-300 bg-background dark:bg-card ${
           isFullscreen ? 'w-full h-full p-6 z-50' : 'p-5'
         }`} 
         id="gantt-chart-container"
