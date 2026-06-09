@@ -19,6 +19,7 @@ export interface ProjectsContextType {
   getTasksForProject: (projectId: string) => Task[];
   addTask: (task: Omit<Task, 'id'>) => Promise<Task | null>;
   updateTask: (task: Task) => Promise<void>;
+  updateTasksBatch: (tasks: Task[]) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   reorderTasks: (updates: { id: string, orderIndex: number }[]) => Promise<void>;
   // Weekly plans

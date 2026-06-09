@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
 import { Project, Task, getCriticalTaskIds, safeParseDate, calculateSCurve, getProjectProgress } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
-import { Calendar, ChevronDown, ChevronRight, Users, Download, ZoomIn, ZoomOut } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, Users, Download, ZoomIn, ZoomOut, Briefcase, Maximize2, Minimize2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
@@ -28,7 +28,11 @@ export default function GanttTab({ project }: { project: Project }) {
   const [sortMode, setSortMode] = useState<'manual' | 'chronological'>('manual');
   const [showCriticalPath, setShowCriticalPath] = useState(false);
   const [showAllLabels, setShowAllLabels] = useState(false);
-  const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
+  const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(() => {
+    // Collect all task IDs that act as parents (have subtasks) to keep them collapsed by default
+    const parentIds = allTasks.filter(t => t.parentId).map(t => t.parentId!);
+    return new Set(parentIds);
+  });
   const [clickedBars, setClickedBars] = useState<Set<string>>(new Set());
   const [todayHovered, setTodayHovered] = useState(false);
   const [filterStart, setFilterStart] = useState('');
@@ -37,7 +41,43 @@ export default function GanttTab({ project }: { project: Project }) {
   const timelineRef = useRef<HTMLDivElement>(null);
   const minimapRef = useRef<HTMLDivElement>(null);
   const [scrollFraction, setScrollFraction] = useState(0);
-  const pixelsPerDay = viewMode === 'diario' ? 45 : viewMode === 'semanal' ? 12 : 4;
+  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
+  const [showFrentesInGantt, setShowFrentesInGantt] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    const el = document.getElementById('gantt-chart-container');
+    if (!el) return;
+    
+    if (!document.fullscreenElement) {
+      el.requestFullscreen().catch(err => {
+        console.error("Erro ao entrar em tela cheia:", err);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!timelineRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(timelineRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   const hasFilter = filterStart !== '' || filterEnd !== '';
 
   // CPM critical path set
@@ -186,6 +226,42 @@ export default function GanttTab({ project }: { project: Project }) {
 
   const filteredTasks = visibleTasks;
 
+  const ganttRows = useMemo(() => {
+    const rows: Array<{
+      id: string;
+      type: 'task' | 'frente';
+      task: Task;
+      frente?: ServiceFront;
+      depth: number;
+      wbs: string;
+    }> = [];
+    
+    filteredTasks.forEach(task => {
+      const depth = depthMap.get(task.id) || 0;
+      const wbs = wbsMap.get(task.id) || '';
+      rows.push({
+        id: task.id,
+        type: 'task',
+        task,
+        depth,
+        wbs
+      });
+      if (showFrentesInGantt && task.frentes && task.frentes.length > 0) {
+        task.frentes.forEach((frente, fIdx) => {
+          rows.push({
+            id: `${task.id}-frente-${frente.id}`,
+            type: 'frente',
+            task,
+            frente,
+            depth: depth + 1,
+            wbs: `${wbs}.${fIdx + 1}`
+          });
+        });
+      }
+    });
+    return rows;
+  }, [filteredTasks, depthMap, wbsMap, showFrentesInGantt]);
+
   const toggleCollapse = (taskId: string) => {
     setCollapsedTasks(prev => {
       const next = new Set(prev);
@@ -208,11 +284,11 @@ export default function GanttTab({ project }: { project: Project }) {
     });
   };
 
-  const { minDate, maxDate, totalDays, ticks } = useMemo(() => {
+  const { minDate, maxDate, totalDays } = useMemo(() => {
     if (allTasks.length === 0) {
       const s = new Date(project.startDate);
       const e = new Date(project.endDate);
-      return { minDate: s.getTime(), maxDate: e.getTime(), totalDays: 30, ticks: [] };
+      return { minDate: s.getTime(), maxDate: e.getTime(), totalDays: 30 };
     }
 
     let taskDates = allTasks.flatMap(t => {
@@ -239,43 +315,62 @@ export default function GanttTab({ project }: { project: Project }) {
     endDate.setDate(endDate.getDate() + 30);
     end = endDate.getTime();
 
-    const ticks: Date[] = [];
-    const current = new Date(start);
+    return { 
+      minDate: start, 
+      maxDate: end, 
+      totalDays: Math.ceil((end - start) / 86400000)
+    };
+  }, [allTasks, computedBounds, project]);
+
+  const ticks = useMemo(() => {
+    const list: Date[] = [];
+    const current = new Date(minDate);
     
     if (viewMode === 'diario') {
-      while (current.getTime() <= end) {
-        ticks.push(new Date(current));
+      while (current.getTime() <= maxDate) {
+        list.push(new Date(current));
         current.setDate(current.getDate() + 1);
       }
     } else if (viewMode === 'semanal') {
       // Align to start of week (Sunday)
       current.setDate(current.getDate() - current.getDay());
-      while (current.getTime() <= end) {
-        ticks.push(new Date(current));
+      while (current.getTime() <= maxDate) {
+        list.push(new Date(current));
         current.setDate(current.getDate() + 7);
       }
     } else {
       current.setDate(1);
-      while (current.getTime() <= end) {
-        ticks.push(new Date(current));
+      while (current.getTime() <= maxDate) {
+        list.push(new Date(current));
         current.setMonth(current.getMonth() + 1);
       }
     }
+    return list;
+  }, [minDate, maxDate, viewMode]);
 
-    return { 
-      minDate: start, 
-      maxDate: end, 
-      totalDays: Math.ceil((end - start) / 86400000),
-      ticks 
-    };
-  }, [allTasks, computedBounds, project, viewMode]);
+  const daysPerTick = viewMode === 'diario' ? 1 : viewMode === 'semanal' ? 7 : 30;
 
-  const timelineWidth = totalDays * pixelsPerDay;
+  const pixelsPerDay = useMemo(() => {
+    const basePixels = (viewMode === 'diario' ? 45 : viewMode === 'semanal' ? 12 : 4) * zoomLevel;
+    // Sidebar is w-80 = 320px. Plus some scrollbars/borders margins.
+    const minTimelineWidth = containerWidth > 350 ? containerWidth - 350 : 600;
+    const calculatedWidth = ticks.length * basePixels * daysPerTick;
+    if (zoomLevel >= 1.0 && calculatedWidth < minTimelineWidth) {
+      return minTimelineWidth / (ticks.length * daysPerTick);
+    }
+    return basePixels;
+  }, [viewMode, zoomLevel, containerWidth, ticks, daysPerTick]);
+
+  const timelineWidth = ticks.length * (viewMode === 'diario' ? pixelsPerDay : viewMode === 'semanal' ? pixelsPerDay * 7 : pixelsPerDay * 30);
   const tickWidth = viewMode === 'diario' ? pixelsPerDay : viewMode === 'semanal' ? pixelsPerDay * 7 : pixelsPerDay * 30;
+
+  const timelineStartDate = useMemo(() => {
+    return ticks[0] ? ticks[0].getTime() : minDate;
+  }, [ticks, minDate]);
 
   const getPosition = (dateStr: string) => {
     const date = safeParseDate(dateStr);
-    return ((date - minDate) / 86400000) * pixelsPerDay;
+    return ((date - timelineStartDate) / 86400000) * pixelsPerDay;
   };
 
   const today = new Date().toISOString().split('T')[0];
@@ -326,6 +421,12 @@ export default function GanttTab({ project }: { project: Project }) {
              const svgArrows = clonedEl.querySelector('.pdf-hide-arrows') as HTMLElement;
              if (svgArrows) {
                  svgArrows.style.display = 'none';
+             }
+
+             // Hide controls bar in PDF
+             const controls = clonedEl.querySelector('.pdf-hide-controls') as HTMLElement;
+             if (controls) {
+                 controls.style.display = 'none';
              }
              
              // Remove flex truncation that causes html2canvas to slice text in half vertically
@@ -385,131 +486,195 @@ export default function GanttTab({ project }: { project: Project }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-between items-center flex-wrap gap-4">
-        <div>
-          <h2 className="font-display font-bold text-lg text-foreground">Cronograma (Gantt)</h2>
-        </div>
-        
-        <div className="flex items-center flex-wrap gap-3">
-          <div className="bg-muted/50 p-1 rounded-xl flex gap-1 border border-border/40">
-            <Button 
-              variant={sortMode === 'manual' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              className={`text-xs h-8 px-4 rounded-lg transition-all ${sortMode === 'manual' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
-              onClick={() => setSortMode('manual')}
-              title="Ordenar conforme o Planejamento"
-            >
-              Manual
-            </Button>
-            <Button 
-              variant={sortMode === 'chronological' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              className={`text-xs h-8 px-4 rounded-lg transition-all ${sortMode === 'chronological' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
-              onClick={() => setSortMode('chronological')}
-              title="Ordenar por data de início"
-            >
-              Crono
-            </Button>
+      <div 
+        className={`card-elevated overflow-hidden border border-border/30 shadow-sm flex flex-col transition-all duration-300 bg-background dark:bg-card ${
+          isFullscreen ? 'w-full h-full p-6 z-50' : 'p-5'
+        }`} 
+        id="gantt-chart-container"
+      >
+        {/* Controls Bar inside the container */}
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-4 pb-4 border-b border-border/40 pdf-hide-controls shrink-0">
+          <div>
+            <h2 className="font-display font-bold text-lg text-foreground">Cronograma (Gantt)</h2>
           </div>
-
-          {/* View Mode Discrete Buttons */}
-          <div className="bg-muted/50 p-1 rounded-xl flex gap-1 border border-border/40">
-            <Button 
-              variant={viewMode === 'diario' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              className={`text-xs h-8 px-4 rounded-lg transition-all ${viewMode === 'diario' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
-              onClick={() => setViewMode('diario')}
-            >
-              Dia
-            </Button>
-            <Button 
-              variant={viewMode === 'semanal' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              className={`text-xs h-8 px-4 rounded-lg transition-all ${viewMode === 'semanal' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
-              onClick={() => setViewMode('semanal')}
-            >
-              Semana
-            </Button>
-            <Button 
-              variant={viewMode === 'mensal' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              className={`text-xs h-8 px-4 rounded-lg transition-all ${viewMode === 'mensal' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
-              onClick={() => setViewMode('mensal')}
-            >
-              Mês
-            </Button>
-          </div>
-
-          <Button
-            variant={showCriticalPath ? 'secondary' : 'outline'} 
-            size="sm" 
-            className={`h-8 rounded-lg gap-2 text-xs font-semibold px-4 transition-all ${showCriticalPath ? 'bg-destructive/10 border-destructive/30 text-destructive' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setShowCriticalPath(!showCriticalPath)}
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            Caminho Crítico
-          </Button>
-
-          <Button 
-            variant={showAllLabels ? 'secondary' : 'outline'} 
-            size="sm" 
-            className={`h-8 rounded-lg gap-2 text-xs font-semibold px-4 transition-all ${showAllLabels ? 'bg-primary/10 border-primary/30 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setShowAllLabels(!showAllLabels)}
-          >
-            <Users className="w-3.5 h-3.5" />
-            Exibir Responsáveis
-          </Button>
-
-          <Button onClick={handleExportVisualPDF} size="sm" className="h-8 rounded-lg gap-2 text-xs font-semibold px-4 shadow-sm bg-primary/90 hover:bg-primary text-primary-foreground transition-all">
-            <Download className="w-3.5 h-3.5" />
-            Salvar PDF Visual
-          </Button>
-        </div>
-      </div>
-
-      <div className="card-elevated overflow-hidden border border-border/30 shadow-sm flex flex-col" id="gantt-chart-container">
-        <div className="flex flex-1 overflow-x-auto min-h-[500px]">
-          {/* Sidebar - Activities */}
-          <div className="w-80 border-r border-border/40 flex flex-col shrink-0 bg-muted/[0.02] z-10">
-            <div className="h-12 border-b border-border/40 flex items-center px-4 font-bold text-[10px] uppercase tracking-widest text-muted-foreground/70 bg-muted/40 backdrop-blur-sm sticky top-0">
-              Atividade
+          
+          <div className="flex items-center flex-wrap gap-3">
+            <div className="bg-muted/50 p-1 rounded-xl flex gap-1 border border-border/40">
+              <Button 
+                variant={sortMode === 'manual' ? 'secondary' : 'ghost'} 
+                size="sm" 
+                className={`text-xs h-8 px-4 rounded-lg transition-all ${sortMode === 'manual' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setSortMode('manual')}
+                title="Ordenar conforme o Planejamento"
+              >
+                Manual
+              </Button>
+              <Button 
+                variant={sortMode === 'chronological' ? 'secondary' : 'ghost'} 
+                size="sm" 
+                className={`text-xs h-8 px-4 rounded-lg transition-all ${sortMode === 'chronological' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setSortMode('chronological')}
+                title="Ordenar por data de início"
+              >
+                Crono
+              </Button>
             </div>
-            <div className="flex-1 overflow-y-hidden">
-              {/* OBRA Summary Row — always pinned at top */}
-              {projectSummary && (
-                <div className="h-10 flex items-center px-4 border-b-2 border-primary/30 bg-primary/[0.05] shrink-0">
-                  <div className="flex items-center gap-2 w-full">
-                    <div className="w-4 shrink-0" />
-                    <span className="text-[11px] font-black text-primary uppercase tracking-tight flex-1 truncate">
-                      {project.name}
-                    </span>
-                    <span className="text-[10px] font-black text-primary tabular-nums shrink-0">
-                      {projectSummary.totalProgress}%
-                    </span>
-                  </div>
-                </div>
+
+            {/* View Mode Discrete Buttons */}
+            <div className="bg-muted/50 p-1 rounded-xl flex gap-1 border border-border/40">
+              <Button 
+                variant={viewMode === 'diario' ? 'secondary' : 'ghost'} 
+                size="sm" 
+                className={`text-xs h-8 px-4 rounded-lg transition-all ${viewMode === 'diario' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setViewMode('diario')}
+              >
+                Dia
+              </Button>
+              <Button 
+                variant={viewMode === 'semanal' ? 'secondary' : 'ghost'} 
+                size="sm" 
+                className={`text-xs h-8 px-4 rounded-lg transition-all ${viewMode === 'semanal' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setViewMode('semanal')}
+              >
+                Semana
+              </Button>
+              <Button 
+                variant={viewMode === 'mensal' ? 'secondary' : 'ghost'} 
+                size="sm" 
+                className={`text-xs h-8 px-4 rounded-lg transition-all ${viewMode === 'mensal' ? 'shadow-sm bg-background border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setViewMode('mensal')}
+              >
+                Mês
+              </Button>
+            </div>
+
+            {/* Zoom Controls */}
+            <div className="bg-muted/50 p-1 rounded-xl flex gap-1 border border-border/40 items-center">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-background/50"
+                onClick={() => setZoomLevel(prev => Math.max(0.1, prev - 0.1))}
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <span className="text-[10px] font-bold px-1 text-muted-foreground select-none min-w-[32px] text-center">
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-background/50"
+                onClick={() => setZoomLevel(prev => Math.min(3.0, prev + 0.1))}
+                title="Zoom In"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <Button
+              variant={showCriticalPath ? 'secondary' : 'outline'} 
+              size="sm" 
+              className={`h-8 rounded-lg gap-2 text-xs font-semibold px-4 transition-all ${showCriticalPath ? 'bg-destructive/10 border-destructive/30 text-destructive' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setShowCriticalPath(!showCriticalPath)}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              Caminho Crítico
+            </Button>
+
+            <Button 
+              variant={showAllLabels ? 'secondary' : 'outline'} 
+              size="sm" 
+              className={`h-8 rounded-lg gap-2 text-xs font-semibold px-4 transition-all ${showAllLabels ? 'bg-primary/10 border-primary/30 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setShowAllLabels(!showAllLabels)}
+            >
+              <Users className="w-3.5 h-3.5" />
+              Exibir Responsáveis
+            </Button>
+
+            <Button 
+              variant={showFrentesInGantt ? 'secondary' : 'outline'} 
+              size="sm" 
+              className={`h-8 rounded-lg gap-2 text-xs font-semibold px-4 transition-all ${showFrentesInGantt ? 'bg-primary/10 border-primary/30 text-primary animate-pulse-subtle' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setShowFrentesInGantt(!showFrentesInGantt)}
+            >
+              <Briefcase className="w-3.5 h-3.5" />
+              Exibir Frentes de Serviço
+            </Button>
+
+            <Button onClick={handleExportVisualPDF} size="sm" className="h-8 rounded-lg gap-2 text-xs font-semibold px-4 shadow-sm bg-primary/90 hover:bg-primary text-primary-foreground transition-all">
+              <Download className="w-3.5 h-3.5" />
+              Salvar PDF Visual
+            </Button>
+
+            <Button 
+              onClick={toggleFullscreen} 
+              variant="outline"
+              size="sm" 
+              className="h-8 rounded-lg gap-2 text-xs font-semibold px-4 text-muted-foreground hover:text-foreground transition-all"
+            >
+              {isFullscreen ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5" />
+                  Sair de Tela Cheia
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  Ver em Tela Cheia
+                </>
               )}
-              {filteredTasks.length === 0 ? (
+            </Button>
+          </div>
+        </div>
+
+        <div 
+          ref={timelineRef}
+          className={`flex flex-col flex-1 overflow-auto relative scrollbar-thin scrollbar-thumb-muted-foreground/20 ${
+            isFullscreen ? 'h-[calc(100vh-140px)] max-h-none' : 'max-h-[calc(100vh-280px)] min-h-[500px]'
+          }`}
+          onScroll={e => {
+            const el = e.currentTarget;
+            const maxScroll = el.scrollWidth - el.clientWidth;
+            if (maxScroll > 0) setScrollFraction(el.scrollLeft / maxScroll);
+          }}
+        >
+          {/* Unified Gantt Layout Table */}
+          <div className="flex flex-row flex-1 relative" style={{ minWidth: 'max-content' }}>
+            
+            {/* Sidebar Column (Atividades) */}
+            <div className="w-80 shrink-0 border-r border-border/60 bg-background dark:bg-card z-40 sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+              {/* Sticky Title */}
+              <div 
+                className="h-12 border-b border-border/60 flex items-center px-4 font-bold text-[10px] uppercase tracking-widest text-muted-foreground/70 bg-muted/95 dark:bg-card/95 backdrop-blur-sm sticky top-0 z-50"
+                style={{ height: '48px' }}
+              >
+                Atividade
+              </div>
+
+              {/* List of Tasks */}
+              {ganttRows.length === 0 ? (
                 <div className="p-8 text-center text-xs text-muted-foreground italic">
                   {hasFilter ? 'Nenhuma atividade no período selecionado.' : 'Nenhuma tarefa visível'}
                 </div>
               ) : (
-                filteredTasks.map(task => {
-                  const depth = depthMap.get(task.id) || 0;
-                  const hasChildren = hasChildrenMap.get(task.id) || false;
-                  const isCollapsed = collapsedTasks.has(task.id);
-                  const bounds = computedBounds.get(task.id);
-                  // Not strictly used for display but good for internal logic
+                ganttRows.map(row => {
+                  const { task, frente, type, depth, wbs } = row;
+                  const hasChildren = type === 'task' && (hasChildrenMap.get(task.id) || false);
+                  const isCollapsed = type === 'task' && collapsedTasks.has(task.id);
+                  
                   return (
-                    <div 
-                      key={task.id} 
-                      className="h-10 flex flex-col justify-center px-4 border-b border-border/20 hover:bg-muted/10 transition-colors group"
+                     <div 
+                      key={row.id} 
+                      className="h-10 flex flex-col justify-center px-4 border-b border-border/60 hover:bg-muted/10 bg-background dark:bg-card transition-colors group shrink-0"
+                      style={{ height: '40px' }}
                     >
                       <div 
                         className="flex items-center gap-1.5 w-full"
                         style={{ paddingLeft: `${depth * 1}rem` }}
                       >
-                        {hasChildren ? (
+                        {type === 'task' && hasChildren ? (
                           <button 
                             onClick={() => toggleCollapse(task.id)}
                             className="w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground shrink-0 rounded hover:bg-muted/50 transition-colors"
@@ -520,10 +685,12 @@ export default function GanttTab({ project }: { project: Project }) {
                           <div className="w-4 shrink-0" />
                         )}
                         <div className="flex flex-col truncate">
-                          <span className={`text-[11px] truncate flex items-center ${hasChildren ? 'font-bold text-foreground' : 'font-semibold text-foreground/80'}`}>
-                            <span className="text-muted-foreground/50 mr-2 font-mono text-[10px] w-9 shrink-0">{wbsMap.get(task.id)}</span>
-                            {hasChildren && <Calendar className="w-3.5 h-3.5 mr-1.5 text-primary/60 shrink-0" />}
-                            <span className="truncate">{task.name}</span>
+                          <span className={`text-[11px] truncate flex items-center ${type === 'task' && hasChildren ? 'font-bold text-foreground' : 'font-semibold text-foreground/80'}`}>
+                            <span className="text-muted-foreground/50 mr-2 font-mono text-[10px] w-9 shrink-0">{wbs}</span>
+                            {type === 'task' && hasChildren && <Calendar className="w-3.5 h-3.5 mr-1.5 text-primary/60 shrink-0" />}
+                            <span className="truncate">
+                               {type === 'frente' ? `👷 ${frente?.name}` : task.name}
+                            </span>
                           </span>
                         </div>
                       </div>
@@ -532,26 +699,22 @@ export default function GanttTab({ project }: { project: Project }) {
                 })
               )}
             </div>
-          </div>
 
-          {/* Timeline */}
-          <div
-            ref={timelineRef}
-            className="flex-1 overflow-x-auto overflow-y-visible relative scrollbar-thin scrollbar-thumb-muted-foreground/20"
-            onScroll={e => {
-              const el = e.currentTarget;
-              const maxScroll = el.scrollWidth - el.clientWidth;
-              if (maxScroll > 0) setScrollFraction(el.scrollLeft / maxScroll);
-            }}
-          >
-            <div style={{ width: Math.max(600, timelineWidth), minHeight: '100%' }} className="relative">
+            {/* Timeline Column (Gantt Bars) */}
+            <div 
+              style={{ width: Math.max(600, timelineWidth) }} 
+              className="relative flex-1 flex flex-col bg-background dark:bg-card shrink-0"
+            >
               {/* Timeline Header */}
-              <div className="sticky top-0 z-20 h-12 border-b border-border/40 bg-background/95 backdrop-blur-sm flex">
-                {ticks.map((tick, i) => (
+              <div 
+                className="sticky top-0 z-30 h-12 border-b border-border/70 bg-background dark:bg-card flex shrink-0"
+                style={{ height: '48px', minHeight: '48px', maxHeight: '48px' }}
+              >
+                {useMemo(() => ticks.map((tick, i) => (
                   <div 
                     key={i} 
-                    style={{ width: tickWidth }} 
-                    className="border-r border-border/10 h-12 flex flex-col justify-center items-center px-1 text-[10px] font-bold shrink-0 overflow-hidden"
+                    style={{ width: tickWidth, height: '48px', minHeight: '48px', maxHeight: '48px' }} 
+                    className="border-r border-border/60 h-12 flex flex-col justify-center items-center px-1 text-[10px] font-bold shrink-0 overflow-hidden"
                   >
                     <span className="text-muted-foreground/60 uppercase tracking-tighter">
                       {viewMode === 'mensal' 
@@ -569,21 +732,21 @@ export default function GanttTab({ project }: { project: Project }) {
                       }
                     </span>
                   </div>
-                ))}
+                )), [ticks, tickWidth, viewMode])}
               </div>
 
               {/* Grid background lines */}
               <div className="absolute inset-x-0 top-12 bottom-0 flex pointer-events-none">
-                {ticks.map((tick, i) => {
+                {useMemo(() => ticks.map((tick, i) => {
                   const isWeekend = tick.getDay() === 0 || tick.getDay() === 6;
                   return (
                     <div 
                       key={i} 
                       style={{ width: tickWidth }} 
-                      className={`border-r border-border/[0.18] h-full ${isWeekend && viewMode === 'diario' ? 'bg-muted/30' : ''}`} 
+                      className={`border-r border-border/60 h-full ${isWeekend && viewMode === 'diario' ? 'bg-muted/30' : ''}`} 
                     />
                   );
-                })}
+                }), [ticks, tickWidth, viewMode])}
               </div>
 
               {/* Dependency SVG Overlay */}
@@ -597,13 +760,15 @@ export default function GanttTab({ project }: { project: Project }) {
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(148, 163, 184, 0.5)" />
                   </marker>
                 </defs>
-                {filteredTasks.map((task, idx) => 
-                  task.predecessors.map(predId => {
+                {ganttRows.map((row, idx) => {
+                  if (row.type !== 'task') return null;
+                  const task = row.task;
+                  return task.predecessors.map(predId => {
                     const predTask = allTasks.find(t => t.id === predId);
                     if (!predTask) return null;
                     
-                    const predIdxInFiltered = filteredTasks.findIndex(t => t.id === predId);
-                    if (predIdxInFiltered === -1) return null; // Predecessor hidden
+                    const predIdxInRows = ganttRows.findIndex(r => r.type === 'task' && r.task.id === predId);
+                    if (predIdxInRows === -1) return null; // Predecessor hidden
                     const predBounds = computedBounds.get(predTask.id);
                     const taskBounds = computedBounds.get(task.id);
 
@@ -625,10 +790,10 @@ export default function GanttTab({ project }: { project: Project }) {
                     
                     const taskStartStr = (isTaskSummary && taskBounds ? taskBounds.start : task.startDate) || todayStr;
                     
-                    // +40 offset accounts for the OBRA summary row above all task rows
-                    const obraOffset = projectSummary ? 40 : 0;
+                    // 0 offset accounts for the simplified rows layout without OBRA row
+                    const obraOffset = 0;
                     const startX = predStartPos + predWidth;
-                    const startY = predIdxInFiltered * 40 + 20 + obraOffset;
+                    const startY = predIdxInRows * 40 + 20 + obraOffset;
                     const endX = getPosition(taskStartStr);
                     const endY = idx * 40 + 20 + obraOffset;
                     
@@ -652,142 +817,120 @@ export default function GanttTab({ project }: { project: Project }) {
                         />
                       </Fragment>
                     );
-                  })
-                )}
+                  });
+                })}
               </svg>
-
-              {/* Vertical Today Line — Enhanced with S-Curve tooltip */}
-              {todayPos >= 0 && todayPos <= timelineWidth && (() => {
-                const diff = actualToday - plannedToday;
-                const isAhead = diff > 1;
-                const isBehind = diff < -1;
-                const statusLabel = isAhead ? `Adiantado ${diff.toFixed(0)}%` : isBehind ? `Atrasado ${Math.abs(diff).toFixed(0)}%` : 'No Prazo';
-                const statusColor = isAhead ? 'bg-emerald-500' : isBehind ? 'bg-red-500' : 'bg-blue-500';
-                const statusTextColor = isAhead ? 'text-emerald-400' : isBehind ? 'text-red-400' : 'text-blue-400';
-                const statusEmoji = isAhead ? '🟢' : isBehind ? '🔴' : '✅';
-
-                return (
-                  <div
-                    className="absolute top-0 bottom-0 z-30 cursor-pointer"
-                    style={{ left: todayPos, width: '30px', marginLeft: '-15px' }}
-                    onMouseEnter={() => setTodayHovered(true)}
-                    onMouseLeave={() => setTodayHovered(false)}
-                  >
-                    {/* Header badge — floats inside sticky header area (z-30 > header z-20) */}
-                    <div className="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col items-center z-30 pointer-events-none">
-                      <div className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-md whitespace-nowrap">
-                        Hoje
-                      </div>
-                      <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-red-500" />
-                    </div>
-
-                    {/* Vertical line — starts exactly at the rows area, below the header */}
-                    <div className="absolute top-12 bottom-0 left-1/2 -translate-x-1/2 w-[2px] bg-red-500/70" />
-
-                    {/* Content visible only on hover */}
-                    {todayHovered && (
-                      <>
-                        {/* Status pill on the line */}
-                        <div className="absolute top-7 left-1/2 -translate-x-1/2 flex flex-col items-center">
-                          <div className={`text-white text-[8px] px-2 py-0.5 rounded-full font-bold shadow-lg whitespace-nowrap ${statusColor}`}>
-                            {statusEmoji} {statusLabel}
-                          </div>
-                        </div>
-
-                        {/* Planned vs Actual markers on the line */}
-                        <div
-                          className="absolute left-1/2 flex flex-col gap-0.5"
-                          style={{ top: '60px', transform: 'translateX(6px)' }}
-                        >
-                          {/* Planned marker */}
-                          <div className="flex items-center gap-1.5 whitespace-nowrap">
-                            <div className="w-2.5 h-0.5 bg-slate-400" />
-                            <span className="text-[8px] text-slate-400 font-bold">P {plannedToday}%</span>
-                          </div>
-                          {/* Actual marker */}
-                          <div className="flex items-center gap-1.5 whitespace-nowrap">
-                            <div className={`w-2.5 h-0.5 ${statusColor}`} />
-                            <span className={`text-[8px] font-bold ${statusTextColor}`}>R {actualToday}%</span>
-                          </div>
-                        </div>
-
-                        {/* Hover tooltip */}
-                        <div
-                          className="absolute top-16 left-6 z-50 bg-popover border border-border/60 rounded-2xl shadow-2xl p-4 w-52 space-y-3 pointer-events-none"
-                        >
-                          <p className="text-xs font-bold text-foreground uppercase tracking-widest border-b border-border/40 pb-2">Performance hoje</p>
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
-                                Planejado
-                              </span>
-                              <span className="font-bold text-foreground tabular-nums">{plannedToday}%</span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground flex items-center gap-1.5">
-                                <span className={`w-2 h-2 rounded-full inline-block ${statusColor}`} />
-                                Realizado
-                              </span>
-                              <span className={`font-bold tabular-nums ${statusTextColor}`}>{actualToday}%</span>
-                            </div>
-                            <div className="h-px bg-border/40" />
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Diferença</span>
-                              <span className={`font-black tabular-nums ${statusTextColor}`}>{diff > 0 ? '+' : ''}{diff.toFixed(0)}%</span>
-                            </div>
-                          </div>
-                          <div className={`text-[11px] font-bold text-center py-1.5 rounded-lg ${statusColor} text-white`}>
-                            {statusEmoji} {statusLabel}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })()}
 
               {/* Rows and Bars */}
               <div className="relative pt-0">
-                {/* OBRA project-level bar */}
-                {projectSummary && (() => {
-                  const obraStartPos = getPosition(projectSummary.startStr);
-                  const obraEndPos   = getPosition(projectSummary.endStr) + pixelsPerDay;
-                  const obraWidth    = Math.max(8, obraEndPos - obraStartPos);
+                {/* Vertical Today Line — Enhanced with S-Curve tooltip */}
+                {todayPos >= 0 && todayPos <= timelineWidth && (() => {
+                  const diff = actualToday - plannedToday;
+                  const isAhead = diff > 1;
+                  const isBehind = diff < -1;
+                  const statusLabel = isAhead ? `Adiantado ${diff.toFixed(0)}%` : isBehind ? `Atrasado ${Math.abs(diff).toFixed(0)}%` : 'No Prazo';
+                  const statusColor = isAhead ? 'bg-emerald-500' : isBehind ? 'bg-red-500' : 'bg-blue-500';
+                  const statusTextColor = isAhead ? 'text-emerald-400' : isBehind ? 'text-red-400' : 'text-blue-400';
+                  const statusEmoji = isAhead ? '🟢' : isBehind ? '🔴' : '✅';
+
                   return (
-                    <div className="h-10 relative border-b-2 border-primary/30 bg-primary/[0.05]">
-                      <div className="absolute top-1 z-10" style={{ left: obraStartPos, width: obraWidth }}>
-                        {/* Progress track */}
-                        <div className="absolute top-0 left-0 right-0 h-4 rounded-sm overflow-hidden bg-primary/15">
-                          <div
-                            className="h-full bg-primary transition-all duration-1000 ease-out relative"
-                            style={{ width: `${projectSummary.totalProgress}%` }}
-                          >
-                            <div className="absolute inset-0 bg-white/15" />
-                          </div>
+                    <div
+                      className="absolute top-0 bottom-0 z-30 cursor-pointer"
+                      style={{ left: todayPos, width: '30px', marginLeft: '-15px' }}
+                      onMouseEnter={() => setTodayHovered(true)}
+                      onMouseLeave={() => setTodayHovered(false)}
+                    >
+                      {/* Header badge — floats inside sticky header area (z-30 > header z-20) */}
+                      <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex flex-col items-center z-30 pointer-events-none">
+                        <div className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-md whitespace-nowrap">
+                          Hoje
                         </div>
-                        {/* Left bracket tip */}
-                        <div className="absolute top-3 left-0 w-0 h-0 border-l-[12px] border-r-0 border-t-[12px] border-transparent border-l-primary" />
-                        {/* Right bracket tip */}
-                        <div className="absolute top-3 right-0 w-0 h-0 border-r-[12px] border-l-0 border-t-[12px] border-transparent border-r-primary" />
-                        {/* Percentage label */}
-                        <div className="absolute top-0.5 flex items-center whitespace-nowrap" style={{ left: obraWidth + 6 }}>
-                          <span className="text-[10px] font-black text-primary tabular-nums">{projectSummary.totalProgress}%</span>
-                        </div>
+                        <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-red-500" />
                       </div>
+
+                      {/* Vertical line — starts exactly at the rows area */}
+                      <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[2px] bg-red-500/70" />
+
+                      {/* Content visible only on hover */}
+                      {todayHovered && (
+                        <>
+                          {/* Status pill on the line */}
+                          <div className="absolute top-7 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                            <div className={`text-white text-[8px] px-2 py-0.5 rounded-full font-bold shadow-lg whitespace-nowrap ${statusColor}`}>
+                              {statusEmoji} {statusLabel}
+                            </div>
+                          </div>
+
+                          {/* Planned vs Actual markers on the line */}
+                          <div
+                            className="absolute left-1/2 flex flex-col gap-0.5"
+                            style={{ top: '60px', transform: 'translateX(6px)' }}
+                          >
+                            {/* Planned marker */}
+                            <div className="flex items-center gap-1.5 whitespace-nowrap">
+                              <div className="w-2.5 h-0.5 bg-slate-400" />
+                              <span className="text-[8px] text-slate-400 font-bold">P {plannedToday}%</span>
+                            </div>
+                            {/* Actual marker */}
+                            <div className="flex items-center gap-1.5 whitespace-nowrap">
+                              <div className={`w-2.5 h-0.5 ${statusColor}`} />
+                              <span className={`text-[8px] font-bold ${statusTextColor}`}>R {actualToday}%</span>
+                            </div>
+                          </div>
+
+                          {/* Hover tooltip */}
+                          <div
+                            className="absolute top-16 left-6 z-50 bg-popover border border-border/60 rounded-2xl shadow-2xl p-4 w-52 space-y-3 pointer-events-none"
+                          >
+                            <p className="text-xs font-bold text-foreground uppercase tracking-widest border-b border-border/40 pb-2">Performance hoje</p>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
+                                  Planejado
+                                </span>
+                                <span className="font-bold text-foreground tabular-nums">{plannedToday}%</span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground flex items-center gap-1.5">
+                                  <span className={`w-2 h-2 rounded-full inline-block ${statusColor}`} />
+                                  Realizado
+                                </span>
+                                <span className={`font-bold tabular-nums ${statusTextColor}`}>{actualToday}%</span>
+                              </div>
+                              <div className="h-px bg-border/40" />
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">Diferença</span>
+                                <span className={`font-black tabular-nums ${statusTextColor}`}>{diff > 0 ? '+' : ''}{diff.toFixed(0)}%</span>
+                              </div>
+                            </div>
+                            <div className={`text-[11px] font-bold text-center py-1.5 rounded-lg ${statusColor} text-white`}>
+                              {statusEmoji} {statusLabel}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })()}
+                {/* Rows and Bars */}
 
-                {filteredTasks.map((task, idx) => {
-                  const isSummary = hasChildrenMap.get(task.id);
-                  const bounds = computedBounds.get(task.id);
+                {useMemo(() => ganttRows.map((row, idx) => {
+                  const { task, frente, type } = row;
+                  const isSummary = type === 'task' && hasChildrenMap.get(task.id);
+                  const bounds = type === 'task' ? computedBounds.get(task.id) : null;
                   
-                  const hasNoDates = !task.startDate || !task.endDate;
+                  const hasNoDates = type === 'task' 
+                    ? (!task.startDate || !task.endDate) 
+                    : (!frente?.startDate || !frente?.endDate);
                   const todayStr = new Date().toISOString().split('T')[0];
                   
-                  const startStr = (isSummary && bounds ? bounds.start : task.startDate) || todayStr;
-                  const endStr = (isSummary && bounds ? bounds.end : task.endDate) || todayStr;
+                  const startStr = type === 'task' 
+                    ? ((isSummary && bounds ? bounds.start : task.startDate) || todayStr)
+                    : (frente?.startDate || todayStr);
+                  const endStr = type === 'task'
+                    ? ((isSummary && bounds ? bounds.end : task.endDate) || todayStr)
+                    : (frente?.endDate || todayStr);
                   
                   const startPos = getPosition(startStr);
                   const endPos = getPosition(endStr) + (hasNoDates ? pixelsPerDay * 3 : pixelsPerDay);
@@ -795,26 +938,39 @@ export default function GanttTab({ project }: { project: Project }) {
                   // Summary task bar should stretch exactly between bounds. Regular tasks have min width.
                   const width = isSummary ? Math.max(8, endPos - startPos) : Math.max(24, endPos - startPos);
                   
-                  const critical = showCriticalPath && criticalSet.has(task.id);
+                  const critical = type === 'task' && showCriticalPath && criticalSet.has(task.id);
 
                   // Color based on status
-                  const barColor = critical
-                    ? 'bg-status-danger text-white'
-                    : task.status === 'completed'
-                      ? 'bg-status-ok text-white'
-                      : task.status === 'in_progress'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : task.status === 'rescheduled'
-                      ? 'bg-amber-500 text-white shadow-sm'
+                  const barColor = type === 'frente' && frente
+                    ? frente.status === 'completed'
+                      ? 'bg-emerald-500/80 border border-emerald-500/20 text-white shadow-sm'
+                      : frente.status === 'in_progress'
+                      ? 'bg-sky-500/80 border border-sky-500/20 text-white shadow-sm'
+                      : frente.status === 'delayed'
+                      ? 'bg-rose-500/80 border border-rose-500/20 text-white shadow-inner'
+                      : frente.status === 'paused'
+                      ? 'bg-amber-500/80 border border-amber-500/20 text-white shadow-sm'
+                      : 'bg-zinc-400/80 border border-zinc-400/20 text-muted-foreground'
+                    : critical
+                      ? 'bg-status-danger text-white'
+                      : task.status === 'completed'
+                        ? 'bg-status-ok text-white'
+                        : task.status === 'in_progress'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : task.status === 'rescheduled'
+                        ? 'bg-amber-500 text-white shadow-sm'
                         : task.status === 'delayed'
-                          ? 'bg-status-danger/70 text-white shadow-inner'
-                          : 'bg-muted/80 text-muted-foreground';
+                        ? 'bg-status-danger/70 text-white shadow-inner'
+                        : 'bg-muted/80 text-muted-foreground';
 
-                  const textColor = task.status === 'not_started' ? 'text-muted-foreground' : 'text-white';
-                  const isClicked = clickedBars.has(task.id);
+                  const textColor = type === 'frente'
+                    ? 'text-white'
+                    : task.status === 'not_started' ? 'text-muted-foreground' : 'text-white';
+                  
+                  const isClicked = type === 'task' && clickedBars.has(task.id);
 
                   // Baseline ghost bar (only for non-summary rescheduled tasks)
-                  const hasBaseline = !isSummary &&
+                  const hasBaseline = type === 'task' && !isSummary &&
                     task.plannedStart && task.plannedEnd &&
                     (task.plannedStart !== task.startDate || task.plannedEnd !== task.endDate);
                   const baselineStartPos = hasBaseline ? getPosition(task.plannedStart!) : 0;
@@ -822,8 +978,27 @@ export default function GanttTab({ project }: { project: Project }) {
                   const baselineWidth = hasBaseline ? Math.max(8, baselineEndPos - baselineStartPos) : 0;
 
                   return (
-                    <div key={task.id} className="h-10 relative group transition-colors hover:bg-muted/10 border-b border-border/30">
-                      {isSummary ? (
+                    <div 
+                      key={row.id} 
+                      className="h-10 relative group transition-colors hover:bg-muted/10 border-b border-border/60 shrink-0"
+                      style={{ height: '40px', minHeight: '40px', maxHeight: '40px' }}
+                    >
+                      {type === 'frente' && frente ? (
+                        // Secondary thinner bar for Service Front
+                        <div
+                          className={`absolute top-3.5 h-3.5 rounded-md flex items-center px-2 z-10 font-bold text-[8px] cursor-pointer hover:brightness-110 shadow-sm ${barColor}`}
+                          style={{ left: startPos, width }}
+                          title={`${task.name} - Frente: ${frente.name}: ${frente.percentComplete}%`}
+                        >
+                          {frente.status === 'in_progress' && frente.percentComplete > 0 && (
+                            <div 
+                              className="absolute inset-0 bg-white/20 pointer-events-none rounded-md"
+                              style={{ width: `${frente.percentComplete}%` }}
+                            />
+                          )}
+                          <span className="relative z-10 truncate">{frente.percentComplete}%</span>
+                        </div>
+                      ) : isSummary ? (
                         // MS Project Summary Task Style (Black Bracket) with Progress
                         <div
                           className="absolute top-1.5 z-10"
@@ -891,22 +1066,24 @@ export default function GanttTab({ project }: { project: Project }) {
                         </>
                       )}
 
-                      {!isSummary && (showAllLabels || isClicked) && (
+                      {(type === 'frente' || (!isSummary && (showAllLabels || isClicked))) && (
                         <div 
                           className="absolute top-3 h-4 flex items-center px-2 z-20 whitespace-nowrap font-bold text-[9px] text-slate-800 dark:text-slate-200 pointer-events-none"
                           style={{ left: startPos + width + 4 }}
                         >
-                          {task.name} {task.responsible ? `• ${task.responsible}` : ''}
+                          {type === 'frente' && frente
+                            ? `👷 ${frente.name} (${frente.responsible})`
+                            : `${task.name} ${task.responsible ? `• ${task.responsible}` : ''}`}
                         </div>
                       )}
                     </div>
                   );
-                })}
+                }), [ganttRows, hasChildrenMap, computedBounds, showCriticalPath, criticalSet, clickedBars, showAllLabels, pixelsPerDay, zoomLevel, timelineStartDate])}
               </div>
             </div>
           </div>
         </div>
-      </div>
+        </div>
 
       {/* ── Minimap Navigation Bar ── */}
       <div className="space-y-1.5">

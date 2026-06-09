@@ -9,7 +9,7 @@ import {
 import { 
   FileText, TableProperties, GanttChart, 
   Triangle, Wallet, Download, FileSpreadsheet,
-  CalendarDays
+  CalendarDays, Briefcase
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -298,6 +298,46 @@ export default function ReportsTab({ project }: ReportsTabProps) {
     }
   };
 
+  const handleExportFrentes = (format: 'pdf' | 'excel') => {
+    const data: any[] = [];
+    tasks.forEach(task => {
+      if (task.frentes && task.frentes.length > 0) {
+        task.frentes.forEach(f => {
+          data.push({
+            'Atividade': task.name,
+            'Frente': f.name,
+            'Responsável': f.responsible || '-',
+            'Data Início': formatDate(f.startDate),
+            'Data Fim': formatDate(f.endDate),
+            'Percentual': `${f.percentComplete || 0}%`,
+            'Status': statusMap[f.status] || f.status,
+          });
+        });
+      }
+    });
+
+    const cols = [
+      { header: 'Atividade', key: 'Atividade', width: 45 },
+      { header: 'Frente', key: 'Frente', width: 30 },
+      { header: 'Responsável', key: 'Responsável', width: 30 },
+      { header: 'Data Início', key: 'Data Início', width: 20 },
+      { header: 'Data Fim', key: 'Data Fim', width: 20 },
+      { header: 'Percentual', key: 'Percentual', width: 15 },
+      { header: 'Status', key: 'Status', width: 20 },
+    ] as any;
+
+    if (format === 'excel') {
+      exportToExcel(`Frentes_de_Servico_${project.name}`, 'Frentes de Serviço', data, cols);
+    } else {
+      exportToPdf(
+        `Frentes_de_Servico_${project.name}`, 
+        'Relatório de Frentes de Serviço',
+        { name: project.name, date: formatDate(new Date().toISOString()) },
+        data, cols
+      );
+    }
+  };
+
   const reports = [
     {
       id: 'planejamento',
@@ -316,6 +356,15 @@ export default function ReportsTab({ project }: ReportsTabProps) {
       color: 'text-purple-500',
       bg: 'bg-purple-500/10',
       action: handleExportGantt
+    },
+    {
+      id: 'frentes',
+      title: 'Frentes de Serviço',
+      description: 'Detalhamento operacional das frentes de serviço atreladas às atividades.',
+      icon: Briefcase,
+      color: 'text-teal-500',
+      bg: 'bg-teal-500/10',
+      action: handleExportFrentes
     },
     {
       id: 'restricoes',

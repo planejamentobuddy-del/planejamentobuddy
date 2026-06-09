@@ -105,6 +105,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
             statusComments: (Array.isArray(t.status_comments) ? t.status_comments : []) as any,
             checklists: (Array.isArray(t.checklists) ? t.checklists : []) as unknown as ChecklistItem[],
             orderIndex: (t as any).order_index || 0,
+            frentes: (Array.isArray((t as any).frentes) ? (t as any).frentes : []) as any,
+            frentesMode: ((t as any).frentes_mode || 'manual') as any,
             // Reschedule fields
             plannedStart: (t as any).planned_start || t.start_date || '',
             plannedEnd: (t as any).planned_end || t.end_date || '',
@@ -494,6 +496,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         status_comments: (finalStatus === 'completed' ? [] : (task.statusComments as any) || []),
         checklists: (task.checklists as any) || [],
         order_index: task.orderIndex || 0,
+        frentes: (task.frentes as any) || [],
+        frentes_mode: task.frentesMode || 'manual',
       })
       .eq('id', task.id);
 
@@ -548,16 +552,14 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      // Direct update in Supabase for all changed tasks
-      const promises = updates.map(upd => 
-        supabase.from('tasks').update({ order_index: upd.orderIndex } as any).eq('id', upd.id)
-      );
+      const rpcUpdates = updates.map(upd => ({
+        id: upd.id,
+        order_index: upd.orderIndex
+      }));
+      const { error } = await supabase.rpc('update_tasks', { updates: rpcUpdates });
       
-      const results = await Promise.all(promises);
-      const firstError = results.find(r => r.error);
-      
-      if (firstError) {
-        throw firstError.error;
+      if (error) {
+        throw error;
       }
     } catch (error: any) {
       setTasks(original);
@@ -565,6 +567,106 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       toast.error(`Erro ao reordenar: ${error.message}`);
     }
   }, [tasks]);
+
+  const updateTasksBatch = useCallback(async (tasksToUpdate: Task[]) => {
+    const originalTasks = [...tasks];
+    const originalPlans = [...plans];
+
+    const today = new Date().toISOString().split('T')[0];
+    const sanitizedUpdates: Task[] = [];
+    const rpcUpdates: any[] = [];
+    const completedTaskIds: string[] = [];
+
+    tasksToUpdate.forEach(task => {
+      const startDate = task.startDate || new Date().toISOString().split('T')[0];
+      const endDate = task.endDate || startDate;
+      const lastStatusDate = task.lastStatusDate || null;
+
+      let finalStatus = task.status;
+      if (endDate) {
+        if (finalStatus !== 'completed' && endDate < today) {
+          finalStatus = 'delayed';
+        } else if (finalStatus === 'delayed' && endDate >= today) {
+          finalStatus = 'in_progress';
+        }
+      }
+
+      const updatedTask = { ...task, status: finalStatus };
+      sanitizedUpdates.push(updatedTask);
+
+      if (finalStatus === 'completed') {
+        completedTaskIds.push(task.id);
+      }
+
+      rpcUpdates.push({
+        id: task.id,
+        name: task.name,
+        start_date: startDate,
+        end_date: endDate,
+        duration: task.duration,
+        percent_complete: task.percentComplete,
+        responsible: task.responsible,
+        predecessors: task.predecessors,
+        has_restriction: task.hasRestriction,
+        restriction_type: task.restrictionType,
+        status: finalStatus,
+        observations: task.observations,
+        last_status: task.lastStatus,
+        last_status_date: lastStatusDate,
+        status_comments: finalStatus === 'completed' ? [] : (task.statusComments as any) || [],
+        checklists: (task.checklists as any) || [],
+        order_index: task.orderIndex || 0,
+        frentes: (task.frentes as any) || [],
+        frentes_mode: task.frentesMode || 'manual',
+      });
+    });
+
+    // Optimistic local state update
+    setTasks(prev =>
+      prev.map(t => {
+        const found = sanitizedUpdates.find(upd => upd.id === t.id);
+        return found ? found : t;
+      })
+    );
+
+    try {
+      const { error } = await supabase.rpc('update_tasks', { updates: rpcUpdates });
+
+      if (error) {
+        throw error;
+      }
+
+      // Auto-sync weekly plans for completed tasks
+      if (completedTaskIds.length > 0) {
+        const linkedPlans = plans.filter(
+          p => completedTaskIds.includes(p.taskId) && p.status !== 'completed'
+        );
+        if (linkedPlans.length > 0) {
+          setPlans(prev =>
+            prev.map(p =>
+              completedTaskIds.includes(p.taskId) && p.status !== 'completed'
+                ? { ...p, status: 'completed' as any }
+                : p
+            )
+          );
+
+          await Promise.all(
+            linkedPlans.map(p =>
+              supabase
+                .from('weekly_plans')
+                .update({ status: 'completed' })
+                .eq('id', p.id)
+            )
+          );
+        }
+      }
+    } catch (error: any) {
+      setTasks(originalTasks);
+      setPlans(originalPlans);
+      console.error('[updateTasksBatch] Error:', error);
+      toast.error(`Erro ao salvar lote: ${error.message}`);
+    }
+  }, [tasks, plans]);
 
   const deleteTask = useCallback(async (id: string) => {
     const original = [...tasks];
@@ -986,7 +1088,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       archiveProject,
       duplicateProject,
       deleteProject,
-      getTasksForProject, addTask, updateTask, deleteTask, reorderTasks,
+      getTasksForProject, addTask, updateTask, updateTasksBatch, deleteTask, reorderTasks,
       getPlansForProject, addWeeklyPlan, updateWeeklyPlan, deleteWeeklyPlan,
       getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,
       getHistoryForProject, closeWeek,

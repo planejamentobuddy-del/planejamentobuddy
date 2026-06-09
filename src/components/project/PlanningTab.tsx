@@ -1,13 +1,14 @@
-import { useState, useMemo, Fragment, useEffect } from 'react';
+import React, { useState, useMemo, Fragment, useEffect } from 'react';
 import { Project, Task, TaskStatus, getProjectProgress, StatusComment, safeParseDate } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History, ChevronsDownUp, ChevronsUpDown, Eye } from 'lucide-react';
 import StatusCommentLog from './StatusCommentLog';
 import TeamTab from './TeamTab';
 import AssignmentsTab from './AssignmentsTab';
 import { RescheduleModal } from './RescheduleModal';
 import { RescheduleHistoryModal } from './RescheduleHistoryModal';
+import { TaskDetailModal } from './TaskDetailModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -153,7 +154,7 @@ function PredecessorPicker({
 
 
 export default function PlanningTab({ project }: { project: Project }) {
-  const { getTasksForProject, addTask, updateTask, deleteTask, reorderTasks, users, getResourcesForProject } = useProjects();
+  const { getTasksForProject, addTask, updateTask, updateTasksBatch, deleteTask, reorderTasks, users, getResourcesForProject } = useProjects();
   const { isAdmin } = useAuth();
   const allTasks = getTasksForProject(project.id);
   const resources = getResourcesForProject(project.id);
@@ -161,13 +162,50 @@ export default function PlanningTab({ project }: { project: Project }) {
   // Reschedule modal state
   const [rescheduleTask, setRescheduleTask] = useState<Task | null>(null);
   const [historyTask, setHistoryTask] = useState<Task | null>(null);
+  const [selectedDetailTask, setSelectedDetailTask] = useState<Task | null>(null);
   const [showOnlyRescheduled, setShowOnlyRescheduled] = useState(false);
+  const [filterResponsible, setFilterResponsible] = useState<string>('_all');
+  const [expandedFrentes, setExpandedFrentes] = useState<Set<string>>(new Set());
 
-  const stages = useMemo(() => 
-    allTasks.filter(t => !t.parentId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
-  , [allTasks]);
-  const getSubtasks = (stageId: string) => 
-    allTasks.filter(t => t.parentId === stageId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+  const uniqueResponsibles = useMemo(() => {
+    const resps = new Set<string>();
+    allTasks.forEach(t => {
+      if (t.responsible) resps.add(t.responsible);
+      if (t.frentes) {
+        t.frentes.forEach(f => {
+          if (f.responsible) resps.add(f.responsible);
+        });
+      }
+    });
+    return Array.from(resps).sort();
+  }, [allTasks]);
+
+  const matchesResponsibleFilter = useMemo(() => {
+    return (task: Task) => {
+      if (filterResponsible === '_all') return true;
+      if (task.responsible === filterResponsible) return true;
+      if (task.frentes && task.frentes.some(f => f.responsible === filterResponsible)) return true;
+      return false;
+    };
+  }, [filterResponsible]);
+
+  const getSubtasks = useMemo(() => {
+    return (stageId: string) => {
+      const subs = allTasks.filter(t => t.parentId === stageId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      if (filterResponsible === '_all') return subs;
+      return subs.filter(matchesResponsibleFilter);
+    };
+  }, [allTasks, filterResponsible, matchesResponsibleFilter]);
+
+  const stages = useMemo(() => {
+    const rawStages = allTasks.filter(t => !t.parentId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+    if (filterResponsible === '_all') return rawStages;
+    return rawStages.filter(stage => {
+      if (matchesResponsibleFilter(stage)) return true;
+      const subs = allTasks.filter(t => t.parentId === stage.id);
+      return subs.some(matchesResponsibleFilter);
+    });
+  }, [allTasks, filterResponsible, matchesResponsibleFilter]);
 
   const storageKey = `planning_expanded_${project.id}`;
   const [expandedStages, setExpandedStages] = useState<Set<string>>(() => {
@@ -179,7 +217,7 @@ export default function PlanningTab({ project }: { project: Project }) {
         console.error('Error parsing expanded stages:', e);
       }
     }
-    return new Set(stages.map(s => s.id));
+    return new Set<string>(); // Default to empty set (collapsed by default)
   });
 
   useEffect(() => {
@@ -193,6 +231,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: 'Término', align: 'left', width: 120 },
     { label: 'Duração', align: 'center', width: 80 },
     { label: '% Execução', align: 'left', width: 140 },
+    { label: 'Frentes', align: 'center', width: 110 },
     { label: 'Status', align: 'left', width: 150 },
     { label: 'Predecessoras', align: 'left', width: 160 },
     { label: 'Sucessoras', align: 'left', width: 160 },
@@ -375,60 +414,68 @@ export default function PlanningTab({ project }: { project: Project }) {
       else if (updated.percentComplete > 0) updated.status = 'in_progress';
       else updated.status = 'not_started';
     }
-    await updateTask(updated);
+    const batchUpdates: Task[] = [updated];
 
     // ── Propagate to successors: cascade date changes through the entire chain ──
     if (field === 'endDate' || field === 'duration' || field === 'startDate' || field === 'predecessors') {
       const finalEndDate = updated.endDate;
-      if (!finalEndDate) return;
+      if (finalEndDate) {
+        // BFS queue: each entry holds the predecessor ID and its new end date
+        // We use a map to track the new end dates for already-processed tasks,
+        // so that tasks with multiple predecessors pick the latest end date.
+        const newEndByTaskId = new Map<string, string>();
+        newEndByTaskId.set(task.id, finalEndDate);
 
-      // BFS queue: each entry holds the predecessor ID and its new end date
-      // We use a map to track the new end dates for already-processed tasks,
-      // so that tasks with multiple predecessors pick the latest end date.
-      const newEndByTaskId = new Map<string, string>();
-      newEndByTaskId.set(task.id, finalEndDate);
+        const queue: Array<{ predId: string; predNewEnd: string }> = [
+          { predId: task.id, predNewEnd: finalEndDate },
+        ];
+        const visited = new Set<string>();
+        visited.add(task.id);
 
-      const queue: Array<{ predId: string; predNewEnd: string }> = [
-        { predId: task.id, predNewEnd: finalEndDate },
-      ];
-      const visited = new Set<string>();
-      visited.add(task.id);
+        while (queue.length > 0) {
+          const { predId, predNewEnd } = queue.shift()!;
 
-      while (queue.length > 0) {
-        const { predId, predNewEnd } = queue.shift()!;
+          // Find all tasks that list predId as a predecessor
+          const successors = allTasks.filter(t => t.predecessors.includes(predId) && t.id !== task.id);
 
-        // Find all tasks that list predId as a predecessor
-        const successors = allTasks.filter(t => t.predecessors.includes(predId) && t.id !== task.id);
+          for (const succ of successors) {
+            // If this successor has multiple predecessors, we need the latest end among all of them
+            const latestPredEnd = succ.predecessors.reduce((latest, pid) => {
+              const pEnd = newEndByTaskId.get(pid) ?? (allTasks.find(t => t.id === pid)?.endDate ?? '');
+              return pEnd > latest ? pEnd : latest;
+            }, '');
 
-        for (const succ of successors) {
-          // If this successor has multiple predecessors, we need the latest end among all of them
-          const latestPredEnd = succ.predecessors.reduce((latest, pid) => {
-            const pEnd = newEndByTaskId.get(pid) ?? (allTasks.find(t => t.id === pid)?.endDate ?? '');
-            return pEnd > latest ? pEnd : latest;
-          }, '');
+            const succStart = addBusinessDays(latestPredEnd || predNewEnd, 2);
+            const succEnd = addBusinessDays(succStart, succ.duration || 1);
 
-          const succStart = addBusinessDays(latestPredEnd || predNewEnd, 2);
-          const succEnd = addBusinessDays(succStart, succ.duration || 1);
+            if (succStart && succEnd && (succStart !== succ.startDate || succEnd !== succ.endDate)) {
+              const updatedSucc = {
+                ...succ,
+                startDate: succStart,
+                endDate: succEnd,
+              };
+              const existingIdx = batchUpdates.findIndex(t => t.id === succ.id);
+              if (existingIdx !== -1) {
+                batchUpdates[existingIdx] = updatedSucc;
+              } else {
+                batchUpdates.push(updatedSucc);
+              }
+            }
 
-          if (succStart && succEnd && (succStart !== succ.startDate || succEnd !== succ.endDate)) {
-            await updateTask({
-              ...succ,
-              startDate: succStart,
-              endDate: succEnd,
-            });
-          }
+            // Track the new end date so downstream successors can use it
+            newEndByTaskId.set(succ.id, succEnd);
 
-          // Track the new end date so downstream successors can use it
-          newEndByTaskId.set(succ.id, succEnd);
-
-          // Continue down the chain (even if dates didn't change, in case further tasks depend on it)
-          if (!visited.has(succ.id)) {
-            visited.add(succ.id);
-            queue.push({ predId: succ.id, predNewEnd: succEnd });
+            // Continue down the chain (even if dates didn't change, in case further tasks depend on it)
+            if (!visited.has(succ.id)) {
+              visited.add(succ.id);
+              queue.push({ predId: succ.id, predNewEnd: succEnd });
+            }
           }
         }
       }
     }
+
+    await updateTasksBatch(batchUpdates);
   };
 
   const handleDuplicate = async (task: Task) => {
@@ -518,9 +565,19 @@ export default function PlanningTab({ project }: { project: Project }) {
               <span className="text-muted-foreground/30 text-xs pl-1 shrink-0">↳</span>
             )}
             <Input
-              className={`h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 truncate ${isStage ? 'font-bold text-foreground' : 'text-foreground/80'}`}
-              value={task.name}
-              onChange={e => handleChange(task, 'name', e.target.value)}
+              className={`h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 truncate ${isStage ? 'font-bold text-foreground' : 'text-foreground/80 cursor-pointer hover:underline decoration-primary/45 decoration-2'}`}
+              defaultValue={task.name}
+              onBlur={e => {
+                if (e.target.value !== task.name) {
+                  handleChange(task, 'name', e.target.value);
+                }
+              }}
+              onDoubleClick={() => {
+                if (!isStage) {
+                  setSelectedDetailTask(task);
+                }
+              }}
+              title={isStage ? undefined : "Dê duplo clique para abrir frentes de serviço e detalhes"}
               placeholder={isStage ? "Nova Etapa..." : "Nova Subetapa..."}
             />
           </div>
@@ -550,8 +607,12 @@ export default function PlanningTab({ project }: { project: Project }) {
               <Input
                 type="date"
                 className="h-8 text-xs border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
-                value={task.startDate}
-                onChange={e => handleChange(task, 'startDate', e.target.value)}
+                defaultValue={task.startDate}
+                onBlur={e => {
+                  if (e.target.value && e.target.value !== task.startDate) {
+                    handleChange(task, 'startDate', e.target.value);
+                  }
+                }}
               />
               {task.plannedStart && task.plannedStart !== task.startDate && (
                 <div className="px-1 text-[10px] text-muted-foreground/50 font-mono">
@@ -571,8 +632,12 @@ export default function PlanningTab({ project }: { project: Project }) {
               <Input
                 type="date"
                 className="h-8 text-xs border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
-                value={task.endDate}
-                onChange={e => handleChange(task, 'endDate', e.target.value)}
+                defaultValue={task.endDate}
+                onBlur={e => {
+                  if (e.target.value && e.target.value !== task.endDate) {
+                    handleChange(task, 'endDate', e.target.value);
+                  }
+                }}
               />
               {task.plannedEnd && task.plannedEnd !== task.endDate && (
                 <div className="px-1 text-[10px] text-muted-foreground/50 font-mono">
@@ -591,8 +656,13 @@ export default function PlanningTab({ project }: { project: Project }) {
             <Input
               type="number"
               className="h-8 w-full text-center text-sm border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
-              value={task.duration}
-              onChange={e => handleChange(task, 'duration', parseInt(e.target.value) || 0)}
+              defaultValue={task.duration}
+              onBlur={e => {
+                const val = parseInt(e.target.value) || 0;
+                if (val !== task.duration) {
+                  handleChange(task, 'duration', val);
+                }
+              }}
             />
           )}
         </td>
@@ -620,6 +690,38 @@ export default function PlanningTab({ project }: { project: Project }) {
               </>
             )}
           </div>
+        </td>
+
+        {/* Frentes */}
+        <td className="py-2.5 px-3 border-r border-border/40 text-center font-medium">
+          {!isStage && (
+            <div className="flex items-center justify-center gap-1.5">
+              <span className="text-xs font-semibold">
+                {task.frentes && task.frentes.length > 0 ? `👷 ${task.frentes.length} Frentes` : '0 frentes'}
+              </span>
+              {task.frentes && task.frentes.length > 0 && (
+                <button 
+                  onClick={() => {
+                    setExpandedFrentes(prev => {
+                      const next = new Set(prev);
+                      if (next.has(task.id)) next.delete(task.id);
+                      else next.add(task.id);
+                      return next;
+                    });
+                  }} 
+                  className="p-0.5 hover:bg-muted rounded transition-colors"
+                  title="Expandir frentes de serviço"
+                >
+                  {expandedFrentes.has(task.id) ? (
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+          {isStage && <span className="text-muted-foreground/35">—</span>}
         </td>
 
         {/* 7. Status */}
@@ -666,8 +768,12 @@ export default function PlanningTab({ project }: { project: Project }) {
         <td className="py-2.5 px-3 border-r border-border/40">
           <Input
             className="h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30"
-            value={task.observations || ''}
-            onChange={e => handleChange(task, 'observations', e.target.value)}
+            defaultValue={task.observations || ''}
+            onBlur={e => {
+              if (e.target.value !== (task.observations || '')) {
+                handleChange(task, 'observations', e.target.value);
+              }
+            }}
             placeholder="..."
           />
         </td>
@@ -678,6 +784,17 @@ export default function PlanningTab({ project }: { project: Project }) {
             {isStage && (
               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => handleAddSubtask(task.id)} title="Adicionar subetapa">
                 <Plus className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            {!isStage && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                onClick={() => setSelectedDetailTask(task)}
+                title="Ver detalhes / Frentes de serviço"
+              >
+                <Eye className="w-3.5 h-3.5" />
               </Button>
             )}
             {!isStage && (
@@ -727,6 +844,12 @@ export default function PlanningTab({ project }: { project: Project }) {
         task={historyTask}
         isOpen={!!historyTask}
         onClose={() => setHistoryTask(null)}
+      />
+      <TaskDetailModal
+        task={selectedDetailTask}
+        isOpen={!!selectedDetailTask}
+        onClose={() => setSelectedDetailTask(null)}
+        onUpdate={updateTask}
       />
 
       <Tabs defaultValue="schedule" className="w-full">
@@ -791,6 +914,20 @@ export default function PlanningTab({ project }: { project: Project }) {
                 ).length} etapa(s) com reprogramações
               </span>
             )}
+
+            <div className="flex items-center gap-1.5 ml-auto">
+              <span className="text-xs text-muted-foreground font-semibold">Responsável:</span>
+              <select
+                value={filterResponsible}
+                onChange={e => setFilterResponsible(e.target.value)}
+                className="h-8 text-xs border border-border/40 rounded-lg bg-background px-2.5 font-medium focus:outline-none shadow-sm cursor-pointer"
+              >
+                <option value="_all">Todos os responsáveis</option>
+                {uniqueResponsibles.map(resp => (
+                  <option key={resp} value={resp}>{resp}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="card-elevated overflow-x-auto p-0 border-none shadow-none bg-transparent">
@@ -868,8 +1005,15 @@ export default function PlanningTab({ project }: { project: Project }) {
                               <span className="text-xs text-primary font-bold">{projectAggregate.percent}%</span>
                             </div>
                           </td>
+                          {/* Frentes */}
+                          <td className="p-0 border-r border-border/10 text-center">
+                            <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[6] }}>
+                              {allTasks.reduce((sum, t) => sum + (t.frentes?.length || 0), 0)} frentes
+                            </div>
+                          </td>
+                          {/* Status */}
                           <td className="p-0 border-r border-border/10">
-                            <div className="px-3" style={{ width: colWidths[6] }}>
+                            <div className="px-3" style={{ width: colWidths[7] }}>
                               <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
                             </div>
                           </td>
@@ -897,6 +1041,7 @@ export default function PlanningTab({ project }: { project: Project }) {
                                 : getSubtasks(stage.id)
                             }
                             isExpanded={expandedStages.has(stage.id)}
+                            expandedFrentes={expandedFrentes}
                             renderRow={(t: Task, isSub: boolean, dragProps?: any) => {
                               const subIdx = isSub ? getSubtasks(stage.id).findIndex(st => st.id === t.id) : -1;
                               const number = isSub ? `${sIdx + 1}.${subIdx + 1}` : `${sIdx + 1}`;
@@ -933,10 +1078,11 @@ export default function PlanningTab({ project }: { project: Project }) {
   );
 }
 
-function SortableStageRow({ 
+const SortableStageRow = React.memo(function SortableStageRow({ 
   stage, 
   subtasks, 
   isExpanded, 
+  expandedFrentes,
   renderRow, 
   handleAddSubtask, 
   columnHeaders 
@@ -960,7 +1106,50 @@ function SortableStageRow({
   return (
     <tbody ref={setNodeRef} style={style} className={isDragging ? 'shadow-2xl ring-2 ring-primary border-primary rounded-lg overflow-hidden brightness-105 transition-none z-50 pointer-events-none' : ''}>
       {renderRow(stage, false, { ...attributes, ...listeners })}
-      {isExpanded && subtasks.map((sub: any) => renderRow(sub, true))}
+      {isExpanded && subtasks.map((sub: any) => (
+        <Fragment key={sub.id}>
+          {renderRow(sub, true)}
+          {expandedFrentes.has(sub.id) && sub.frentes && sub.frentes.map((frente: any) => (
+            <tr key={frente.id} className="bg-muted/10 border-b border-border/30 hover:bg-muted/15 transition-colors">
+              <td className="py-2 px-3 pl-14 text-xs font-semibold text-foreground/75 flex items-center gap-1.5 min-w-0 truncate">
+                <span className="text-muted-foreground/45 shrink-0">↳</span>
+                <span className="truncate">👷 {frente.name}</span>
+              </td>
+              <td className="py-2 px-3 text-xs text-foreground/80 truncate">{frente.responsible}</td>
+              <td className="py-2 px-3 text-xs text-muted-foreground">{frente.startDate ? new Date(frente.startDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+              <td className="py-2 px-3 text-xs text-muted-foreground">{frente.endDate ? new Date(frente.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+              <td className="py-2 px-3 text-center text-xs text-foreground/80 font-medium">{frente.duration || 1} d</td>
+              <td className="py-2 px-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden shrink-0">
+                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${frente.percentComplete || 0}%` }} />
+                  </div>
+                  <span className="font-semibold text-[11px]">{frente.percentComplete || 0}%</span>
+                </div>
+              </td>
+              <td className="py-2 px-3 text-center text-muted-foreground/30">—</td>
+              <td className="py-2 px-3 text-xs">
+                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shadow-sm shrink-0 ${
+                  frente.status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600' :
+                  frente.status === 'in_progress' ? 'bg-sky-500/10 border-sky-500/20 text-sky-600' :
+                  frente.status === 'delayed' ? 'bg-rose-500/10 border-rose-500/20 text-rose-600' :
+                  frente.status === 'paused' ? 'bg-amber-500/10 border-amber-500/20 text-amber-600' :
+                  'bg-zinc-500/10 border-zinc-500/20 text-zinc-600'
+                }`}>
+                  {frente.status === 'completed' ? 'Concluída' :
+                   frente.status === 'in_progress' ? 'Andamento' :
+                   frente.status === 'delayed' ? 'Atrasada' :
+                   frente.status === 'paused' ? 'Pausada' : 'Não Inic.'}
+                </span>
+              </td>
+              <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+              <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+              <td className="py-2 px-3 text-[11px] text-muted-foreground/70 italic truncate max-w-[150px]" title={frente.observations}>{frente.observations || '—'}</td>
+              <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+            </tr>
+          ))}
+        </Fragment>
+      ))}
       {isExpanded && (
         <tr className="border-b border-dashed bg-muted/5">
           <td colSpan={columnHeaders.length} className="py-2 px-3 pl-10">
@@ -977,4 +1166,4 @@ function SortableStageRow({
       )}
     </tbody>
   );
-}
+});

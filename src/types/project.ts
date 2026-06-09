@@ -44,6 +44,23 @@ export interface StatusComment {
   date: string; // ISO timestamp
 }
 
+export interface ServiceFront {
+  id: string;
+  name: string;
+  responsible: string;
+  mestreObras?: string;
+  encarregado?: string;
+  team?: string;
+  workersCount: number;
+  startDate: string;
+  endDate: string;
+  duration: number;
+  percentComplete: number;
+  status: 'not_started' | 'in_progress' | 'completed' | 'delayed' | 'paused';
+  observations?: string;
+  predecessorId?: string; // ID of another frente inside the same task this frente depends on
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -64,6 +81,10 @@ export interface Task {
   statusComments?: StatusComment[];
   checklists?: ChecklistItem[];
   orderIndex?: number;
+  frentes?: ServiceFront[];
+  frentesMode?: 'manual' | 'auto';
+  location?: string;
+  discipline?: string;
   // Baseline (never modified after first set)
   plannedStart?: string;       // YYYY-MM-DD
   plannedEnd?: string;         // YYYY-MM-DD
