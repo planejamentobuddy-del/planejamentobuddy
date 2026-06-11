@@ -425,16 +425,43 @@ export default function LeanTab({ project }: { project: Project }) {
                           </td>
 
                           <td className="py-4 px-6">
-                            <Select value={plan.status} onValueChange={v => updateWeeklyPlan({ ...plan, status: v as any })}>
-                              <SelectTrigger className="h-8 w-full min-w-[150px] rounded-lg border-0 bg-transparent hover:bg-muted font-bold text-xs mx-auto">
-                                <span className={`flex items-center justify-center px-3 py-1 rounded-full w-full ${stOpt.color}`}>
-                                  {stOpt.label}
-                                </span>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {statusOptions.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <div className="space-y-1.5">
+                              <Select 
+                                value={plan.status} 
+                                onValueChange={v => updateWeeklyPlan({ 
+                                  ...plan, 
+                                  status: v as any, 
+                                  reason: v === 'not_completed' ? plan.reason || 'Outros' : '' 
+                                })}
+                              >
+                                <SelectTrigger className="h-8 w-full min-w-[150px] rounded-lg border-0 bg-transparent hover:bg-muted font-bold text-xs mx-auto">
+                                  <span className={`flex items-center justify-center px-3 py-1 rounded-full w-full ${stOpt.color}`}>
+                                    {stOpt.label}
+                                  </span>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {statusOptions.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+
+                              {plan.status === 'not_completed' && (
+                                <Select 
+                                  value={plan.reason || 'Outros'} 
+                                  onValueChange={r => updateWeeklyPlan({ ...plan, reason: r })}
+                                >
+                                  <SelectTrigger className="h-7 w-full min-w-[150px] rounded-lg border border-destructive/20 bg-destructive/5 text-destructive font-semibold text-[10px] mx-auto focus:ring-1 focus:ring-destructive/30">
+                                    <SelectValue placeholder="Motivo (CNC)..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {DELAY_REASONS.map(reason => (
+                                      <SelectItem key={reason} value={reason} className="text-xs">
+                                        {reason}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
                           </td>
 
                           <td className="py-4 px-6">
