@@ -711,6 +711,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         status: data.status as any,
         reason: data.reason || '',
         observations: data.observations || '',
+        statusComments: [],
       }]);
     } else if (error) {
       toast.error('Erro ao adicionar plano semanal.');
@@ -756,8 +757,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const getHistoryForProject = useCallback((projectId: string) => 
     history.filter(h => h.projectId === projectId), [history]);
 
-  const closeWeek = useCallback(async (projectId: string) => {
-    const week = getCurrentWeek();
+  const closeWeek = useCallback(async (projectId: string, weekParam?: string) => {
+    const week = weekParam || getCurrentWeek();
     const projectPlans = plans.filter(p => p.projectId === projectId && p.week === week);
     if (projectPlans.length === 0) {
       toast.error('Não há planos para fechar nesta semana.');
@@ -791,7 +792,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         closedAt: data.closed_at,
       };
       setHistory(prev => [...prev.filter(h => !(h.projectId === projectId && h.week === week)), entry]);
-      toast.success(`Semana fechada! PPC: ${ppc}%`);
+      toast.success(`Semana ${week} fechada! PPC: ${ppc}%`);
     } else if (error) {
       toast.error('Erro ao fechar semana.');
     }

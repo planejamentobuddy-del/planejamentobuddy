@@ -48,7 +48,7 @@ export interface ProjectsContextType {
   addResource: (r: Omit<ProjectResource, 'id' | 'createdAt'>) => Promise<ProjectResource | null>;
   updateResource: (r: ProjectResource) => Promise<void>;
   deleteResource: (id: string) => Promise<void>;
-  closeWeek: (projectId: string) => Promise<void>;
+  closeWeek: (projectId: string, week?: string) => Promise<void>;
   refresh: () => Promise<void>;
   users: any[];
 }

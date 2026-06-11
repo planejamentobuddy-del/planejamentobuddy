@@ -339,7 +339,7 @@ export default function LeanTab({ project }: { project: Project }) {
                 + Avulsa
               </Button>
 
-              <Button onClick={() => closeWeek(project.id)} className="rounded-xl h-10 px-6 font-semibold shadow-lg shadow-primary/20">
+              <Button onClick={() => closeWeek(project.id, currentWeekStr)} className="rounded-xl h-10 px-6 font-semibold shadow-lg shadow-primary/20">
                 Fechar Semana
               </Button>
             </div>
