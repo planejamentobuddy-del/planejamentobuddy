@@ -235,10 +235,10 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: 'Término', align: 'left' as const, width: 120, always: true },
     { label: 'Duração', align: 'center' as const, width: 80, always: true },
     { label: '% Execução', align: 'left' as const, width: 140, always: true },
-    { label: 'Custo (R$)', align: 'right' as const, width: 140, always: true },
     { label: 'Status', align: 'left' as const, width: 150, always: true },
     { label: 'Predecessoras', align: 'left' as const, width: 160, always: false },
     { label: 'Sucessoras', align: 'left' as const, width: 160, always: false },
+    { label: 'Custo (R$)', align: 'right' as const, width: 140, always: true },
     { label: 'Observações', align: 'left' as const, width: 200, always: false },
     { label: 'Efetivo', align: 'center' as const, width: 110, always: false },
     { label: 'Responsável', align: 'left' as const, width: 140, always: false },
@@ -701,31 +701,6 @@ export default function PlanningTab({ project }: { project: Project }) {
           </div>
         </td>
 
-
-
-        {/* Custo (R$) */}
-        <td className="py-2.5 px-3 border-r border-border/70 text-right">
-          {isStage ? (
-            <div className="px-1.5 py-1 text-sm font-semibold text-foreground/80">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                getSubtasks(task.id).reduce((sum, s) => sum + (s.cost || 0), 0)
-              )}
-            </div>
-          ) : (
-            <Input
-              type="number"
-              className="h-8 w-full text-right text-sm border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
-              defaultValue={task.cost || 0}
-              onBlur={e => {
-                const val = parseFloat(e.target.value) || 0;
-                if (val !== (task.cost || 0)) {
-                  handleChange(task, 'cost', val);
-                }
-              }}
-            />
-          )}
-        </td>
-
         {/* 7. Status */}
         <td className="py-2.5 px-3 border-r border-border/70">
           <div className="space-y-1">
@@ -767,7 +742,34 @@ export default function PlanningTab({ project }: { project: Project }) {
                 {allTasks.filter(t => t.predecessors.includes(task.id)).map(t => t.name).join(', ') || '—'}
               </div>
             </td>
+          </>
+        )}
 
+        {/* Custo (R$) */}
+        <td className="py-2.5 px-3 border-r border-border/70 text-right">
+          {isStage ? (
+            <div className="px-1.5 py-1 text-sm font-semibold text-foreground/80">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                getSubtasks(task.id).reduce((sum, s) => sum + (s.cost || 0), 0)
+              )}
+            </div>
+          ) : (
+            <Input
+              type="number"
+              className="h-8 w-full text-right text-sm border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
+              defaultValue={task.cost || 0}
+              onBlur={e => {
+                const val = parseFloat(e.target.value) || 0;
+                if (val !== (task.cost || 0)) {
+                  handleChange(task, 'cost', val);
+                }
+              }}
+            />
+          )}
+        </td>
+
+        {showAllColumns && (
+          <>
             {/* 11. Observações */}
             <td className="py-2.5 px-3 border-r border-border/70">
               <Input
@@ -1051,24 +1053,31 @@ export default function PlanningTab({ project }: { project: Project }) {
                               <span className="text-xs text-primary font-bold">{projectAggregate.percent}%</span>
                             </div>
                           </td>
-                          {/* Custo (R$) */}
-                          <td className="p-0 border-r border-border/40 text-right">
-                            <div className="px-3 text-xs text-primary font-bold animate-fade-in" style={{ width: colWidths[5] }}>
-                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                allTasks.filter(t => t.parentId).reduce((sum, s) => sum + (s.cost || 0), 0)
-                              )}
-                            </div>
-                          </td>
                           {/* Status */}
                           <td className="p-0 border-r border-border/40">
-                            <div className="px-3" style={{ width: colWidths[6] }}>
+                            <div className="px-3" style={{ width: colWidths[5] }}>
                               <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
                             </div>
                           </td>
                           {showAllColumns && (
                             <>
+                              {/* Predecessoras */}
                               <td className="p-0 border-r border-border/40" />
+                              {/* Sucessoras */}
                               <td className="p-0 border-r border-border/40" />
+                            </>
+                          )}
+                          {/* Custo (R$) */}
+                          <td className="p-0 border-r border-border/40 text-right">
+                            <div className="px-3 text-xs text-primary font-bold animate-fade-in" style={{ width: colWidths[showAllColumns ? 8 : 6] }}>
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                allTasks.filter(t => t.parentId).reduce((sum, s) => sum + (s.cost || 0), 0)
+                              )}
+                            </div>
+                          </td>
+                          {showAllColumns && (
+                            <>
+                              {/* Observações */}
                               <td className="p-0 border-r border-border/40" />
                               {/* Efetivo */}
                               <td className="p-0 border-r border-border/10 text-center">
@@ -1076,7 +1085,9 @@ export default function PlanningTab({ project }: { project: Project }) {
                                   {projectWorkforce.reduce((sum, e) => sum + e.ownWorkers + e.thirdPartyWorkers, 0)} colab.
                                 </div>
                               </td>
+                              {/* Responsável */}
                               <td className="p-0 border-r border-border/40" />
+                              {/* Ações */}
                               <td className="p-0" />
                             </>
                           )}
@@ -1192,8 +1203,6 @@ const SortableStageRow = React.memo(function SortableStageRow({
                     <span className="font-semibold text-[11px]">{frente.percentComplete || 0}%</span>
                   </div>
                 </td>
-                {/* 6. Custo (R$) */}
-                <td className="py-2 px-3 text-right text-xs text-muted-foreground/30">—</td>
                 {/* 7. Status */}
                 <td className="py-2 px-3 text-xs">
                   <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shadow-sm shrink-0 ${
@@ -1216,6 +1225,14 @@ const SortableStageRow = React.memo(function SortableStageRow({
                     <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
                     {/* 9. Sucessoras */}
                     <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+                  </>
+                )}
+
+                {/* 6. Custo (R$) */}
+                <td className="py-2 px-3 text-right text-xs text-muted-foreground/30">—</td>
+
+                {hasExtra && (
+                  <>
                     {/* 10. Observações */}
                     <td className="py-2 px-3 text-[11px] text-muted-foreground/70 italic truncate max-w-[150px]" title={frente.observations}>{frente.observations || '—'}</td>
                     {/* 11. Efetivo */}
