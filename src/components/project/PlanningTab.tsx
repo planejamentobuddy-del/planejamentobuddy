@@ -170,6 +170,7 @@ export default function PlanningTab({ project }: { project: Project }) {
   const [showOnlyRescheduled, setShowOnlyRescheduled] = useState(false);
   const [filterResponsible, setFilterResponsible] = useState<string>('_all');
   const [expandedFrentes, setExpandedFrentes] = useState<Set<string>>(new Set());
+  const [showAllColumns, setShowAllColumns] = useState(false);
 
   const uniqueResponsibles = useMemo(() => {
     const resps = new Set<string>();
