@@ -170,6 +170,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           lastStatus: c.last_status || '',
           lastStatusDate: c.last_status_date || '',
           statusComments: (Array.isArray(c.status_comments) ? c.status_comments : []) as any,
+          supplyPackageId: c.supply_package_id || undefined,
         })));
       }
 
@@ -262,6 +263,60 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Sync overdue supply packages as LEAN constraints on load
+  useEffect(() => {
+    if (loading || supplyPackages.length === 0) return;
+
+    const syncAll = async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const overduePkgs = supplyPackages.filter(pkg => 
+        pkg.taskId && 
+        (pkg.status === 'pending_quantitative' || pkg.status === 'pending_order') && 
+        pkg.orderDeadline && 
+        pkg.orderDeadline < today
+      );
+
+      for (const pkg of overduePkgs) {
+        const existing = constraints.find(c => c.supplyPackageId === pkg.id);
+        if (!existing) {
+          const desc = `[Suprimento Atrasado] O pacote "${pkg.name}" ultrapassou o prazo limite de pedido (${pkg.orderDeadline ? new Date(pkg.orderDeadline + 'T12:00:00').toLocaleDateString('pt-BR') : ''}).`;
+          const { data, error } = await supabase.from('constraints')
+            .insert([{
+              project_id: pkg.projectId,
+              task_id: pkg.taskId,
+              description: desc,
+              category: 'material',
+              status: 'open',
+              responsible: pkg.supplier || 'Suprimentos',
+              due_date: pkg.orderDeadline || null,
+              created_by: user?.id,
+              supply_package_id: pkg.id
+            }])
+            .select()
+            .single();
+
+          if (!error && data) {
+            const newC: Constraint = {
+              id: data.id,
+              projectId: data.project_id,
+              taskId: data.task_id || undefined,
+              description: data.description,
+              category: data.category as any,
+              status: data.status as any,
+              responsible: data.responsible || '',
+              dueDate: data.due_date || '',
+              createdAt: data.created_at,
+              supplyPackageId: data.supply_package_id || undefined
+            };
+            setConstraints(prev => [...prev, newC]);
+          }
+        }
+      }
+    };
+
+    syncAll();
+  }, [loading, supplyPackages, constraints, user]);
 
   const addProject = useCallback(async (p: Omit<Project, 'id' | 'createdAt'>) => {
     const { data, error } = await supabase
@@ -853,7 +908,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         status: c.status,
         responsible: c.responsible,
         due_date: c.dueDate || null,
-        created_by: user?.id
+        created_by: user?.id,
+        supply_package_id: c.supplyPackageId || null
       }])
       .select()
       .single();
@@ -874,6 +930,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       responsible: data.responsible || '',
       dueDate: data.due_date || '',
       createdAt: data.created_at,
+      supplyPackageId: data.supply_package_id || undefined,
     };
     setConstraints(prev => [...prev, newConstraint]);
     toast.success('Restrição adicionada!');
@@ -894,7 +951,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         last_status: c.lastStatus,
         last_status_date: c.lastStatusDate || null,
         status_comments: (c.status === 'closed' ? [] : (c.statusComments as any) || []),
-        closed_at: c.status === 'closed' ? new Date().toISOString() : null
+        closed_at: c.status === 'closed' ? new Date().toISOString() : null,
+        supply_package_id: c.supplyPackageId || null
       })
       .eq('id', c.id);
 
@@ -1124,8 +1182,67 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   }, [resources]);
 
   // ============================================================
-  // SUPPLY PACKAGES CRUD
+  // SUPPLY PACKAGES CRUD & LEAN INTEGRATION (OPTION 02)
   // ============================================================
+
+  const syncConstraintForSupplyPackage = useCallback(async (pkg: SupplyPackage, currentConstraints: Constraint[] = constraints) => {
+    if (!pkg.taskId) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const isPending = pkg.status === 'pending_quantitative' || pkg.status === 'pending_order';
+    const isOverdue = pkg.orderDeadline ? (pkg.orderDeadline < today) : false;
+
+    const existing = currentConstraints.find(c => c.supplyPackageId === pkg.id);
+
+    if (isPending && isOverdue) {
+      if (!existing) {
+        const desc = `[Suprimento Atrasado] O pacote "${pkg.name}" ultrapassou o prazo limite de pedido (${pkg.orderDeadline ? new Date(pkg.orderDeadline + 'T12:00:00').toLocaleDateString('pt-BR') : ''}).`;
+        const { data, error } = await supabase.from('constraints')
+          .insert([{
+            project_id: pkg.projectId,
+            task_id: pkg.taskId,
+            description: desc,
+            category: 'material',
+            status: 'open',
+            responsible: pkg.supplier || 'Suprimentos',
+            due_date: pkg.orderDeadline || null,
+            created_by: user?.id,
+            supply_package_id: pkg.id
+          }])
+          .select()
+          .single();
+
+        if (!error && data) {
+          const newC: Constraint = {
+            id: data.id,
+            projectId: data.project_id,
+            taskId: data.task_id || undefined,
+            description: data.description,
+            category: data.category as any,
+            status: data.status as any,
+            responsible: data.responsible || '',
+            dueDate: data.due_date || '',
+            createdAt: data.created_at,
+            supplyPackageId: data.supply_package_id || undefined
+          };
+          setConstraints(prev => [...prev, newC]);
+        }
+      } else if (existing.status === 'closed') {
+        const updated = { ...existing, status: 'open' as const };
+        setConstraints(prev => prev.map(c => c.id === existing.id ? updated : c));
+        await supabase.from('constraints').update({ status: 'open', closed_at: null }).eq('id', existing.id);
+      }
+    } else {
+      if (existing && existing.status === 'open') {
+        const updated = { ...existing, status: 'closed' as const, closedAt: new Date().toISOString() };
+        setConstraints(prev => prev.map(c => c.id === existing.id ? updated : c));
+        await supabase.from('constraints').update({ 
+          status: 'closed', 
+          closed_at: new Date().toISOString() 
+        }).eq('id', existing.id);
+      }
+    }
+  }, [user, constraints]);
 
   const getSupplyPackagesForProject = useCallback((projectId: string) =>
     supplyPackages.filter(s => s.projectId === projectId), [supplyPackages]);
@@ -1179,8 +1296,9 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     };
     setSupplyPackages(prev => [...prev, newPkg]);
     toast.success('Pacote de suprimento adicionado!');
+    await syncConstraintForSupplyPackage(newPkg);
     return newPkg;
-  }, [user, supplyPackages]);
+  }, [user, supplyPackages, syncConstraintForSupplyPackage]);
 
   const updateSupplyPackage = useCallback(async (pkg: SupplyPackage) => {
     const original = [...supplyPackages];
@@ -1199,7 +1317,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         order_deadline: pkg.orderDeadline || null,
         order_date: pkg.orderDate || null,
         expected_delivery_date: pkg.expectedDeliveryDate || null,
-        actual_delivery_date: pkg.actualDeliveryDate || null,
+        actual_delivery_date: pkg.actual_delivery_date || null,
         status: pkg.status,
         notes: pkg.notes || null,
       })
@@ -1211,12 +1329,20 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       toast.error('Erro ao atualizar pacote de suprimento.');
     } else {
       toast.success('Pacote atualizado!');
+      await syncConstraintForSupplyPackage(pkg);
     }
-  }, [supplyPackages]);
+  }, [supplyPackages, syncConstraintForSupplyPackage]);
 
   const deleteSupplyPackage = useCallback(async (id: string) => {
     const original = [...supplyPackages];
     setSupplyPackages(prev => prev.filter(s => s.id !== id));
+
+    const linkedConstraint = constraints.find(c => c.supplyPackageId === id);
+    if (linkedConstraint) {
+      setConstraints(prev => prev.filter(c => c.id !== linkedConstraint.id));
+      await supabase.from('constraints').delete().eq('id', linkedConstraint.id);
+    }
+
     const { error } = await supabase.from('supply_packages').delete().eq('id', id);
     if (error) {
       setSupplyPackages(original);
@@ -1224,7 +1350,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     } else {
       toast.success('Pacote removido.');
     }
-  }, [supplyPackages]);
+  }, [supplyPackages, constraints]);
 
   // ============================================================
   // WORKFORCE ENTRIES CRUD

@@ -184,6 +184,7 @@ export interface Constraint {
   lastStatus?: string;
   lastStatusDate?: string;
   statusComments?: StatusComment[];
+  supplyPackageId?: string; // Vinculado a um pacote de suprimento
 }
 
 export function getProjectProgress(tasks: Task[]): number {
