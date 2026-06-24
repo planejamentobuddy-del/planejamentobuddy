@@ -60,7 +60,12 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 export default function WorkforceTab({ project }: { project: Project }) {
-  const { workforceEntries, addWorkforceEntry, updateWorkforceEntry, deleteWorkforceEntry } = useProjects();
+  const { workforceEntries, addWorkforceEntry, updateWorkforceEntry, deleteWorkforceEntry, getTasksForProject } = useProjects();
+
+  const tasks = useMemo(() => getTasksForProject(project.id), [getTasksForProject, project.id]);
+  const planningPhases = useMemo(() => {
+    return Array.from(new Set(tasks.map(t => t.name))).sort();
+  }, [tasks]);
 
   const entries = useMemo(
     () => workforceEntries.filter(e => e.projectId === project.id),
@@ -236,7 +241,14 @@ export default function WorkforceTab({ project }: { project: Project }) {
                 className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">Selecione uma fase...</option>
-                {COMMON_PHASES.map(p => <option key={p} value={p}>{p}</option>)}
+                {planningPhases.length > 0 && (
+                  <optgroup label="Etapas do Planejamento Mestre">
+                    {planningPhases.map(p => <option key={p} value={p}>{p}</option>)}
+                  </optgroup>
+                )}
+                <optgroup label="Fases Padrão">
+                  {COMMON_PHASES.map(p => <option key={p} value={p}>{p}</option>)}
+                </optgroup>
                 <option value="__custom__">+ Outra fase (digitar)</option>
               </select>
             </div>
