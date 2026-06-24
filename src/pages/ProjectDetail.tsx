@@ -2,7 +2,6 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet, FileSpreadsheet, Sun, ShoppingCart, Users } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProjects } from '@/hooks/useProjects';
 import DashboardTab from '@/components/project/DashboardTab';
 import PlanningTab from '@/components/project/PlanningTab';
@@ -94,8 +93,10 @@ export default function ProjectDetail() {
     );
   }
 
+  const activeTab = searchParams.get('tab') || 'dashboard';
+
   return (
-    <Tabs value={searchParams.get('tab') || 'dashboard'} onValueChange={(v) => setSearchParams({ tab: v })} className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="bg-card border-b sticky top-0 z-30 shadow-sm">
         <div className="container mx-auto flex items-center gap-4 pt-4 pb-3 px-6">
@@ -148,9 +149,8 @@ export default function ProjectDetail() {
 
         {/* Tabs Bar */}
         <div className="container mx-auto px-6 pb-3 overflow-x-auto flex [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-          <TabsList className="bg-transparent border-0 p-0 h-auto gap-2 inline-flex w-max">
+          <div className="bg-transparent border-0 p-0 h-auto gap-2 inline-flex w-max">
             {tabGroups.map(group => {
-              const activeTab = searchParams.get('tab') || 'dashboard';
               const activeItem = tabs.find(t => t.value === activeTab && group.items.includes(t.value));
               const GroupIcon = activeItem ? activeItem.icon : group.icon;
               const groupLabel = activeItem ? activeItem.label : group.label;
@@ -196,27 +196,26 @@ export default function ProjectDetail() {
                 </DropdownMenu>
               );
             })}
-          </TabsList>
+          </div>
         </div>
       </header>
 
       {/* Content */}
       <div className="container mx-auto px-6 py-5 flex-1 w-full max-w-[1600px]">
-
-           <TabsContent value="hoje"><TodayTab project={project} /></TabsContent>
-          <TabsContent value="dashboard"><DashboardTab project={project} /></TabsContent>
-          <TabsContent value="planning"><PlanningTab project={project} /></TabsContent>
-          <TabsContent value="gantt"><GanttTab project={project} /></TabsContent>
-          <TabsContent value="kanban"><KanbanTab project={project} /></TabsContent>
-          <TabsContent value="physical_financial"><PhysicalFinancialTab project={project} /></TabsContent>
-          <TabsContent value="curves"><CurveSTab project={project} /></TabsContent>
-          <TabsContent value="lean"><LeanTab project={project} /></TabsContent>
-          <TabsContent value="supplies"><SuppliesTab project={project} /></TabsContent>
-          <TabsContent value="workforce"><WorkforceTab project={project} /></TabsContent>
-          <TabsContent value="diary"><DiaryTab project={project} /></TabsContent>
-          <TabsContent value="admin"><AdminTab project={project} /></TabsContent>
-          <TabsContent value="reports"><ReportsTab project={project} /></TabsContent>
+        {activeTab === 'hoje' && <TodayTab project={project} />}
+        {activeTab === 'dashboard' && <DashboardTab project={project} />}
+        {activeTab === 'planning' && <PlanningTab project={project} />}
+        {activeTab === 'gantt' && <GanttTab project={project} />}
+        {activeTab === 'kanban' && <KanbanTab project={project} />}
+        {activeTab === 'physical_financial' && <PhysicalFinancialTab project={project} />}
+        {activeTab === 'curves' && <CurveSTab project={project} />}
+        {activeTab === 'lean' && <LeanTab project={project} />}
+        {activeTab === 'supplies' && <SuppliesTab project={project} />}
+        {activeTab === 'workforce' && <WorkforceTab project={project} />}
+        {activeTab === 'diary' && <DiaryTab project={project} />}
+        {activeTab === 'admin' && <AdminTab project={project} />}
+        {activeTab === 'reports' && <ReportsTab project={project} />}
       </div>
-    </Tabs>
+    </div>
   );
 }
