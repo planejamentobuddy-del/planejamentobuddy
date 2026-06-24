@@ -229,20 +229,25 @@ export default function PlanningTab({ project }: { project: Project }) {
     localStorage.setItem(storageKey, JSON.stringify(Array.from(expandedStages)));
   }, [expandedStages, storageKey]);
 
-  const columnHeaders = [
-    { label: 'Etapa / Atividade', align: 'left', width: 300 },
-    { label: 'Início', align: 'left', width: 120 },
-    { label: 'Término', align: 'left', width: 120 },
-    { label: 'Duração', align: 'center', width: 80 },
-    { label: '% Execução', align: 'left', width: 140 },
-    { label: 'Status', align: 'left', width: 150 },
-    { label: 'Predecessoras', align: 'left', width: 160 },
-    { label: 'Sucessoras', align: 'left', width: 160 },
-    { label: 'Observações', align: 'left', width: 200 },
-    { label: 'Efetivo', align: 'center', width: 110 },
-    { label: 'Responsável', align: 'left', width: 140 },
-    { label: 'Ações', align: 'center', width: 130 },
-  ];
+  const allHeaders = useMemo(() => [
+    { label: 'Etapa / Atividade', align: 'left' as const, width: 300, always: true },
+    { label: 'Início', align: 'left' as const, width: 120, always: true },
+    { label: 'Término', align: 'left' as const, width: 120, always: true },
+    { label: 'Duração', align: 'center' as const, width: 80, always: true },
+    { label: '% Execução', align: 'left' as const, width: 140, always: true },
+    { label: 'Custo (R$)', align: 'right' as const, width: 140, always: true },
+    { label: 'Status', align: 'left' as const, width: 150, always: true },
+    { label: 'Predecessoras', align: 'left' as const, width: 160, always: false },
+    { label: 'Sucessoras', align: 'left' as const, width: 160, always: false },
+    { label: 'Observações', align: 'left' as const, width: 200, always: false },
+    { label: 'Efetivo', align: 'center' as const, width: 110, always: false },
+    { label: 'Responsável', align: 'left' as const, width: 140, always: false },
+    { label: 'Ações', align: 'center' as const, width: 130, always: false },
+  ], []);
+
+  const columnHeaders = useMemo(() => {
+    return allHeaders.filter(h => h.always || showAllColumns);
+  }, [allHeaders, showAllColumns]);
 
   const { widths: colWidths, onMouseDown: onColResize } = useResizableColumns(
     columnHeaders.map(h => h.width)
@@ -698,6 +703,29 @@ export default function PlanningTab({ project }: { project: Project }) {
 
 
 
+        {/* Custo (R$) */}
+        <td className="py-2.5 px-3 border-r border-border/70 text-right">
+          {isStage ? (
+            <div className="px-1.5 py-1 text-sm font-semibold text-foreground/80">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                getSubtasks(task.id).reduce((sum, s) => sum + (s.cost || 0), 0)
+              )}
+            </div>
+          ) : (
+            <Input
+              type="number"
+              className="h-8 w-full text-right text-sm border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
+              defaultValue={task.cost || 0}
+              onBlur={e => {
+                const val = parseFloat(e.target.value) || 0;
+                if (val !== (task.cost || 0)) {
+                  handleChange(task, 'cost', val);
+                }
+              }}
+            />
+          )}
+        </td>
+
         {/* 7. Status */}
         <td className="py-2.5 px-3 border-r border-border/70">
           <div className="space-y-1">
@@ -1140,45 +1168,67 @@ const SortableStageRow = React.memo(function SortableStageRow({
       {isExpanded && subtasks.map((sub: any) => (
         <Fragment key={sub.id}>
           {renderRow(sub, true)}
-          {expandedFrentes.has(sub.id) && sub.frentes && sub.frentes.map((frente: any) => (
-            <tr key={frente.id} className="bg-muted/10 border-b border-border/60 hover:bg-muted/15 transition-colors">
-              <td className="py-2 px-3 pl-14 text-xs font-semibold text-foreground/75 flex items-center gap-1.5 min-w-0 truncate">
-                <span className="text-muted-foreground/45 shrink-0">↳</span>
-                <span className="truncate">👷 {frente.name}</span>
-              </td>
-              <td className="py-2 px-3 text-xs text-foreground/80 truncate">{frente.responsible}</td>
-              <td className="py-2 px-3 text-xs text-muted-foreground">{frente.startDate ? new Date(frente.startDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
-              <td className="py-2 px-3 text-xs text-muted-foreground">{frente.endDate ? new Date(frente.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
-              <td className="py-2 px-3 text-center text-xs text-foreground/80 font-medium">{frente.duration || 1} d</td>
-              <td className="py-2 px-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden shrink-0">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${frente.percentComplete || 0}%` }} />
+          {expandedFrentes.has(sub.id) && sub.frentes && sub.frentes.map((frente: any) => {
+            const hasExtra = columnHeaders.length > 7;
+            return (
+              <tr key={frente.id} className="bg-muted/10 border-b border-border/60 hover:bg-muted/15 transition-colors">
+                {/* 1. Etapa / Atividade */}
+                <td className="py-2 px-3 pl-14 text-xs font-semibold text-foreground/75 flex items-center gap-1.5 min-w-0 truncate">
+                  <span className="text-muted-foreground/45 shrink-0">↳</span>
+                  <span className="truncate">👷 {frente.name}</span>
+                </td>
+                {/* 2. Início */}
+                <td className="py-2 px-3 text-xs text-muted-foreground">{frente.startDate ? new Date(frente.startDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                {/* 3. Término */}
+                <td className="py-2 px-3 text-xs text-muted-foreground">{frente.endDate ? new Date(frente.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                {/* 4. Duração */}
+                <td className="py-2 px-3 text-center text-xs text-foreground/80 font-medium">{frente.duration || 1} d</td>
+                {/* 5. % Execução */}
+                <td className="py-2 px-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden shrink-0">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${frente.percentComplete || 0}%` }} />
+                    </div>
+                    <span className="font-semibold text-[11px]">{frente.percentComplete || 0}%</span>
                   </div>
-                  <span className="font-semibold text-[11px]">{frente.percentComplete || 0}%</span>
-                </div>
-              </td>
-              <td className="py-2 px-3 text-center text-muted-foreground/30">—</td>
-              <td className="py-2 px-3 text-xs">
-                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shadow-sm shrink-0 ${
-                  frente.status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600' :
-                  frente.status === 'in_progress' ? 'bg-sky-500/10 border-sky-500/20 text-sky-600' :
-                  frente.status === 'delayed' ? 'bg-rose-500/10 border-rose-500/20 text-rose-600' :
-                  frente.status === 'paused' ? 'bg-amber-500/10 border-amber-500/20 text-amber-600' :
-                  'bg-zinc-500/10 border-zinc-500/20 text-zinc-600'
-                }`}>
-                  {frente.status === 'completed' ? 'Concluída' :
-                   frente.status === 'in_progress' ? 'Andamento' :
-                   frente.status === 'delayed' ? 'Atrasada' :
-                   frente.status === 'paused' ? 'Pausada' : 'Não Inic.'}
-                </span>
-              </td>
-              <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
-              <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
-              <td className="py-2 px-3 text-[11px] text-muted-foreground/70 italic truncate max-w-[150px]" title={frente.observations}>{frente.observations || '—'}</td>
-              <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
-            </tr>
-          ))}
+                </td>
+                {/* 6. Custo (R$) */}
+                <td className="py-2 px-3 text-right text-xs text-muted-foreground/30">—</td>
+                {/* 7. Status */}
+                <td className="py-2 px-3 text-xs">
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shadow-sm shrink-0 ${
+                    frente.status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600' :
+                    frente.status === 'in_progress' ? 'bg-sky-500/10 border-sky-500/20 text-sky-600' :
+                    frente.status === 'delayed' ? 'bg-rose-500/10 border-rose-500/20 text-rose-600' :
+                    frente.status === 'paused' ? 'bg-amber-500/10 border-amber-500/20 text-amber-600' :
+                    'bg-zinc-500/10 border-zinc-500/20 text-zinc-600'
+                  }`}>
+                    {frente.status === 'completed' ? 'Concluída' :
+                     frente.status === 'in_progress' ? 'Andamento' :
+                     frente.status === 'delayed' ? 'Atrasada' :
+                     frente.status === 'paused' ? 'Pausada' : 'Não Inic.'}
+                  </span>
+                </td>
+
+                {hasExtra && (
+                  <>
+                    {/* 8. Predecessoras */}
+                    <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+                    {/* 9. Sucessoras */}
+                    <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+                    {/* 10. Observações */}
+                    <td className="py-2 px-3 text-[11px] text-muted-foreground/70 italic truncate max-w-[150px]" title={frente.observations}>{frente.observations || '—'}</td>
+                    {/* 11. Efetivo */}
+                    <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+                    {/* 12. Responsável */}
+                    <td className="py-2 px-3 text-xs text-foreground/80 truncate">{frente.responsible || '—'}</td>
+                    {/* 13. Ações */}
+                    <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+                  </>
+                )}
+              </tr>
+            );
+          })}
         </Fragment>
       ))}
       {isExpanded && (
