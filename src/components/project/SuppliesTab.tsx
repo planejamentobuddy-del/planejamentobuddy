@@ -8,11 +8,28 @@ import { Badge } from '@/components/ui/badge';
 import {
   Plus, Trash2, Edit2, Package, AlertTriangle, CheckCircle2,
   Clock, TrendingUp, DollarSign, ShoppingCart, Truck, X, Save,
-  ChevronDown, ChevronUp, Filter, Star
+  ChevronDown, ChevronUp, Filter, Star, LayoutGrid, List,
+  ArrowRight, Zap, PackageCheck, Factory, BarChart2, Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const PHASE_COLORS: Record<string, string> = {
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants & helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STATUS_ORDER: SupplyStatus[] = [
+  'pending_quantitative', 'pending_order', 'ordered', 'in_production', 'delivered', 'cancelled'
+];
+
+const KANBAN_COLUMNS: { id: SupplyStatus; label: string; icon: React.ReactNode; color: string; headerBg: string }[] = [
+  { id: 'pending_quantitative', label: 'Aguard. Quantitativo', icon: <BarChart2 className="w-3.5 h-3.5" />, color: 'border-slate-400', headerBg: 'bg-slate-500/10' },
+  { id: 'pending_order',        label: 'Aguard. Pedido',        icon: <Clock className="w-3.5 h-3.5" />,     color: 'border-amber-400', headerBg: 'bg-amber-500/10' },
+  { id: 'ordered',              label: 'Pedido Realizado',       icon: <PackageCheck className="w-3.5 h-3.5" />, color: 'border-blue-400', headerBg: 'bg-blue-500/10' },
+  { id: 'in_production',        label: 'Em Produção / Lead',     icon: <Factory className="w-3.5 h-3.5" />,   color: 'border-purple-400', headerBg: 'bg-purple-500/10' },
+  { id: 'delivered',            label: 'Entregue',               icon: <Truck className="w-3.5 h-3.5" />,     color: 'border-emerald-400', headerBg: 'bg-emerald-500/10' },
+];
+
+const DOT_COLORS: Record<string, string> = {
   pending_quantitative: 'bg-slate-400',
   pending_order: 'bg-amber-500',
   ordered: 'bg-blue-500',
@@ -40,78 +57,76 @@ function daysUntil(dateStr?: string): number | null {
   return Math.round((target.getTime() - now.getTime()) / 86400000);
 }
 
-function DeadlineAlert({ pkg }: { pkg: SupplyPackage }) {
+function isOrderLate(pkg: SupplyPackage) {
+  const d = daysUntil(pkg.orderDeadline);
+  return d !== null && d < 0 && pkg.status !== 'ordered' && pkg.status !== 'delivered' && pkg.status !== 'cancelled';
+}
+
+function isDeliveryLate(pkg: SupplyPackage) {
+  const d = daysUntil(pkg.expectedDeliveryDate);
+  return d !== null && d < 0 && pkg.status !== 'delivered' && pkg.status !== 'cancelled';
+}
+
+function isUrgent(pkg: SupplyPackage) {
+  const d = daysUntil(pkg.orderDeadline);
+  return d !== null && d >= 0 && d <= 10 && pkg.status !== 'ordered' && pkg.status !== 'delivered' && pkg.status !== 'cancelled';
+}
+
+function DeadlineBadge({ pkg }: { pkg: SupplyPackage }) {
   if (pkg.status === 'ordered' || pkg.status === 'delivered' || pkg.status === 'cancelled') return null;
   const days = daysUntil(pkg.orderDeadline);
   if (days === null) return null;
-  if (days < 0) {
-    return <span className="inline-flex items-center gap-1 text-xs text-red-600 font-semibold"><AlertTriangle className="w-3 h-3" /> Atrasado {Math.abs(days)}d</span>;
-  }
-  if (days <= 30) {
-    return <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-semibold"><Clock className="w-3 h-3" /> {days}d para pedir</span>;
-  }
-  return <span className="text-xs text-muted-foreground">{days}d restantes</span>;
+  if (days < 0)  return <span className="inline-flex items-center gap-1 text-[10px] text-red-600 font-bold bg-red-500/10 rounded px-1.5 py-0.5"><AlertTriangle className="w-2.5 h-2.5" /> Atrasado {Math.abs(days)}d</span>;
+  if (days <= 10) return <span className="inline-flex items-center gap-1 text-[10px] text-orange-600 font-bold bg-orange-500/10 rounded px-1.5 py-0.5"><Zap className="w-2.5 h-2.5" /> {days}d URGENTE</span>;
+  if (days <= 30) return <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 font-semibold bg-amber-500/10 rounded px-1.5 py-0.5"><Clock className="w-2.5 h-2.5" /> {days}d</span>;
+  return <span className="text-[10px] text-muted-foreground">{days}d restantes</span>;
 }
 
-const EMPTY_PKG: Omit<SupplyPackage, 'id' | 'createdAt'> = {
-  projectId: '',
-  name: '',
-  supplier: '',
-  estimatedValue: undefined,
-  isCritical: false,
-  leadTimeDays: 30,
-  quantitativeDoneDate: '',
-  orderDeadline: '',
-  orderDate: '',
-  expectedDeliveryDate: '',
-  actualDeliveryDate: '',
-  status: 'pending_quantitative',
-  notes: '',
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// Form types
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface FormState {
-  name: string;
-  supplier: string;
-  estimatedValue: string;
-  isCritical: boolean;
-  leadTimeDays: string;
-  quantitativeDoneDate: string;
-  orderDeadline: string;
-  orderDate: string;
-  expectedDeliveryDate: string;
-  actualDeliveryDate: string;
-  status: SupplyStatus;
-  notes: string;
-  taskId: string;
+  name: string; supplier: string; estimatedValue: string; isCritical: boolean;
+  leadTimeDays: string; quantitativeDoneDate: string; orderDeadline: string;
+  orderDate: string; expectedDeliveryDate: string; actualDeliveryDate: string;
+  status: SupplyStatus; notes: string; taskId: string;
 }
 
 const EMPTY_FORM: FormState = {
-  name: '',
-  supplier: '',
-  estimatedValue: '',
-  isCritical: false,
-  leadTimeDays: '30',
-  quantitativeDoneDate: '',
-  orderDeadline: '',
-  orderDate: '',
-  expectedDeliveryDate: '',
-  actualDeliveryDate: '',
-  status: 'pending_quantitative',
-  notes: '',
-  taskId: '',
+  name: '', supplier: '', estimatedValue: '', isCritical: false, leadTimeDays: '30',
+  quantitativeDoneDate: '', orderDeadline: '', orderDate: '', expectedDeliveryDate: '',
+  actualDeliveryDate: '', status: 'pending_quantitative', notes: '', taskId: '',
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────────────────
+
+type ViewMode = 'kanban' | 'timeline' | 'list';
 
 export default function SuppliesTab({ project }: { project: Project }) {
   const { supplyPackages, addSupplyPackage, updateSupplyPackage, deleteSupplyPackage, getTasksForProject } = useProjects();
   const tasks = getTasksForProject(project.id);
   const packages = useMemo(() => supplyPackages.filter(p => p.projectId === project.id), [supplyPackages, project.id]);
 
+  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterCritical, setFilterCritical] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // ── KPIs ──────────────────────────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const urgent       = packages.filter(isUrgent);
+    const orderLate    = packages.filter(isOrderLate);
+    const deliveryLate = packages.filter(isDeliveryLate);
+    const criticalVal  = packages.filter(p => p.isCritical).reduce((s, p) => s + (p.estimatedValue || 0), 0);
+    const totalVal     = packages.reduce((s, p) => s + (p.estimatedValue || 0), 0);
+    return { urgent: urgent.length, orderLate: orderLate.length, deliveryLate: deliveryLate.length, criticalVal, totalVal };
+  }, [packages]);
 
   const filtered = useMemo(() => {
     let list = packages;
@@ -120,78 +135,39 @@ export default function SuppliesTab({ project }: { project: Project }) {
     return list.sort((a, b) => {
       if (a.isCritical !== b.isCritical) return a.isCritical ? -1 : 1;
       if (!a.orderDeadline && !b.orderDeadline) return 0;
-      if (!a.orderDeadline) return 1;
-      if (!b.orderDeadline) return -1;
+      if (!a.orderDeadline) return 1; if (!b.orderDeadline) return -1;
       return a.orderDeadline.localeCompare(b.orderDeadline);
     });
   }, [packages, filterStatus, filterCritical]);
 
-  // KPIs
-  const kpis = useMemo(() => {
-    const critical = packages.filter(p => p.isCritical);
-    const pendingOrder = packages.filter(p => p.status === 'pending_order' || p.status === 'pending_quantitative');
-    const urgentAlerts = packages.filter(p => {
-      const d = daysUntil(p.orderDeadline);
-      return d !== null && d <= 30 && p.status !== 'ordered' && p.status !== 'delivered' && p.status !== 'cancelled';
-    });
-    const totalValue = packages.reduce((s, p) => s + (p.estimatedValue || 0), 0);
-    return { critical: critical.length, pendingOrder: pendingOrder.length, urgentAlerts: urgentAlerts.length, totalValue };
-  }, [packages]);
-
-  function openNew() {
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-    setShowForm(true);
-  }
+  // ── CRUD helpers ──────────────────────────────────────────────────────────
+  function openNew() { setForm(EMPTY_FORM); setEditingId(null); setShowForm(true); }
 
   function openEdit(pkg: SupplyPackage) {
     setForm({
-      name: pkg.name,
-      supplier: pkg.supplier || '',
-      estimatedValue: pkg.estimatedValue?.toString() || '',
-      isCritical: pkg.isCritical,
-      leadTimeDays: pkg.leadTimeDays.toString(),
-      quantitativeDoneDate: pkg.quantitativeDoneDate || '',
-      orderDeadline: pkg.orderDeadline || '',
-      orderDate: pkg.orderDate || '',
-      expectedDeliveryDate: pkg.expectedDeliveryDate || '',
-      actualDeliveryDate: pkg.actualDeliveryDate || '',
-      status: pkg.status,
-      notes: pkg.notes || '',
+      name: pkg.name, supplier: pkg.supplier || '', estimatedValue: pkg.estimatedValue?.toString() || '',
+      isCritical: pkg.isCritical, leadTimeDays: pkg.leadTimeDays.toString(),
+      quantitativeDoneDate: pkg.quantitativeDoneDate || '', orderDeadline: pkg.orderDeadline || '',
+      orderDate: pkg.orderDate || '', expectedDeliveryDate: pkg.expectedDeliveryDate || '',
+      actualDeliveryDate: pkg.actualDeliveryDate || '', status: pkg.status, notes: pkg.notes || '',
       taskId: pkg.taskId || '',
     });
-    setEditingId(pkg.id);
-    setShowForm(true);
+    setEditingId(pkg.id); setShowForm(true);
   }
 
   async function handleSave() {
     if (!form.name.trim()) { toast.error('Nome do pacote é obrigatório.'); return; }
     const payload: Omit<SupplyPackage, 'id' | 'createdAt'> = {
-      projectId: project.id,
-      taskId: form.taskId || undefined,
-      name: form.name.trim(),
-      supplier: form.supplier || undefined,
-      estimatedValue: form.estimatedValue ? parseFloat(form.estimatedValue) : undefined,
-      isCritical: form.isCritical,
-      leadTimeDays: parseInt(form.leadTimeDays) || 30,
-      quantitativeDoneDate: form.quantitativeDoneDate || undefined,
-      orderDeadline: form.orderDeadline || undefined,
-      orderDate: form.orderDate || undefined,
-      expectedDeliveryDate: form.expectedDeliveryDate || undefined,
-      actualDeliveryDate: form.actualDeliveryDate || undefined,
-      status: form.status,
-      notes: form.notes || undefined,
+      projectId: project.id, taskId: form.taskId || undefined, name: form.name.trim(),
+      supplier: form.supplier || undefined, estimatedValue: form.estimatedValue ? parseFloat(form.estimatedValue) : undefined,
+      isCritical: form.isCritical, leadTimeDays: parseInt(form.leadTimeDays) || 30,
+      quantitativeDoneDate: form.quantitativeDoneDate || undefined, orderDeadline: form.orderDeadline || undefined,
+      orderDate: form.orderDate || undefined, expectedDeliveryDate: form.expectedDeliveryDate || undefined,
+      actualDeliveryDate: form.actualDeliveryDate || undefined, status: form.status, notes: form.notes || undefined,
     };
-
-    if (editingId) {
-      const existing = packages.find(p => p.id === editingId)!;
-      await updateSupplyPackage({ ...existing, ...payload });
-    } else {
-      await addSupplyPackage(payload);
-    }
-    setShowForm(false);
-    setEditingId(null);
-    setForm(EMPTY_FORM);
+    if (editingId) { const ex = packages.find(p => p.id === editingId)!; await updateSupplyPackage({ ...ex, ...payload }); }
+    else await addSupplyPackage(payload);
+    setShowForm(false); setEditingId(null); setForm(EMPTY_FORM);
   }
 
   async function handleDelete(id: string) {
@@ -199,57 +175,72 @@ export default function SuppliesTab({ project }: { project: Project }) {
     await deleteSupplyPackage(id);
   }
 
-  const statusOrder: SupplyStatus[] = ['pending_quantitative', 'pending_order', 'ordered', 'in_production', 'delivered', 'cancelled'];
-
-  // Gantt-style timeline helpers
-  function getTimelinePosition(pkg: SupplyPackage) {
-    const start = project.startDate;
-    const end = project.endDate;
-    const projectStart = new Date(start).getTime();
-    const projectEnd = new Date(end).getTime();
-    const totalMs = projectEnd - projectStart;
-    if (totalMs <= 0) return null;
-
-    const toPercent = (d?: string) => {
-      if (!d) return null;
-      const ms = new Date(d).getTime() - projectStart;
-      return Math.max(0, Math.min(100, (ms / totalMs) * 100));
-    };
-
-    return {
-      qto: toPercent(pkg.quantitativeDoneDate),
-      order: toPercent(pkg.orderDeadline),
-      leadStart: toPercent(pkg.orderDate || pkg.orderDeadline),
-      delivery: toPercent(pkg.expectedDeliveryDate),
-    };
+  async function advanceStatus(pkg: SupplyPackage) {
+    const idx = STATUS_ORDER.indexOf(pkg.status);
+    if (idx < 0 || idx >= STATUS_ORDER.length - 2) return; // don't advance past in_production into delivered automatically, and skip cancelled
+    const next = STATUS_ORDER[idx + 1];
+    await updateSupplyPackage({ ...pkg, status: next });
   }
 
+  // ── Timeline helpers ──────────────────────────────────────────────────────
+  function getTimelinePos(pkg: SupplyPackage) {
+    const ps = new Date(project.startDate).getTime();
+    const pe = new Date(project.endDate).getTime();
+    const total = pe - ps;
+    if (total <= 0) return null;
+    const pct = (d?: string) => {
+      if (!d) return null;
+      return Math.max(0, Math.min(100, ((new Date(d).getTime() - ps) / total) * 100));
+    };
+    return { qto: pct(pkg.quantitativeDoneDate), order: pct(pkg.orderDeadline), leadStart: pct(pkg.orderDate || pkg.orderDeadline), delivery: pct(pkg.expectedDeliveryDate) };
+  }
+
+  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
             <ShoppingCart className="w-5 h-5 text-primary" /> Controle de Suprimentos
           </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Gerencie marcos de compra, lead times e entregas de materiais críticos
-          </p>
+          <p className="text-sm text-muted-foreground mt-0.5">Pipeline visual de compras, lead times e entregas críticas</p>
         </div>
-        <Button onClick={openNew} className="gap-2 rounded-xl">
-          <Plus className="w-4 h-4" /> Novo Pacote
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* View mode switcher */}
+          <div className="flex items-center bg-muted rounded-lg p-1 gap-0.5">
+            {([
+              { mode: 'kanban' as ViewMode,   icon: <LayoutGrid className="w-3.5 h-3.5" />, label: 'Kanban' },
+              { mode: 'timeline' as ViewMode, icon: <BarChart2 className="w-3.5 h-3.5" />,  label: 'Timeline' },
+              { mode: 'list' as ViewMode,     icon: <List className="w-3.5 h-3.5" />,       label: 'Lista' },
+            ]).map(({ mode, icon, label }) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  viewMode === mode ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {icon}{label}
+              </button>
+            ))}
+          </div>
+          <Button onClick={openNew} className="gap-2 rounded-xl">
+            <Plus className="w-4 h-4" /> Novo Pacote
+          </Button>
+        </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* ── KPI Alert Bar ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Pacotes Críticos', value: kpis.critical, icon: Star, color: 'text-amber-600', bg: 'bg-amber-500/10' },
-          { label: 'Aguardando Pedido', value: kpis.pendingOrder, icon: Clock, color: 'text-blue-600', bg: 'bg-blue-500/10' },
-          { label: 'Alertas Urgentes', value: kpis.urgentAlerts, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-500/10' },
-          { label: 'Valor Total Est.', value: formatBRL(kpis.totalValue), icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+          { label: 'Compras Urgentes (<10d)', value: kpis.urgent,       icon: Zap,          color: 'text-orange-600', bg: 'bg-orange-500/10', ring: kpis.urgent > 0 ? 'ring-1 ring-orange-400/50' : '' },
+          { label: 'Pedidos Atrasados',        value: kpis.orderLate,   icon: AlertTriangle, color: 'text-red-600',    bg: 'bg-red-500/10',    ring: kpis.orderLate > 0 ? 'ring-1 ring-red-400/50' : '' },
+          { label: 'Entregas Atrasadas',       value: kpis.deliveryLate, icon: Truck,         color: 'text-purple-600', bg: 'bg-purple-500/10', ring: kpis.deliveryLate > 0 ? 'ring-1 ring-purple-400/50' : '' },
+          { label: 'Volume Financeiro Total',  value: formatBRL(kpis.totalVal), icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-500/10', ring: '' },
         ].map((k, i) => (
-          <div key={i} className="bg-card rounded-xl border border-border p-4 flex items-center gap-3">
+          <div key={i} className={`bg-card rounded-xl border border-border p-4 flex items-center gap-3 ${k.ring}`}>
             <div className={`w-10 h-10 rounded-lg ${k.bg} flex items-center justify-center shrink-0`}>
               <k.icon className={`w-5 h-5 ${k.color}`} />
             </div>
@@ -261,58 +252,28 @@ export default function SuppliesTab({ project }: { project: Project }) {
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1 text-sm text-muted-foreground"><Filter className="w-4 h-4" /> Filtrar:</div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-48 h-8 rounded-lg text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            {statusOrder.map(s => (
-              <SelectItem key={s} value={s}>{SUPPLY_STATUS_LABELS[s]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          variant={filterCritical ? 'default' : 'outline'}
-          size="sm"
-          className="h-8 rounded-lg gap-1 text-xs"
-          onClick={() => setFilterCritical(!filterCritical)}
-        >
-          <Star className="w-3 h-3" /> Só Críticos
-        </Button>
-        <span className="text-xs text-muted-foreground ml-auto">{filtered.length} pacote{filtered.length !== 1 ? 's' : ''}</span>
-      </div>
-
-      {/* Urgent Alerts Banner */}
-      {kpis.urgentAlerts > 0 && (
+      {/* ── Urgent Banner ── */}
+      {(kpis.urgent > 0 || kpis.orderLate > 0) && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-red-700 dark:text-red-400">
-              {kpis.urgentAlerts} pacote{kpis.urgentAlerts > 1 ? 's' : ''} com prazo de pedido urgente (&lt;30 dias)
+              Atenção: {kpis.orderLate} pedido{kpis.orderLate !== 1 ? 's' : ''} atrasado{kpis.orderLate !== 1 ? 's' : ''} e {kpis.urgent} compra{kpis.urgent !== 1 ? 's' : ''} urgente{kpis.urgent !== 1 ? 's' : ''} (&lt;10 dias)
             </p>
-            <p className="text-xs text-red-600/80 mt-0.5">
-              Verifique os itens marcados em vermelho/âmbar na tabela abaixo.
-            </p>
+            <p className="text-xs text-red-600/80 mt-0.5">Revise imediatamente os itens destacados na visualização abaixo.</p>
           </div>
         </div>
       )}
 
-      {/* Add/Edit Form */}
+      {/* ── Add/Edit Form ── */}
       {showForm && (
         <div className="bg-card border border-primary/30 rounded-xl p-5 shadow-lg">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold text-foreground">
-              {editingId ? 'Editar Pacote' : 'Novo Pacote de Suprimento'}
-            </h3>
+            <h3 className="font-display font-semibold text-foreground">{editingId ? 'Editar Pacote' : 'Novo Pacote de Suprimento'}</h3>
             <Button variant="ghost" size="icon" className="rounded-lg" onClick={() => { setShowForm(false); setEditingId(null); }}>
               <X className="w-4 h-4" />
             </Button>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Nome do Pacote *</label>
@@ -334,9 +295,7 @@ export default function SuppliesTab({ project }: { project: Project }) {
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Status</label>
               <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as SupplyStatus }))}>
                 <SelectTrigger className="rounded-lg"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {statusOrder.map(s => <SelectItem key={s} value={s}>{SUPPLY_STATUS_LABELS[s]}</SelectItem>)}
-                </SelectContent>
+                <SelectContent>{STATUS_ORDER.map(s => <SelectItem key={s} value={s}>{SUPPLY_STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
@@ -365,23 +324,13 @@ export default function SuppliesTab({ project }: { project: Project }) {
                 <SelectTrigger className="rounded-lg"><SelectValue placeholder="Nenhuma" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhuma</SelectItem>
-                  {(() => {
-                    const parentIds = new Set(tasks.map(t => t.parentId).filter(Boolean) as string[]);
-                    return tasks.filter(t => !parentIds.has(t.id)).map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                    ));
-                  })()}
+                  {(() => { const parentIds = new Set(tasks.map(t => t.parentId).filter(Boolean) as string[]); return tasks.filter(t => !parentIds.has(t.id)).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>); })()}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex items-center gap-3 pt-5">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.isCritical}
-                  onChange={e => setForm(f => ({ ...f, isCritical: e.target.checked }))}
-                  className="w-4 h-4 rounded accent-amber-500"
-                />
+                <input type="checkbox" checked={form.isCritical} onChange={e => setForm(f => ({ ...f, isCritical: e.target.checked }))} className="w-4 h-4 rounded accent-amber-500" />
                 <span className="text-sm font-medium flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500" /> Item Crítico</span>
               </label>
             </div>
@@ -390,7 +339,6 @@ export default function SuppliesTab({ project }: { project: Project }) {
               <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Informações adicionais..." className="rounded-lg" />
             </div>
           </div>
-
           <div className="flex gap-3 mt-5 justify-end">
             <Button variant="outline" className="rounded-xl" onClick={() => { setShowForm(false); setEditingId(null); }}>Cancelar</Button>
             <Button className="rounded-xl gap-2" onClick={handleSave}><Save className="w-4 h-4" /> {editingId ? 'Salvar Alterações' : 'Adicionar Pacote'}</Button>
@@ -398,164 +346,289 @@ export default function SuppliesTab({ project }: { project: Project }) {
         </div>
       )}
 
-      {/* Packages List */}
-      {filtered.length === 0 ? (
-        <div className="bg-card rounded-xl border border-border p-12 text-center">
-          <Package className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-muted-foreground font-medium">Nenhum pacote de suprimento cadastrado</p>
-          <p className="text-sm text-muted-foreground/70 mt-1">Adicione pacotes de compra para monitorar lead times e marcos críticos</p>
-          <Button variant="outline" className="mt-4 rounded-xl gap-2" onClick={openNew}><Plus className="w-4 h-4" /> Adicionar Primeiro Pacote</Button>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map(pkg => {
-            const days = daysUntil(pkg.orderDeadline);
-            const isUrgent = days !== null && days <= 30 && pkg.status !== 'ordered' && pkg.status !== 'delivered' && pkg.status !== 'cancelled';
-            const isOverdue = days !== null && days < 0 && pkg.status !== 'ordered' && pkg.status !== 'delivered' && pkg.status !== 'cancelled';
-            const isExpanded = expandedId === pkg.id;
-            const timeline = getTimelinePosition(pkg);
-
-            return (
-              <div
-                key={pkg.id}
-                className={`bg-card rounded-xl border transition-all ${
-                  isOverdue ? 'border-red-500/40 bg-red-500/5' :
-                  isUrgent ? 'border-amber-500/40 bg-amber-500/5' :
-                  pkg.status === 'delivered' ? 'border-emerald-500/30' :
-                  'border-border'
-                }`}
-              >
-                {/* Main Row */}
-                <div className="flex items-center gap-3 p-4">
-                  {/* Status dot */}
-                  <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${PHASE_COLORS[pkg.status]}`} />
-
-                  {/* Critical star */}
-                  {pkg.isCritical && <Star className="w-4 h-4 text-amber-500 shrink-0 fill-amber-500" />}
-
-                  {/* Name & supplier */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm text-foreground">{pkg.name}</span>
-                      <Badge className={`text-[10px] px-2 py-0 h-5 ${SUPPLY_STATUS_COLORS[pkg.status]}`}>
-                        {SUPPLY_STATUS_LABELS[pkg.status]}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                      {pkg.supplier && <span className="text-xs text-muted-foreground">{pkg.supplier}</span>}
-                      {pkg.estimatedValue && (
-                        <span className="text-xs font-semibold text-emerald-600">{formatBRL(pkg.estimatedValue)}</span>
-                      )}
-                      <span className="text-xs text-muted-foreground">Lead: {pkg.leadTimeDays}d</span>
-                    </div>
-                  </div>
-
-                  {/* Deadline & alert */}
-                  <div className="text-right shrink-0">
-                    {pkg.orderDeadline && (
-                      <div className="text-xs text-muted-foreground mb-0.5">Pedir até: <span className="font-semibold">{formatDate(pkg.orderDeadline)}</span></div>
-                    )}
-                    <DeadlineAlert pkg={pkg} />
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg" onClick={() => setExpandedId(isExpanded ? null : pkg.id)}>
-                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    </Button>
-                    <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg" onClick={() => openEdit(pkg)}>
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg text-destructive hover:text-destructive" onClick={() => handleDelete(pkg.id)}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Expanded details with mini timeline */}
-                {isExpanded && (
-                  <div className="border-t border-border px-4 pb-4 pt-3 space-y-3">
-                    {/* Timeline bar */}
-                    {timeline && (
-                      <div>
-                        <div className="text-xs text-muted-foreground mb-2 font-medium">Linha do tempo do projeto</div>
-                        <div className="relative h-6 bg-muted rounded-lg overflow-hidden">
-                          {/* Lead time bar */}
-                          {timeline.leadStart !== null && timeline.delivery !== null && (
+      {/* ═══════════════════════════════════════════════════════════════════════
+          KANBAN VIEW
+      ═══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'kanban' && (
+        <>
+          {packages.length === 0 ? <EmptyState onAdd={openNew} /> : (
+            <div className="overflow-x-auto pb-2">
+              <div className="flex gap-3 min-w-[900px]">
+                {KANBAN_COLUMNS.map(col => {
+                  const colPkgs = packages.filter(p => p.status === col.id).sort((a, b) => {
+                    if (a.isCritical !== b.isCritical) return a.isCritical ? -1 : 1;
+                    return (a.orderDeadline || '9999').localeCompare(b.orderDeadline || '9999');
+                  });
+                  return (
+                    <div key={col.id} className={`flex-1 min-w-[200px] rounded-xl border-t-2 ${col.color} bg-card border border-border overflow-hidden`}>
+                      {/* Column header */}
+                      <div className={`${col.headerBg} px-3 py-2.5 flex items-center justify-between`}>
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">{col.icon} {col.label}</div>
+                        <span className="text-xs text-muted-foreground bg-background/60 rounded-full px-2 py-0.5">{colPkgs.length}</span>
+                      </div>
+                      {/* Cards */}
+                      <div className="p-2 space-y-2 min-h-[120px]">
+                        {colPkgs.map(pkg => {
+                          const late = isOrderLate(pkg);
+                          const urg  = isUrgent(pkg);
+                          return (
                             <div
-                              className="absolute top-1 bottom-1 bg-purple-500/40 rounded"
-                              style={{ left: `${timeline.leadStart}%`, width: `${Math.max(0, (timeline.delivery || 0) - timeline.leadStart)}%` }}
-                            />
+                              key={pkg.id}
+                              className={`rounded-lg border p-3 space-y-2 text-xs transition-all hover:shadow-sm ${
+                                late ? 'border-red-400/50 bg-red-500/5' : urg ? 'border-orange-400/50 bg-orange-500/5' : 'border-border bg-background'
+                              }`}
+                            >
+                              {/* Top row: critical star + name */}
+                              <div className="flex items-start gap-1.5">
+                                {pkg.isCritical && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0 mt-0.5" />}
+                                <span className="font-semibold text-foreground leading-tight">{pkg.name}</span>
+                              </div>
+                              {/* Supplier */}
+                              {pkg.supplier && <div className="text-muted-foreground">{pkg.supplier}</div>}
+                              {/* Value */}
+                              {pkg.estimatedValue && <div className="text-emerald-600 font-semibold">{formatBRL(pkg.estimatedValue)}</div>}
+                              {/* Lead time + deadline badge */}
+                              <div className="flex items-center justify-between flex-wrap gap-1">
+                                <span className="text-muted-foreground">Lead: {pkg.leadTimeDays}d</span>
+                                <DeadlineBadge pkg={pkg} />
+                              </div>
+                              {/* Deadline date */}
+                              {pkg.orderDeadline && (
+                                <div className="text-muted-foreground">Pedir até: <span className="font-medium text-foreground">{formatDate(pkg.orderDeadline)}</span></div>
+                              )}
+                              {/* Actions */}
+                              <div className="flex items-center gap-1 pt-1 border-t border-border/60">
+                                {col.id !== 'delivered' && col.id !== 'in_production' && (
+                                  <button
+                                    onClick={() => advanceStatus(pkg)}
+                                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-semibold transition-colors"
+                                  >
+                                    Avançar <ArrowRight className="w-3 h-3" />
+                                  </button>
+                                )}
+                                <button onClick={() => openEdit(pkg)} className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"><Edit2 className="w-3 h-3" /></button>
+                                <button onClick={() => handleDelete(pkg.id)} className="p-1 rounded-md hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"><Trash2 className="w-3 h-3" /></button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {colPkgs.length === 0 && (
+                          <div className="flex items-center justify-center h-20 text-muted-foreground/40 text-xs">Vazio</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          TIMELINE VIEW
+      ═══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'timeline' && (
+        <>
+          {packages.length === 0 ? <EmptyState onAdd={openNew} /> : (
+            <div className="bg-card rounded-xl border border-border overflow-hidden">
+              {/* Timeline legend */}
+              <div className="border-b border-border px-4 py-2.5 flex items-center gap-4 text-[10px] text-muted-foreground flex-wrap">
+                <span className="font-semibold text-foreground text-xs">Linha do Tempo — {formatDate(project.startDate)} → {formatDate(project.endDate)}</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> QTO pronto</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Limite pedido</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-1.5 rounded bg-purple-400/50 inline-block" /> Lead time</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Entrega</span>
+              </div>
+              <div className="divide-y divide-border">
+                {filtered.map(pkg => {
+                  const tl = getTimelinePos(pkg);
+                  const late = isOrderLate(pkg);
+                  const urg  = isUrgent(pkg);
+                  return (
+                    <div key={pkg.id} className={`px-4 py-3 ${late ? 'bg-red-500/5' : urg ? 'bg-orange-500/5' : ''}`}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${DOT_COLORS[pkg.status]}`} />
+                        {pkg.isCritical && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />}
+                        <span className="text-sm font-semibold text-foreground flex-1">{pkg.name}</span>
+                        {pkg.supplier && <span className="text-xs text-muted-foreground">{pkg.supplier}</span>}
+                        {pkg.estimatedValue && <span className="text-xs font-semibold text-emerald-600">{formatBRL(pkg.estimatedValue)}</span>}
+                        <DeadlineBadge pkg={pkg} />
+                        <button onClick={() => openEdit(pkg)} className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                      {/* Timeline bar */}
+                      {tl ? (
+                        <div className="relative h-8 bg-muted/60 rounded-lg overflow-visible ml-5">
+                          {/* Lead time bar */}
+                          {tl.leadStart !== null && tl.delivery !== null && (
+                            <div className="absolute top-2 bottom-2 bg-purple-400/40 rounded"
+                              style={{ left: `${tl.leadStart}%`, width: `${Math.max(1, (tl.delivery || 0) - tl.leadStart)}%` }} />
                           )}
                           {/* QTO marker */}
-                          {timeline.qto !== null && (
-                            <div className="absolute top-0 bottom-0 w-0.5 bg-amber-500" style={{ left: `${timeline.qto}%` }}>
+                          {tl.qto !== null && (
+                            <div className="absolute top-0 bottom-0 w-0.5 bg-amber-500" style={{ left: `${tl.qto}%` }}>
                               <span className="absolute -top-4 -translate-x-1/2 text-[9px] text-amber-600 font-bold whitespace-nowrap">QTO</span>
                             </div>
                           )}
                           {/* Order deadline marker */}
-                          {timeline.order !== null && (
-                            <div className="absolute top-0 bottom-0 w-0.5 bg-red-500" style={{ left: `${timeline.order}%` }}>
-                              <span className="absolute -top-4 -translate-x-1/2 text-[9px] text-red-600 font-bold whitespace-nowrap">PEDIR</span>
+                          {tl.order !== null && (
+                            <div className="absolute top-0 bottom-0 w-0.5 bg-red-500" style={{ left: `${tl.order}%` }}>
+                              <span className="absolute -top-4 -translate-x-1/2 text-[9px] text-red-600 font-bold whitespace-nowrap">PEDIDO</span>
                             </div>
                           )}
                           {/* Delivery marker */}
-                          {timeline.delivery !== null && (
-                            <div className="absolute top-0 bottom-0 w-0.5 bg-emerald-500" style={{ left: `${timeline.delivery}%` }}>
+                          {tl.delivery !== null && (
+                            <div className="absolute top-0 bottom-0 w-0.5 bg-emerald-500" style={{ left: `${tl.delivery}%` }}>
                               <span className="absolute -top-4 -translate-x-1/2 text-[9px] text-emerald-600 font-bold whitespace-nowrap">ENTREGA</span>
                             </div>
                           )}
                         </div>
-                      </div>
-                    )}
-
-                    {/* Date details */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-                      {[
-                        { label: '◆ Quantit. pronto', value: formatDate(pkg.quantitativeDoneDate), color: 'text-amber-600' },
-                        { label: '🔴 Data-limite pedido', value: formatDate(pkg.orderDeadline), color: 'text-red-600' },
-                        { label: '✓ Pedido realizado', value: formatDate(pkg.orderDate), color: 'text-blue-600' },
-                        { label: '◆ Entrega prevista', value: formatDate(pkg.expectedDeliveryDate), color: 'text-purple-600' },
-                        { label: '✓ Entrega real', value: formatDate(pkg.actualDeliveryDate), color: 'text-emerald-600' },
-                      ].map((item, i) => (
-                        <div key={i} className="bg-muted/50 rounded-lg p-2">
-                          <div className="text-muted-foreground mb-0.5">{item.label}</div>
-                          <div className={`font-semibold ${item.color}`}>{item.value}</div>
+                      ) : (
+                        <div className="ml-5 h-8 bg-muted/40 rounded-lg flex items-center justify-center text-xs text-muted-foreground/50">
+                          Sem datas cadastradas
                         </div>
-                      ))}
-                    </div>
-
-                    {/* Notes */}
-                    {pkg.notes && (
-                      <div className="bg-muted/50 rounded-lg p-2.5 text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground">Obs.: </span>{pkg.notes}
+                      )}
+                      {/* Date chips */}
+                      <div className="flex gap-3 mt-2 ml-5 flex-wrap text-[10px]">
+                        {pkg.quantitativeDoneDate && <span className="text-amber-600">◆ QTO: {formatDate(pkg.quantitativeDoneDate)}</span>}
+                        {pkg.orderDeadline && <span className={late ? 'text-red-600 font-bold' : 'text-red-500'}>⚡ Limite: {formatDate(pkg.orderDeadline)}</span>}
+                        {pkg.orderDate && <span className="text-blue-600">✓ Pedido: {formatDate(pkg.orderDate)}</span>}
+                        {pkg.expectedDeliveryDate && <span className="text-purple-600">◆ Prev.: {formatDate(pkg.expectedDeliveryDate)}</span>}
+                        {pkg.actualDeliveryDate && <span className="text-emerald-600">✓ Real: {formatDate(pkg.actualDeliveryDate)}</span>}
+                        <span className="text-muted-foreground">Lead: {pkg.leadTimeDays}d</span>
                       </div>
-                    )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
-                    {/* Linked task */}
-                    {pkg.taskId && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" />
-                        Vinculado à tarefa: <span className="font-medium text-foreground">{tasks.find(t => t.id === pkg.taskId)?.name || pkg.taskId}</span>
+      {/* ═══════════════════════════════════════════════════════════════════════
+          LIST VIEW (Classic)
+      ═══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'list' && (
+        <>
+          {/* Filters */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1 text-sm text-muted-foreground"><Filter className="w-4 h-4" /> Filtrar:</div>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-48 h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                {STATUS_ORDER.map(s => <SelectItem key={s} value={s}>{SUPPLY_STATUS_LABELS[s]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button variant={filterCritical ? 'default' : 'outline'} size="sm" className="h-8 rounded-lg gap-1 text-xs" onClick={() => setFilterCritical(!filterCritical)}>
+              <Star className="w-3 h-3" /> Só Críticos
+            </Button>
+            <span className="text-xs text-muted-foreground ml-auto">{filtered.length} pacote{filtered.length !== 1 ? 's' : ''}</span>
+          </div>
+
+          {filtered.length === 0 ? <EmptyState onAdd={openNew} /> : (
+            <div className="space-y-2">
+              {filtered.map(pkg => {
+                const late = isOrderLate(pkg);
+                const urg  = isUrgent(pkg);
+                const isExp = expandedId === pkg.id;
+                const tl   = getTimelinePos(pkg);
+                return (
+                  <div key={pkg.id} className={`bg-card rounded-xl border transition-all ${late ? 'border-red-500/40 bg-red-500/5' : urg ? 'border-orange-400/40 bg-orange-500/5' : pkg.status === 'delivered' ? 'border-emerald-500/30' : 'border-border'}`}>
+                    <div className="flex items-center gap-3 p-4">
+                      <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${DOT_COLORS[pkg.status]}`} />
+                      {pkg.isCritical && <Star className="w-4 h-4 text-amber-500 shrink-0 fill-amber-500" />}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm text-foreground">{pkg.name}</span>
+                          <Badge className={`text-[10px] px-2 py-0 h-5 ${SUPPLY_STATUS_COLORS[pkg.status]}`}>{SUPPLY_STATUS_LABELS[pkg.status]}</Badge>
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                          {pkg.supplier && <span className="text-xs text-muted-foreground">{pkg.supplier}</span>}
+                          {pkg.estimatedValue && <span className="text-xs font-semibold text-emerald-600">{formatBRL(pkg.estimatedValue)}</span>}
+                          <span className="text-xs text-muted-foreground">Lead: {pkg.leadTimeDays}d</span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {pkg.orderDeadline && <div className="text-xs text-muted-foreground mb-0.5">Pedir até: <span className="font-semibold">{formatDate(pkg.orderDeadline)}</span></div>}
+                        <DeadlineBadge pkg={pkg} />
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg" onClick={() => setExpandedId(isExp ? null : pkg.id)}>
+                          {isExp ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </Button>
+                        <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg" onClick={() => openEdit(pkg)}><Edit2 className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg text-destructive hover:text-destructive" onClick={() => handleDelete(pkg.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                      </div>
+                    </div>
+                    {isExp && (
+                      <div className="border-t border-border px-4 pb-4 pt-3 space-y-3">
+                        {tl && (
+                          <div>
+                            <div className="text-xs text-muted-foreground mb-2 font-medium">Linha do tempo do projeto</div>
+                            <div className="relative h-6 bg-muted rounded-lg overflow-hidden">
+                              {tl.leadStart !== null && tl.delivery !== null && (
+                                <div className="absolute top-1 bottom-1 bg-purple-500/40 rounded" style={{ left: `${tl.leadStart}%`, width: `${Math.max(0, (tl.delivery || 0) - tl.leadStart)}%` }} />
+                              )}
+                              {tl.qto !== null && <div className="absolute top-0 bottom-0 w-0.5 bg-amber-500" style={{ left: `${tl.qto}%` }}><span className="absolute -top-4 -translate-x-1/2 text-[9px] text-amber-600 font-bold whitespace-nowrap">QTO</span></div>}
+                              {tl.order !== null && <div className="absolute top-0 bottom-0 w-0.5 bg-red-500" style={{ left: `${tl.order}%` }}><span className="absolute -top-4 -translate-x-1/2 text-[9px] text-red-600 font-bold whitespace-nowrap">PEDIR</span></div>}
+                              {tl.delivery !== null && <div className="absolute top-0 bottom-0 w-0.5 bg-emerald-500" style={{ left: `${tl.delivery}%` }}><span className="absolute -top-4 -translate-x-1/2 text-[9px] text-emerald-600 font-bold whitespace-nowrap">ENTREGA</span></div>}
+                            </div>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                          {[
+                            { label: '◆ Quantit. pronto', value: formatDate(pkg.quantitativeDoneDate), color: 'text-amber-600' },
+                            { label: '🔴 Data-limite pedido', value: formatDate(pkg.orderDeadline), color: 'text-red-600' },
+                            { label: '✓ Pedido realizado', value: formatDate(pkg.orderDate), color: 'text-blue-600' },
+                            { label: '◆ Entrega prevista', value: formatDate(pkg.expectedDeliveryDate), color: 'text-purple-600' },
+                            { label: '✓ Entrega real', value: formatDate(pkg.actualDeliveryDate), color: 'text-emerald-600' },
+                          ].map((item, i) => (
+                            <div key={i} className="bg-muted/50 rounded-lg p-2">
+                              <div className="text-muted-foreground mb-0.5">{item.label}</div>
+                              <div className={`font-semibold ${item.color}`}>{item.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {pkg.notes && <div className="bg-muted/50 rounded-lg p-2.5 text-xs text-muted-foreground"><span className="font-medium text-foreground">Obs.: </span>{pkg.notes}</div>}
+                        {pkg.taskId && (
+                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" /> Vinculado à tarefa: <span className="font-medium text-foreground">{tasks.find(t => t.id === pkg.taskId)?.name || pkg.taskId}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                );
+              })}
+            </div>
+          )}
 
-      {/* Status Legend */}
-      <div className="flex flex-wrap gap-3 pt-2">
-        {statusOrder.map(s => (
-          <div key={s} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <div className={`w-2 h-2 rounded-full ${PHASE_COLORS[s]}`} />
-            {SUPPLY_STATUS_LABELS[s]}
+          {/* Status Legend */}
+          <div className="flex flex-wrap gap-3 pt-2">
+            {STATUS_ORDER.map(s => (
+              <div key={s} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <div className={`w-2 h-2 rounded-full ${DOT_COLORS[s]}`} />{SUPPLY_STATUS_LABELS[s]}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EmptyState sub-component
+// ─────────────────────────────────────────────────────────────────────────────
+function EmptyState({ onAdd }: { onAdd: () => void }) {
+  return (
+    <div className="bg-card rounded-xl border border-border p-12 text-center">
+      <Package className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+      <p className="text-muted-foreground font-medium">Nenhum pacote de suprimento cadastrado</p>
+      <p className="text-sm text-muted-foreground/70 mt-1">Adicione pacotes de compra para monitorar lead times e marcos críticos</p>
+      <Button variant="outline" className="mt-4 rounded-xl gap-2" onClick={onAdd}><Plus className="w-4 h-4" /> Adicionar Primeiro Pacote</Button>
     </div>
   );
 }

@@ -75,7 +75,7 @@ export default function LeanTab({ project }: { project: Project }) {
     getTasksForProject, getPlansForProject, addWeeklyPlan, updateWeeklyPlan,
     deleteWeeklyPlan, getHistoryForProject, closeWeek,
     getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,
-    users, loading
+    supplyPackages, users, loading
   } = useProjects();
 
   const tasks = getTasksForProject(project.id);
@@ -389,6 +389,13 @@ export default function LeanTab({ project }: { project: Project }) {
                       const linkedTask = tasks.find(t => t.id === plan.taskId);
                       const stOpt = statusOptions.find(s => s.value === plan.status) || statusOptions[0];
                       const taskConstraints = constraints.filter(c => c.taskId === plan.taskId && c.status === 'open');
+                      // Supply package alerts for this task
+                      const taskSupplies = plan.taskId ? supplyPackages.filter(sp => sp.projectId === project.id && sp.taskId === plan.taskId) : [];
+                      const pendingSupplies = taskSupplies.filter(sp => {
+                        if (sp.status === 'delivered' || sp.status === 'cancelled') return false;
+                        const d = sp.orderDeadline ? Math.round((new Date(sp.orderDeadline + 'T12:00:00').getTime() - Date.now()) / 86400000) : null;
+                        return d === null || d <= 30;
+                      });
                       
                       return (
                         <tr key={plan.id} className="group hover:bg-muted/10 transition-colors">
@@ -465,20 +472,28 @@ export default function LeanTab({ project }: { project: Project }) {
                           </td>
 
                           <td className="py-4 px-6">
-                            {taskConstraints.length > 0 ? (
-                              <button 
-                                onClick={() => handleTabChange('restricoes')}
-                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-status-danger/10 text-status-danger hover:bg-status-danger/20 transition-colors"
-                              >
-                                <AlertTriangle className="w-3 h-3" />
-                                <span className="text-[10px] font-bold">{taskConstraints.length} Pendentes</span>
-                              </button>
-                            ) : (
-                              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600">
-                                <CheckCircle2 className="w-3 h-3" />
-                                <span className="text-[10px] font-bold">Liberada</span>
-                              </div>
-                            )}
+                            <div className="flex flex-col gap-1">
+                              {taskConstraints.length > 0 ? (
+                                <button 
+                                  onClick={() => handleTabChange('restricoes')}
+                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-status-danger/10 text-status-danger hover:bg-status-danger/20 transition-colors"
+                                >
+                                  <AlertTriangle className="w-3 h-3" />
+                                  <span className="text-[10px] font-bold">{taskConstraints.length} Pendentes</span>
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span className="text-[10px] font-bold">Liberada</span>
+                                </div>
+                              )}
+                              {pendingSupplies.length > 0 && (
+                                <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700" title={pendingSupplies.map(s => s.name).join(', ')}>
+                                  <span className="text-[10px]">📦</span>
+                                  <span className="text-[10px] font-bold">{pendingSupplies.length} Suprimento{pendingSupplies.length > 1 ? 's' : ''}</span>
+                                </div>
+                              )}
+                            </div>
                           </td>
 
                           <td className="py-2 px-4 min-w-[300px] border-r border-border/50">
