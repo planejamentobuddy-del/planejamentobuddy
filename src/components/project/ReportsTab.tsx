@@ -378,7 +378,6 @@ export default function ReportsTab({ project }: ReportsTabProps) {
 
     const now = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
     const weekday = new Date().toLocaleDateString('pt-BR', { weekday: 'long' });
-    const parentIds = new Set(tasks.map(t => t.parentId).filter(Boolean) as string[]);
     const criticalTasks = tasks.filter(t => criticalIds.has(t.id) && !parentIds.has(t.id)).slice(0, 5);
 
     // ─── CÁLCULO DO CRONOGRAMA SIMPLIFICADO (GANTT) PARA O RELATÓRIO ───
