@@ -236,9 +236,9 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: 'Duração', align: 'center' as const, width: 80, always: true },
     { label: '% Execução', align: 'left' as const, width: 140, always: true },
     { label: 'Status', align: 'left' as const, width: 150, always: true },
-    { label: 'Predecessoras', align: 'left' as const, width: 160, always: false },
+    { label: 'Predecessoras', align: 'left' as const, width: 160, always: true },
     { label: 'Sucessoras', align: 'left' as const, width: 160, always: false },
-    { label: 'Custo (R$)', align: 'right' as const, width: 140, always: true },
+    { label: 'Custo (R$)', align: 'right' as const, width: 140, always: false },
     { label: 'Observações', align: 'left' as const, width: 200, always: false },
     { label: 'Efetivo', align: 'center' as const, width: 110, always: false },
     { label: 'Responsável', align: 'left' as const, width: 140, always: false },
@@ -724,49 +724,49 @@ export default function PlanningTab({ project }: { project: Project }) {
           </div>
         </td>
 
+        {/* 8. Predecessoras */}
+        <td className="py-2.5 px-3 border-r border-border/70">
+          <PredecessorPicker
+            task={task}
+            allTaskOptions={allTaskOptions.filter(t => t.id !== task.id)}
+            allTasks={allTasks}
+            onChange={(v) => handleChange(task, 'predecessors', v === '_none' ? [] : [v])}
+          />
+        </td>
+
         {showAllColumns && (
           <>
-            {/* 8. Predecessoras */}
-            <td className="py-2.5 px-3 border-r border-border/70">
-              <PredecessorPicker
-                task={task}
-                allTaskOptions={allTaskOptions.filter(t => t.id !== task.id)}
-                allTasks={allTasks}
-                onChange={(v) => handleChange(task, 'predecessors', v === '_none' ? [] : [v])}
-              />
-            </td>
-
             {/* 9. Sucessoras */}
             <td className="py-2.5 px-3 text-xs text-muted-foreground border-r border-border/70">
               <div className="truncate w-full px-1" title={allTasks.filter(t => t.predecessors.includes(task.id)).map(t => t.name).join(', ') || '—'}>
                 {allTasks.filter(t => t.predecessors.includes(task.id)).map(t => t.name).join(', ') || '—'}
               </div>
             </td>
+
+            {/* Custo (R$) */}
+            <td className="py-2.5 px-3 border-r border-border/70 text-right">
+              {isStage ? (
+                <div className="px-1.5 py-1 text-sm font-semibold text-foreground/80">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    getSubtasks(task.id).reduce((sum, s) => sum + (s.cost || 0), 0)
+                  )}
+                </div>
+              ) : (
+                <Input
+                  type="number"
+                  className="h-8 w-full text-right text-sm border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
+                  defaultValue={task.cost || 0}
+                  onBlur={e => {
+                    const val = parseFloat(e.target.value) || 0;
+                    if (val !== (task.cost || 0)) {
+                      handleChange(task, 'cost', val);
+                    }
+                  }}
+                />
+              )}
+            </td>
           </>
         )}
-
-        {/* Custo (R$) */}
-        <td className="py-2.5 px-3 border-r border-border/70 text-right">
-          {isStage ? (
-            <div className="px-1.5 py-1 text-sm font-semibold text-foreground/80">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                getSubtasks(task.id).reduce((sum, s) => sum + (s.cost || 0), 0)
-              )}
-            </div>
-          ) : (
-            <Input
-              type="number"
-              className="h-8 w-full text-right text-sm border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
-              defaultValue={task.cost || 0}
-              onBlur={e => {
-                const val = parseFloat(e.target.value) || 0;
-                if (val !== (task.cost || 0)) {
-                  handleChange(task, 'cost', val);
-                }
-              }}
-            />
-          )}
-        </td>
 
         {showAllColumns && (
           <>
@@ -1059,22 +1059,23 @@ export default function PlanningTab({ project }: { project: Project }) {
                               <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
                             </div>
                           </td>
+                          {/* Predecessoras */}
+                          <td className="p-0 border-r border-border/40" />
+
                           {showAllColumns && (
                             <>
-                              {/* Predecessoras */}
-                              <td className="p-0 border-r border-border/40" />
                               {/* Sucessoras */}
                               <td className="p-0 border-r border-border/40" />
+                              {/* Custo (R$) */}
+                              <td className="p-0 border-r border-border/40 text-right">
+                                <div className="px-3 text-xs text-primary font-bold animate-fade-in" style={{ width: colWidths[8] }}>
+                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                    allTasks.filter(t => t.parentId).reduce((sum, s) => sum + (s.cost || 0), 0)
+                                  )}
+                                </div>
+                              </td>
                             </>
                           )}
-                          {/* Custo (R$) */}
-                          <td className="p-0 border-r border-border/40 text-right">
-                            <div className="px-3 text-xs text-primary font-bold animate-fade-in" style={{ width: colWidths[showAllColumns ? 8 : 6] }}>
-                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                allTasks.filter(t => t.parentId).reduce((sum, s) => sum + (s.cost || 0), 0)
-                              )}
-                            </div>
-                          </td>
                           {showAllColumns && (
                             <>
                               {/* Observações */}
@@ -1219,17 +1220,17 @@ const SortableStageRow = React.memo(function SortableStageRow({
                   </span>
                 </td>
 
+                {/* 8. Predecessoras */}
+                <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+
                 {hasExtra && (
                   <>
-                    {/* 8. Predecessoras */}
-                    <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
                     {/* 9. Sucessoras */}
                     <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+                    {/* 6. Custo (R$) */}
+                    <td className="py-2 px-3 text-right text-xs text-muted-foreground/30">—</td>
                   </>
                 )}
-
-                {/* 6. Custo (R$) */}
-                <td className="py-2 px-3 text-right text-xs text-muted-foreground/30">—</td>
 
                 {hasExtra && (
                   <>
