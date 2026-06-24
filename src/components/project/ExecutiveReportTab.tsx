@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Project, Task, Constraint, WeeklyHistory, SupplyPackage, WorkforceEntry, getCriticalTaskIds, getProjectProgress, computeWorkforceSummary } from '@/types/project';
+import { Project, Task, Constraint, WeeklyHistory, SupplyPackage, WorkforceEntry, getCriticalTaskIds, getProjectProgress, computeWorkforceSummary, safeParseDate } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { FileText, Download, AlertTriangle, CheckCircle2, Clock, TrendingUp, Users, ShoppingCart, Star } from 'lucide-react';
