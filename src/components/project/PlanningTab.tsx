@@ -1006,9 +1006,17 @@ export default function PlanningTab({ project }: { project: Project }) {
                               <span className="text-xs text-primary font-bold">{projectAggregate.percent}%</span>
                             </div>
                           </td>
+                          {/* Custo (R$) */}
+                          <td className="p-0 border-r border-border/40 text-right">
+                            <div className="px-3 text-xs text-primary font-bold animate-fade-in" style={{ width: colWidths[5] }}>
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                allTasks.filter(t => t.parentId).reduce((sum, s) => sum + (s.cost || 0), 0)
+                              )}
+                            </div>
+                          </td>
                           {/* Status */}
                           <td className="p-0 border-r border-border/40">
-                            <div className="px-3" style={{ width: colWidths[5] }}>
+                            <div className="px-3" style={{ width: colWidths[6] }}>
                               <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
                             </div>
                           </td>
@@ -1017,7 +1025,7 @@ export default function PlanningTab({ project }: { project: Project }) {
                           <td className="p-0 border-r border-border/40" />
                           {/* Efetivo */}
                           <td className="p-0 border-r border-border/10 text-center">
-                            <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[9] }}>
+                            <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[10] }}>
                               {projectWorkforce.reduce((sum, e) => sum + e.ownWorkers + e.thirdPartyWorkers, 0)} colab.
                             </div>
                           </td>

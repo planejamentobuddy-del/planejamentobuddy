@@ -93,6 +93,7 @@ export interface Task {
   currentEnd?: string;         // YYYY-MM-DD
   rescheduleCount?: number;
   reschedules?: TaskReschedule[];
+  cost?: number;
 }
 
 export type TaskStatus = 'not_started' | 'in_progress' | 'completed' | 'delayed' | 'rescheduled';

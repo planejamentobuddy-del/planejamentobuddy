@@ -117,6 +117,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
             currentStart: (t as any).current_start || t.start_date || '',
             currentEnd: (t as any).current_end || t.end_date || '',
             rescheduleCount: (t as any).reschedule_count || 0,
+            cost: Number(t.cost) || 0,
           };
         }).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0) || a.startDate.localeCompare(b.startDate)));
       }
@@ -519,6 +520,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         observations: task.observations,
         checklists: (task.checklists as any) || [],
         order_index: task.orderIndex || 0,
+        cost: task.cost || 0,
       }])
       .select()
       .single();
@@ -546,6 +548,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       observations: data.observations || '',
       checklists: (Array.isArray(data.checklists) ? data.checklists : []) as unknown as ChecklistItem[],
       orderIndex: (data as any).order_index || 0,
+      cost: Number(data.cost) || 0,
     };
     setTasks(prev => [...prev, newTask]);
     return newTask;
@@ -595,6 +598,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         order_index: task.orderIndex || 0,
         frentes: (task.frentes as any) || [],
         frentes_mode: task.frentesMode || 'manual',
+        cost: task.cost || 0,
       })
       .eq('id', task.id);
 
@@ -715,6 +719,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         order_index: task.orderIndex || 0,
         frentes: (task.frentes as any) || [],
         frentes_mode: task.frentesMode || 'manual',
+        cost: task.cost || 0,
       });
     });
 

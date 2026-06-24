@@ -16,6 +16,7 @@ import ReportsTab from '@/components/project/ReportsTab';
 import TodayTab from '@/components/project/TodayTab';
 import SuppliesTab from '@/components/project/SuppliesTab';
 import WorkforceTab from '@/components/project/WorkforceTab';
+import PhysicalFinancialTab from '@/components/project/PhysicalFinancialTab';
 
 const tabs = [
   { value: 'hoje', label: 'Hoje', icon: Sun },
@@ -23,6 +24,7 @@ const tabs = [
   { value: 'planning', label: 'Planejamento', icon: TableProperties },
   { value: 'gantt', label: 'Gantt', icon: GanttChart },
   { value: 'kanban', label: 'Kanban', icon: Columns3 },
+  { value: 'physical_financial', label: 'Físico-Financeiro', icon: FileSpreadsheet },
   { value: 'curves', label: 'Curva S', icon: TrendingUp },
   { value: 'lean', label: 'Lean', icon: Triangle },
   { value: 'supplies', label: 'Suprimentos', icon: ShoppingCart },
@@ -142,11 +144,12 @@ export default function ProjectDetail() {
       {/* Content */}
       <div className="container mx-auto px-6 py-5 flex-1 w-full max-w-[1600px]">
 
-          <TabsContent value="hoje"><TodayTab project={project} /></TabsContent>
+           <TabsContent value="hoje"><TodayTab project={project} /></TabsContent>
           <TabsContent value="dashboard"><DashboardTab project={project} /></TabsContent>
           <TabsContent value="planning"><PlanningTab project={project} /></TabsContent>
           <TabsContent value="gantt"><GanttTab project={project} /></TabsContent>
           <TabsContent value="kanban"><KanbanTab project={project} /></TabsContent>
+          <TabsContent value="physical_financial"><PhysicalFinancialTab project={project} /></TabsContent>
           <TabsContent value="curves"><CurveSTab project={project} /></TabsContent>
           <TabsContent value="lean"><LeanTab project={project} /></TabsContent>
           <TabsContent value="supplies"><SuppliesTab project={project} /></TabsContent>

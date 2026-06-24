@@ -190,7 +190,7 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
         frentesMode: task.frentesMode || 'manual',
       });
       // Load cost info if saved in task properties
-      setCostPlanned((task as any).costPlanned || 0);
+      setCostPlanned(task.cost || (task as any).costPlanned || 0);
       setCostActual((task as any).costActual || 0);
     }
   }, [task]);
@@ -202,6 +202,7 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
   const handleSaveCosts = async () => {
     const updatedTask = {
       ...localTask,
+      cost: costPlanned,
       costPlanned,
       costActual,
     } as any;
