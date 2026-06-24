@@ -2,7 +2,7 @@ import React, { useState, useMemo, Fragment, useEffect } from 'react';
 import { Project, Task, TaskStatus, getProjectProgress, StatusComment, safeParseDate } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History, ChevronsDownUp, ChevronsUpDown, Eye } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History, ChevronsDownUp, ChevronsUpDown, Eye, TableProperties } from 'lucide-react';
 import StatusCommentLog from './StatusCommentLog';
 import TeamTab from './TeamTab';
 import AssignmentsTab from './AssignmentsTab';
