@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Project, SupplyPackage, SupplyStatus, SUPPLY_STATUS_LABELS, SUPPLY_STATUS_COLORS } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import {
   Plus, Trash2, Edit2, Package, AlertTriangle, CheckCircle2,
   Clock, TrendingUp, DollarSign, ShoppingCart, Truck, X, Save,
   ChevronDown, ChevronUp, Filter, Star, LayoutGrid, List,
-  ArrowRight, Zap, PackageCheck, Factory, BarChart2, Eye
+  ArrowRight, Zap, PackageCheck, Factory, BarChart2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
