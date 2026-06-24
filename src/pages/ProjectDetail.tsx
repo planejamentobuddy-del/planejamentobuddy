@@ -17,6 +17,12 @@ import TodayTab from '@/components/project/TodayTab';
 import SuppliesTab from '@/components/project/SuppliesTab';
 import WorkforceTab from '@/components/project/WorkforceTab';
 import PhysicalFinancialTab from '@/components/project/PhysicalFinancialTab';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const tabs = [
   { value: 'hoje', label: 'Hoje', icon: Sun },
@@ -32,6 +38,33 @@ const tabs = [
   { value: 'diary', label: 'Diário', icon: FileText },
   { value: 'admin', label: 'Administração', icon: Wallet },
   { value: 'reports', label: 'Relatórios', icon: FileSpreadsheet },
+];
+
+const tabGroups = [
+  {
+    id: 'paineis',
+    label: 'Painéis',
+    icon: LayoutDashboard,
+    items: ['hoje', 'dashboard', 'diary']
+  },
+  {
+    id: 'cronograma',
+    label: 'Planejamento',
+    icon: TableProperties,
+    items: ['planning', 'gantt', 'kanban', 'lean']
+  },
+  {
+    id: 'recursos',
+    label: 'Recursos',
+    icon: Users,
+    items: ['workforce', 'supplies']
+  },
+  {
+    id: 'controladoria',
+    label: 'Controladoria',
+    icon: Wallet,
+    items: ['physical_financial', 'curves', 'admin', 'reports']
+  }
 ];
 
 export default function ProjectDetail() {
@@ -115,28 +148,54 @@ export default function ProjectDetail() {
 
         {/* Tabs Bar */}
         <div className="container mx-auto px-6 pb-3 overflow-x-auto flex [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-          <TabsList className="bg-transparent border-0 p-0 h-auto gap-1 inline-flex w-max">
-            {tabs.map(tab => (
-              tab.value === 'hoje' ? (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  className="gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-amber-600 dark:text-amber-400 border border-amber-400/30 bg-amber-500/8 data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-300 data-[state=active]:border-amber-500/50 data-[state=active]:shadow-none hover:bg-amber-500/15 transition-all"
-                >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
-                </TabsTrigger>
-              ) : (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  className="gap-2 rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted transition-all"
-                >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
-                </TabsTrigger>
-              )
-            ))}
+          <TabsList className="bg-transparent border-0 p-0 h-auto gap-2 inline-flex w-max">
+            {tabGroups.map(group => {
+              const activeTab = searchParams.get('tab') || 'dashboard';
+              const activeItem = tabs.find(t => t.value === activeTab && group.items.includes(t.value));
+              const GroupIcon = activeItem ? activeItem.icon : group.icon;
+              const groupLabel = activeItem ? activeItem.label : group.label;
+              const isGroupActive = !!activeItem;
+
+              return (
+                <DropdownMenu key={group.id}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className={`gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all h-9 border ${
+                        isGroupActive 
+                          ? 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/15' 
+                          : 'text-muted-foreground border-transparent hover:bg-muted hover:text-foreground'
+                      }`}
+                    >
+                      <GroupIcon className="w-4 h-4" />
+                      <span>{groupLabel}</span>
+                      <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="rounded-xl border border-border/80 p-1 min-w-[160px] shadow-lg">
+                    {group.items.map(val => {
+                      const item = tabs.find(t => t.value === val);
+                      if (!item) return null;
+                      const isItemActive = activeTab === val;
+                      return (
+                        <DropdownMenuItem
+                          key={val}
+                          onClick={() => setSearchParams({ tab: val })}
+                          className={`gap-2 rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer ${
+                            isItemActive 
+                              ? 'bg-primary/10 text-primary font-bold focus:bg-primary/15 focus:text-primary' 
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          <item.icon className="w-3.5 h-3.5 shrink-0" />
+                          <span>{item.label}</span>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            })}
           </TabsList>
         </div>
       </header>

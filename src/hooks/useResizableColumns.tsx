@@ -1,8 +1,12 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 export function useResizableColumns(initialWidths: number[]) {
   const [widths, setWidths] = useState(initialWidths);
   const dragging = useRef<{ index: number; startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    setWidths(initialWidths);
+  }, [initialWidths.length]);
 
   const onMouseDown = useCallback((index: number, e: React.MouseEvent) => {
     e.preventDefault();

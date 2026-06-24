@@ -720,115 +720,119 @@ export default function PlanningTab({ project }: { project: Project }) {
           </div>
         </td>
 
-        {/* 8. Predecessoras */}
-        <td className="py-2.5 px-3 border-r border-border/70">
-          <PredecessorPicker
-            task={task}
-            allTaskOptions={allTaskOptions.filter(t => t.id !== task.id)}
-            allTasks={allTasks}
-            onChange={(v) => handleChange(task, 'predecessors', v === '_none' ? [] : [v])}
-          />
-        </td>
+        {showAllColumns && (
+          <>
+            {/* 8. Predecessoras */}
+            <td className="py-2.5 px-3 border-r border-border/70">
+              <PredecessorPicker
+                task={task}
+                allTaskOptions={allTaskOptions.filter(t => t.id !== task.id)}
+                allTasks={allTasks}
+                onChange={(v) => handleChange(task, 'predecessors', v === '_none' ? [] : [v])}
+              />
+            </td>
 
-        {/* 9. Sucessoras */}
-        <td className="py-2.5 px-3 text-xs text-muted-foreground border-r border-border/70">
-          <div className="truncate w-full px-1" title={allTasks.filter(t => t.predecessors.includes(task.id)).map(t => t.name).join(', ') || '—'}>
-            {allTasks.filter(t => t.predecessors.includes(task.id)).map(t => t.name).join(', ') || '—'}
-          </div>
-        </td>
+            {/* 9. Sucessoras */}
+            <td className="py-2.5 px-3 text-xs text-muted-foreground border-r border-border/70">
+              <div className="truncate w-full px-1" title={allTasks.filter(t => t.predecessors.includes(task.id)).map(t => t.name).join(', ') || '—'}>
+                {allTasks.filter(t => t.predecessors.includes(task.id)).map(t => t.name).join(', ') || '—'}
+              </div>
+            </td>
 
-        {/* 11. Observações */}
-        <td className="py-2.5 px-3 border-r border-border/70">
-          <Input
-            className="h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30"
-            defaultValue={task.observations || ''}
-            onBlur={e => {
-              if (e.target.value !== (task.observations || '')) {
-                handleChange(task, 'observations', e.target.value);
-              }
-            }}
-            placeholder="..."
-          />
-        </td>
+            {/* 11. Observações */}
+            <td className="py-2.5 px-3 border-r border-border/70">
+              <Input
+                className="h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30"
+                defaultValue={task.observations || ''}
+                onBlur={e => {
+                  if (e.target.value !== (task.observations || '')) {
+                    handleChange(task, 'observations', e.target.value);
+                  }
+                }}
+                placeholder="..."
+              />
+            </td>
 
-        {/* Efetivo */}
-        <td className="py-2.5 px-3 border-r border-border/70 text-center font-medium">
-          {!isStage && (
-            <div 
-              className="flex items-center justify-center gap-1 cursor-pointer hover:underline text-xs font-semibold"
-              onClick={() => setSelectedDetailTask(task)}
-              title="Clique para gerenciar o efetivo desta tarefa"
-            >
-              👷 {totalWorkers} colab.
-            </div>
-          )}
-          {isStage && <span className="text-muted-foreground/35">—</span>}
-        </td>
+            {/* Efetivo */}
+            <td className="py-2.5 px-3 border-r border-border/70 text-center font-medium">
+              {!isStage && (
+                <div 
+                  className="flex items-center justify-center gap-1 cursor-pointer hover:underline text-xs font-semibold"
+                  onClick={() => setSelectedDetailTask(task)}
+                  title="Clique para gerenciar o efetivo desta tarefa"
+                >
+                  ♻ {totalWorkers} colab.
+                </div>
+              )}
+              {isStage && <span className="text-muted-foreground/35">—</span>}
+            </td>
 
-        {/* 2. Responsável */}
-        <td className="py-2.5 px-3 border-r border-border/70">
-          <Input
-            list="users-list"
-            className="h-8 text-sm border-0 border-b border-transparent bg-transparent px-1.5 focus-visible:ring-0 focus-visible:border-primary hover:border-border/60 transition-colors"
-            defaultValue={task.responsible || ''}
-            onBlur={e => {
-              if (e.target.value !== (task.responsible || '')) {
-                handleChange(task, 'responsible', e.target.value);
-              }
-            }}
-            placeholder="Responsável..."
-          />
-        </td>
+            {/* 2. Responsável */}
+            <td className="py-2.5 px-3 border-r border-border/70">
+              <Input
+                list="users-list"
+                className="h-8 text-sm border-0 border-b border-transparent bg-transparent px-1.5 focus-visible:ring-0 focus-visible:border-primary hover:border-border/60 transition-colors"
+                defaultValue={task.responsible || ''}
+                onBlur={e => {
+                  if (e.target.value !== (task.responsible || '')) {
+                    handleChange(task, 'responsible', e.target.value);
+                  }
+                }}
+                placeholder="Responsável..."
+              />
+            </td>
 
-        {/* 11. Ações */}
-        <td className="py-2.5 px-3">
-          <div className="flex items-center justify-center gap-0.5">
-            {isStage && (
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => handleAddSubtask(task.id)} title="Adicionar subetapa">
-                <Plus className="w-3.5 h-3.5" />
-              </Button>
-            )}
-            {!isStage && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-primary"
-                onClick={() => setSelectedDetailTask(task)}
-                title="Ver detalhes / Frentes de serviço"
-              >
-                <Eye className="w-3.5 h-3.5" />
-              </Button>
-            )}
-            {!isStage && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-amber-500"
-                onClick={() => setRescheduleTask(task)}
-                title="Reprogramar tarefa"
-              >
-                <CalendarClock className="w-3.5 h-3.5" />
-              </Button>
-            )}
-            {!isStage && (task.rescheduleCount || 0) > 0 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-primary"
-                onClick={() => setHistoryTask(task)}
-                title="Ver histórico de reprogramações"
-              >
-                <History className="w-3.5 h-3.5" />
-              </Button>
-            )}
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleDuplicate(task)} title="Duplicar">
-              <Copy className="w-3.5 h-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => isStage ? handleDeleteStage(task.id) : deleteTask(task.id)} title="Excluir">
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-        </td>
+            {/* 11. Ações */}
+            <td className="py-2.5 px-3">
+              <div className="flex items-center justify-center gap-0.5">
+                {isStage && (
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => handleAddSubtask(task.id)} title="Adicionar subetapa">
+                    <Plus className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {!isStage && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-primary"
+                    onClick={() => setSelectedDetailTask(task)}
+                    title="Ver detalhes / Frentes de serviço"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {!isStage && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-amber-500"
+                    onClick={() => setRescheduleTask(task)}
+                    title="Reprogramar tarefa"
+                  >
+                    <CalendarClock className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {!isStage && (task.rescheduleCount || 0) > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-primary"
+                    onClick={() => setHistoryTask(task)}
+                    title="Ver histórico de reprogramações"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleDuplicate(task)} title="Duplicar">
+                  <Copy className="w-3.5 h-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => isStage ? handleDeleteStage(task.id) : deleteTask(task.id)} title="Excluir">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </td>
+          </>
+        )}
       </tr>
     );
   };
@@ -916,6 +920,18 @@ export default function PlanningTab({ project }: { project: Project }) {
                 ).length} etapa(s) com reprogramações
               </span>
             )}
+
+            <button
+              onClick={() => setShowAllColumns(v => !v)}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                showAllColumns
+                  ? 'bg-primary/10 border-primary/30 text-primary'
+                  : 'bg-muted/50 border-border/40 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <TableProperties className="w-3.5 h-3.5" />
+              {showAllColumns ? 'Exibição Completa' : 'Exibição Simplificada'}
+            </button>
 
             <div className="flex items-center gap-1.5 ml-auto">
               <span className="text-xs text-muted-foreground font-semibold">Responsável:</span>
@@ -1020,17 +1036,21 @@ export default function PlanningTab({ project }: { project: Project }) {
                               <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
                             </div>
                           </td>
-                          <td className="p-0 border-r border-border/40" />
-                          <td className="p-0 border-r border-border/40" />
-                          <td className="p-0 border-r border-border/40" />
-                          {/* Efetivo */}
-                          <td className="p-0 border-r border-border/10 text-center">
-                            <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[10] }}>
-                              {projectWorkforce.reduce((sum, e) => sum + e.ownWorkers + e.thirdPartyWorkers, 0)} colab.
-                            </div>
-                          </td>
-                          <td className="p-0 border-r border-border/40" />
-                          <td className="p-0" />
+                          {showAllColumns && (
+                            <>
+                              <td className="p-0 border-r border-border/40" />
+                              <td className="p-0 border-r border-border/40" />
+                              <td className="p-0 border-r border-border/40" />
+                              {/* Efetivo */}
+                              <td className="p-0 border-r border-border/10 text-center">
+                                <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[10] }}>
+                                  {projectWorkforce.reduce((sum, e) => sum + e.ownWorkers + e.thirdPartyWorkers, 0)} colab.
+                                </div>
+                              </td>
+                              <td className="p-0 border-r border-border/40" />
+                              <td className="p-0" />
+                            </>
+                          )}
                         </tr>
                       </tbody>
                     )}
