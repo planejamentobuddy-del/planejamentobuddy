@@ -226,7 +226,6 @@ export default function PlanningTab({ project }: { project: Project }) {
 
   const columnHeaders = [
     { label: 'Etapa / Atividade', align: 'left', width: 300 },
-    { label: 'Responsável', align: 'left', width: 140 },
     { label: 'Início', align: 'left', width: 120 },
     { label: 'Término', align: 'left', width: 120 },
     { label: 'Duração', align: 'center', width: 80 },
@@ -236,6 +235,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: 'Predecessoras', align: 'left', width: 160 },
     { label: 'Sucessoras', align: 'left', width: 160 },
     { label: 'Observações', align: 'left', width: 200 },
+    { label: 'Responsável', align: 'left', width: 140 },
     { label: 'Ações', align: 'center', width: 130 },
   ];
 
@@ -392,8 +392,8 @@ export default function PlanningTab({ project }: { project: Project }) {
             .pop()!;
           // Start = next business day after predecessor ends
           const newStart = addBusinessDays(latestEnd, 2); // 1 day past = next business day
-          // Keep the same duration, recalculate end
-          const dur = task.duration || 1;
+          // Keep the same duration, recalculate end (allow 0 for milestones)
+          const dur = task.duration === 0 ? 0 : (task.duration || 1);
           const newEnd = addBusinessDays(newStart, dur);
           updated.startDate = newStart;
           updated.endDate = newEnd;
@@ -403,7 +403,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     }
 
     if (field === 'startDate' || field === 'endDate') {
-      updated.duration = Math.max(1, getBusinessDays(updated.startDate, updated.endDate));
+      updated.duration = Math.max(0, getBusinessDays(updated.startDate, updated.endDate));
     }
     if (field === 'duration') {
       updated.endDate = addBusinessDays(updated.startDate, value);
@@ -446,7 +446,7 @@ export default function PlanningTab({ project }: { project: Project }) {
             }, '');
 
             const succStart = addBusinessDays(latestPredEnd || predNewEnd, 2);
-            const succEnd = addBusinessDays(succStart, succ.duration || 1);
+            const succEnd = addBusinessDays(succStart, succ.duration === 0 ? 0 : (succ.duration || 1));
 
             if (succStart && succEnd && (succStart !== succ.startDate || succEnd !== succ.endDate)) {
               const updatedSucc = {
@@ -525,21 +525,26 @@ export default function PlanningTab({ project }: { project: Project }) {
     const effectiveOverdue = agg ? agg.hasOverdue : overdue;
     const effectiveStatus = effectiveOverdue ? 'delayed' as TaskStatus : (agg ? (percent >= 100 ? 'completed' : percent > 0 ? 'in_progress' : 'not_started') : task.status);
 
-    const statusBorderColor = effectiveStatus === 'completed' ? 'border-l-status-ok' :
-                             effectiveStatus === 'in_progress' ? 'border-l-blue-600' :
-                             effectiveStatus === 'delayed' ? 'border-l-status-danger' :
-                             effectiveStatus === 'rescheduled' ? 'border-l-amber-500' :
-                             'border-l-muted';
+    const isMilestone = !isStage && task.duration === 0;
+
+    const statusBorderColor = isMilestone ? 'border-l-amber-500' :
+                             (effectiveStatus === 'completed' ? 'border-l-status-ok' :
+                              effectiveStatus === 'in_progress' ? 'border-l-blue-600' :
+                              effectiveStatus === 'delayed' ? 'border-l-status-danger' :
+                              effectiveStatus === 'rescheduled' ? 'border-l-amber-500' :
+                              'border-l-muted');
 
     return (
       <tr
         key={task.id}
         className={`border-b border-border/80 transition-colors border-l-4 ${statusBorderColor} ${
-          effectiveOverdue
-            ? 'bg-destructive/[0.02]'
-            : isStage
-              ? 'bg-primary/[0.05] hover:bg-primary/[0.08]'
-              : 'hover:bg-muted/30'
+          isMilestone
+            ? 'bg-amber-500/[0.04] hover:bg-amber-500/[0.07] font-medium'
+            : (effectiveOverdue
+                ? 'bg-destructive/[0.02]'
+                : isStage
+                  ? 'bg-primary/[0.05] hover:bg-primary/[0.08]'
+                  : 'hover:bg-muted/30')
         }`}
       >
         {/* 1. Etapa / Atividade */}
@@ -564,6 +569,11 @@ export default function PlanningTab({ project }: { project: Project }) {
             ) : (
               <span className="text-muted-foreground/30 text-xs pl-1 shrink-0">↳</span>
             )}
+            {isMilestone && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest bg-amber-500/10 text-amber-700 border border-amber-500/20 shrink-0 uppercase select-none">
+                ◆ MARCO
+              </span>
+            )}
             <Input
               className={`h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 truncate ${isStage ? 'font-bold text-foreground' : 'text-foreground/80 cursor-pointer hover:underline decoration-primary/45 decoration-2'}`}
               defaultValue={task.name}
@@ -583,20 +593,6 @@ export default function PlanningTab({ project }: { project: Project }) {
           </div>
         </td>
 
-        {/* 2. Responsável */}
-        <td className="py-2.5 px-3 border-r border-border/70">
-          <Input
-            list="users-list"
-            className="h-8 text-sm border-0 border-b border-transparent bg-transparent px-1.5 focus-visible:ring-0 focus-visible:border-primary hover:border-border/60 transition-colors"
-            defaultValue={task.responsible || ''}
-            onBlur={e => {
-              if (e.target.value !== (task.responsible || '')) {
-                handleChange(task, 'responsible', e.target.value);
-              }
-            }}
-            placeholder="Responsável..."
-          />
-        </td>
 
         {/* 3. Início */}
         <td className="py-2.5 px-3 text-sm text-muted-foreground border-r border-border/70">
@@ -775,6 +771,21 @@ export default function PlanningTab({ project }: { project: Project }) {
               }
             }}
             placeholder="..."
+          />
+        </td>
+
+        {/* 2. Responsável */}
+        <td className="py-2.5 px-3 border-r border-border/70">
+          <Input
+            list="users-list"
+            className="h-8 text-sm border-0 border-b border-transparent bg-transparent px-1.5 focus-visible:ring-0 focus-visible:border-primary hover:border-border/60 transition-colors"
+            defaultValue={task.responsible || ''}
+            onBlur={e => {
+              if (e.target.value !== (task.responsible || '')) {
+                handleChange(task, 'responsible', e.target.value);
+              }
+            }}
+            placeholder="Responsável..."
           />
         </td>
 
@@ -981,24 +992,23 @@ export default function PlanningTab({ project }: { project: Project }) {
                               <span className="text-sm font-black text-primary uppercase tracking-tight truncate">RESUMO GERAL DO PROJETO</span>
                             </div>
                           </td>
-                          <td className="p-0 border-r border-border/40" />
                           <td className="p-0 border-r border-border/40">
-                            <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[2] }}>
+                            <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[1] }}>
                               {projectAggregate.startDate ? formatDate(projectAggregate.startDate) : '—'}
                             </div>
                           </td>
                           <td className="p-0 border-r border-border/40">
-                            <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[3] }}>
+                            <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[2] }}>
                               {projectAggregate.endDate ? formatDate(projectAggregate.endDate) : '—'}
                             </div>
                           </td>
                           <td className="p-0 border-r border-border/10 text-center">
-                            <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[4] }}>
+                            <div className="px-3 text-[11px] text-primary" style={{ width: colWidths[3] }}>
                               {projectAggregate.duration} dias
                             </div>
                           </td>
                           <td className="p-0 border-r border-border/40">
-                            <div className="px-3 flex items-center gap-2" style={{ width: colWidths[5] }}>
+                            <div className="px-3 flex items-center gap-2" style={{ width: colWidths[4] }}>
                               <div className="flex-1 bg-primary/10 h-2 rounded-full overflow-hidden">
                                 <div className="bg-primary h-full transition-all duration-500" style={{ width: `${projectAggregate.percent}%` }} />
                               </div>
@@ -1007,16 +1017,17 @@ export default function PlanningTab({ project }: { project: Project }) {
                           </td>
                           {/* Frentes */}
                           <td className="p-0 border-r border-border/10 text-center">
-                            <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[6] }}>
+                            <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[5] }}>
                               {allTasks.reduce((sum, t) => sum + (t.frentes?.length || 0), 0)} frentes
                             </div>
                           </td>
                           {/* Status */}
                           <td className="p-0 border-r border-border/40">
-                            <div className="px-3" style={{ width: colWidths[7] }}>
+                            <div className="px-3" style={{ width: colWidths[6] }}>
                               <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
                             </div>
                           </td>
+                          <td className="p-0 border-r border-border/40" />
                           <td className="p-0 border-r border-border/40" />
                           <td className="p-0 border-r border-border/40" />
                           <td className="p-0 border-r border-border/40" />

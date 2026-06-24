@@ -525,3 +525,106 @@ export function calculateSCurve(tasks: Task[], project: Project): CurvePoint[] {
 
   return points;
 }
+
+// ============================================================
+// SUPPLY CHAIN / SUPRIMENTOS
+// ============================================================
+
+export type SupplyStatus =
+  | 'pending_quantitative'
+  | 'pending_order'
+  | 'ordered'
+  | 'in_production'
+  | 'delivered'
+  | 'cancelled';
+
+export const SUPPLY_STATUS_LABELS: Record<SupplyStatus, string> = {
+  pending_quantitative: 'Aguard. Quantitativo',
+  pending_order: 'Aguard. Pedido',
+  ordered: 'Pedido Realizado',
+  in_production: 'Em Produção/Lead',
+  delivered: 'Entregue na Obra',
+  cancelled: 'Cancelado',
+};
+
+export const SUPPLY_STATUS_COLORS: Record<SupplyStatus, string> = {
+  pending_quantitative: 'bg-slate-500/15 text-slate-600 dark:text-slate-400',
+  pending_order: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+  ordered: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+  in_production: 'bg-purple-500/15 text-purple-700 dark:text-purple-400',
+  delivered: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+  cancelled: 'bg-red-500/15 text-red-600 dark:text-red-400',
+};
+
+export interface SupplyPackage {
+  id: string;
+  projectId: string;
+  taskId?: string;             // optional link to a task
+  name: string;                // 'Esquadrias MADO'
+  supplier?: string;           // 'MADO Esquadrias'
+  estimatedValue?: number;     // R$ 3.000.000
+  isCritical: boolean;
+  leadTimeDays: number;        // 120 = 4 months lead time
+  quantitativeDoneDate?: string;   // YYYY-MM-DD when QTO was finalized
+  orderDeadline?: string;          // YYYY-MM-DD last date to place order
+  orderDate?: string;              // YYYY-MM-DD actual order placement
+  expectedDeliveryDate?: string;   // YYYY-MM-DD expected arrival on site
+  actualDeliveryDate?: string;     // YYYY-MM-DD actual arrival on site
+  status: SupplyStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+// ============================================================
+// WORKFORCE / EFETIVO
+// ============================================================
+
+export interface WorkforceEntry {
+  id: string;
+  projectId: string;
+  month: string;               // 'YYYY-MM'
+  phase: string;               // 'Fundações & Subsolo'
+  activity?: string;           // specific activity
+  ownWorkers: number;          // direct employees
+  thirdPartyWorkers: number;   // subcontracted
+  notes?: string;
+  createdAt: string;
+}
+
+/** Computed monthly workforce summary across phases */
+export interface WorkforceMonthlySummary {
+  month: string;               // 'YYYY-MM'
+  label: string;               // 'Jun/2024'
+  totalOwn: number;
+  totalThirdParty: number;
+  total: number;
+  phases: WorkforceEntry[];
+}
+
+/** Helper: compute monthly summaries from entries */
+export function computeWorkforceSummary(entries: WorkforceEntry[]): WorkforceMonthlySummary[] {
+  const byMonth = new Map<string, WorkforceEntry[]>();
+  entries.forEach(e => {
+    const list = byMonth.get(e.month) || [];
+    list.push(e);
+    byMonth.set(e.month, list);
+  });
+
+  return Array.from(byMonth.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, phases]) => {
+      const [y, m] = month.split('-');
+      const label = new Date(parseInt(y), parseInt(m) - 1, 1)
+        .toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      const totalOwn = phases.reduce((s, e) => s + e.ownWorkers, 0);
+      const totalThirdParty = phases.reduce((s, e) => s + e.thirdPartyWorkers, 0);
+      return {
+        month,
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+        totalOwn,
+        totalThirdParty,
+        total: totalOwn + totalThirdParty,
+        phases,
+      };
+    });
+}

@@ -52,7 +52,12 @@ const columns: KanbanColumn[] = [
 
 export default function KanbanTab({ project }: { project: Project }) {
   const { getTasksForProject, updateTask } = useProjects();
-  const tasks = getTasksForProject(project.id);
+  const allTasks = getTasksForProject(project.id);
+  
+  // Filtra para exibir apenas subetapas/tarefas folhas (excluindo etapas principais/pais)
+  const parentIds = new Set(allTasks.map(t => t.parentId).filter(Boolean) as string[]);
+  const tasks = allTasks.filter(t => !parentIds.has(t.id));
+
   const [dragging, setDragging] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 

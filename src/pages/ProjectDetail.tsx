@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet, FileSpreadsheet, Sun } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet, FileSpreadsheet, Sun, ShoppingCart, Users } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,6 +14,8 @@ import AdminTab from '@/components/project/AdminTab';
 import DiaryTab from '@/components/project/DiaryTab';
 import ReportsTab from '@/components/project/ReportsTab';
 import TodayTab from '@/components/project/TodayTab';
+import SuppliesTab from '@/components/project/SuppliesTab';
+import WorkforceTab from '@/components/project/WorkforceTab';
 
 const tabs = [
   { value: 'hoje', label: 'Hoje', icon: Sun },
@@ -23,6 +25,8 @@ const tabs = [
   { value: 'kanban', label: 'Kanban', icon: Columns3 },
   { value: 'curves', label: 'Curva S', icon: TrendingUp },
   { value: 'lean', label: 'Lean', icon: Triangle },
+  { value: 'supplies', label: 'Suprimentos', icon: ShoppingCart },
+  { value: 'workforce', label: 'Efetivo', icon: Users },
   { value: 'diary', label: 'Diário', icon: FileText },
   { value: 'admin', label: 'Administração', icon: Wallet },
   { value: 'reports', label: 'Relatórios', icon: FileSpreadsheet },
@@ -145,6 +149,8 @@ export default function ProjectDetail() {
           <TabsContent value="kanban"><KanbanTab project={project} /></TabsContent>
           <TabsContent value="curves"><CurveSTab project={project} /></TabsContent>
           <TabsContent value="lean"><LeanTab project={project} /></TabsContent>
+          <TabsContent value="supplies"><SuppliesTab project={project} /></TabsContent>
+          <TabsContent value="workforce"><WorkforceTab project={project} /></TabsContent>
           <TabsContent value="diary"><DiaryTab project={project} /></TabsContent>
           <TabsContent value="admin"><AdminTab project={project} /></TabsContent>
           <TabsContent value="reports"><ReportsTab project={project} /></TabsContent>

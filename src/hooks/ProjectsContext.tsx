@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, DailyLog, PaymentReceipt, ProjectResource } from '@/types/project';
+import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, DailyLog, PaymentReceipt, ProjectResource, SupplyPackage, WorkforceEntry } from '@/types/project';
 
 export interface ProjectsContextType {
   projects: Project[];
@@ -51,6 +51,18 @@ export interface ProjectsContextType {
   closeWeek: (projectId: string, week?: string) => Promise<void>;
   refresh: () => Promise<void>;
   users: any[];
+  // Supply Packages
+  supplyPackages: SupplyPackage[];
+  getSupplyPackagesForProject: (projectId: string) => SupplyPackage[];
+  addSupplyPackage: (pkg: Omit<SupplyPackage, 'id' | 'createdAt'>) => Promise<SupplyPackage | null>;
+  updateSupplyPackage: (pkg: SupplyPackage) => Promise<void>;
+  deleteSupplyPackage: (id: string) => Promise<void>;
+  // Workforce
+  workforceEntries: WorkforceEntry[];
+  getWorkforceForProject: (projectId: string) => WorkforceEntry[];
+  addWorkforceEntry: (entry: Omit<WorkforceEntry, 'id' | 'createdAt'>) => Promise<WorkforceEntry | null>;
+  updateWorkforceEntry: (entry: WorkforceEntry) => Promise<void>;
+  deleteWorkforceEntry: (id: string) => Promise<void>;
 }
 
 export const ProjectsContext = createContext<ProjectsContextType | null>(null);

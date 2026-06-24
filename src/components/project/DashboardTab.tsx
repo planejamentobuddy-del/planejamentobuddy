@@ -36,7 +36,9 @@ export default function DashboardTab({ project }: { project: Project }) {
   const progress = getProjectProgress(tasks);
 // Moved estimated calculation down so it can use 'spi'
   const now = new Date().toISOString().split('T')[0];
+  const parentIds = new Set(tasks.map(t => t.parentId).filter(Boolean) as string[]);
   const delayed = tasks.filter(t => {
+    if (parentIds.has(t.id)) return false;
     const endStr = t.endDate;
     if (!endStr) return false;
     const end = safeParseDate(endStr);
@@ -78,7 +80,7 @@ export default function DashboardTab({ project }: { project: Project }) {
     return Number((lastCurvePoint.realizado / lastCurvePoint.planejado).toFixed(2));
   }, [lastCurvePoint]);
 
-  const criticalTasks = tasks.filter(t => isCriticalPath(t, tasks));
+  const criticalTasks = tasks.filter(t => isCriticalPath(t, tasks) && !parentIds.has(t.id));
   const criticalCompletedCount = criticalTasks.filter(t => t.percentComplete === 100).length;
   const criticalPathProgress = criticalTasks.length > 0 
     ? Math.round((criticalCompletedCount / criticalTasks.length) * 100) 
@@ -198,7 +200,7 @@ export default function DashboardTab({ project }: { project: Project }) {
   }
 
   if (delayed.length > 0) {
-    alerts.push({ text: `${delayed.length} tarefa(s) atrasada(s) no caminho crítico.`, type: 'danger', onClick: () => setSearchParams({ tab: 'kanban' }) });
+    alerts.push({ text: `${delayed.length} tarefa(s) atrasada(s).`, type: 'danger', onClick: () => setSearchParams({ tab: 'kanban' }) });
   }
 
   const ppcColor = ppc === null ? 'text-muted-foreground' : ppc >= 80 ? 'text-status-ok' : ppc >= 60 ? 'text-status-warning' : 'text-status-danger';
@@ -386,8 +388,30 @@ export default function DashboardTab({ project }: { project: Project }) {
                 </div>
                 <Tooltip>
                   <TooltipTrigger><Info className="w-3.5 h-3.5 text-muted-foreground/40" /></TooltipTrigger>
-                  <TooltipContent className="max-w-[200px] text-xs">
-                    Score gerencial baseado em PPC, SPI, Caminho Crítico e Restrições pendentes.
+                  <TooltipContent className="max-w-[320px] text-xs p-4 space-y-2.5">
+                    <p className="font-bold border-b border-border/30 pb-1.5 mb-1.5 text-sm">Como é calculado o Score?</p>
+                    <p>Média ponderada baseada nos seguintes indicadores e pesos:</p>
+                    <div className="space-y-1.5 font-mono text-[10px]">
+                      <div className="flex justify-between">
+                        <span>📊 PPC da Semana</span>
+                        <span className="font-bold">Máx: 30 pts</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>📈 Ritmo SPI (Curva S)</span>
+                        <span className="font-bold">Máx: 35 pts</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>📍 Caminho Crítico</span>
+                        <span className="font-bold">Máx: 20 pts</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>🔒 Restrições Pendentes</span>
+                        <span className="font-bold">Máx: 15 pts</span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground border-t border-border/30 pt-1.5 italic">
+                      *Nota baixa no início da obra é normal pois as tarefas da semana ainda não foram concluídas (0% PPC) e há restrições abertas.
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               </div>

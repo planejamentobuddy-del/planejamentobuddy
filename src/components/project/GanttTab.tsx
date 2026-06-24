@@ -759,6 +759,9 @@ export default function GanttTab({ project }: { project: Project }) {
                   <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(148, 163, 184, 0.5)" />
                   </marker>
+                  <marker id="arrow-critical" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#B23A1E" />
+                  </marker>
                 </defs>
                 {ganttRows.map((row, idx) => {
                   if (row.type !== 'task') return null;
@@ -798,22 +801,26 @@ export default function GanttTab({ project }: { project: Project }) {
                     const endY = idx * 40 + 20 + obraOffset;
                     
                     // Arrow logic: Always keep the line flowing forward (to the right) cleanly.
-                    // If the successor starts BEFORE the predecessor finishes (overlap),
-                    // the arrow will drop down and point neatly into the body of the successor 
-                    // instead of creating a chaotic backward zig-zag spiderweb.
                     const visualEndX = Math.max(startX + 18, endX);
                     
                     const path = `M ${startX} ${startY} L ${startX + 10} ${startY} L ${startX + 10} ${endY} L ${visualEndX} ${endY}`;
+                    
+                    // Check if both tasks are critical to highlight the connection path
+                    const isArrowCritical = showCriticalPath && criticalSet.has(predId) && criticalSet.has(task.id);
+                    const strokeColor = isArrowCritical ? '#B23A1E' : 'rgba(148, 163, 184, 0.4)';
+                    const strokeWidth = isArrowCritical ? '2.5' : '1.5';
+                    const marker = isArrowCritical ? 'url(#arrow-critical)' : 'url(#arrow)';
+                    const strokeDash = isArrowCritical ? 'none' : '4 2';
 
                     return (
                       <Fragment key={`${predId}-${task.id}`}>
                         <path 
                           d={path}
                           fill="none"
-                          stroke="rgba(148, 163, 184, 0.4)"
-                          strokeWidth="1.5"
-                          strokeDasharray="4 2"
-                          markerEnd="url(#arrow)"
+                          stroke={strokeColor}
+                          strokeWidth={strokeWidth}
+                          strokeDasharray={strokeDash}
+                          markerEnd={marker}
                         />
                       </Fragment>
                     );

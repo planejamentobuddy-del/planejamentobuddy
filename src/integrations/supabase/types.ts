@@ -543,6 +543,116 @@ export type Database = {
           }
         ]
       }
+      supply_packages: {
+        Row: {
+          id: string
+          project_id: string
+          task_id: string | null
+          name: string
+          supplier: string | null
+          estimated_value: number | null
+          is_critical: boolean
+          lead_time_days: number
+          quantitative_done_date: string | null
+          order_deadline: string | null
+          order_date: string | null
+          expected_delivery_date: string | null
+          actual_delivery_date: string | null
+          status: string
+          notes: string | null
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          task_id?: string | null
+          name: string
+          supplier?: string | null
+          estimated_value?: number | null
+          is_critical?: boolean
+          lead_time_days?: number
+          quantitative_done_date?: string | null
+          order_deadline?: string | null
+          order_date?: string | null
+          expected_delivery_date?: string | null
+          actual_delivery_date?: string | null
+          status?: string
+          notes?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          task_id?: string | null
+          name?: string
+          supplier?: string | null
+          estimated_value?: number | null
+          is_critical?: boolean
+          lead_time_days?: number
+          quantitative_done_date?: string | null
+          order_deadline?: string | null
+          order_date?: string | null
+          expected_delivery_date?: string | null
+          actual_delivery_date?: string | null
+          status?: string
+          notes?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_packages_project_id_fkey"
+            columns: ["project_id"]
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      workforce_entries: {
+        Row: {
+          id: string
+          project_id: string
+          month: string
+          phase: string
+          activity: string | null
+          own_workers: number
+          third_party_workers: number
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          month: string
+          phase: string
+          activity?: string | null
+          own_workers?: number
+          third_party_workers?: number
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          month?: string
+          phase?: string
+          activity?: string | null
+          own_workers?: number
+          third_party_workers?: number
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workforce_entries_project_id_fkey"
+            columns: ["project_id"]
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

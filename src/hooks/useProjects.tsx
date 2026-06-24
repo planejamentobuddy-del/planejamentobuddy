@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, getCurrentWeek, DailyLog, PaymentReceipt, ProjectResource } from '@/types/project';
+import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, getCurrentWeek, DailyLog, PaymentReceipt, ProjectResource, SupplyPackage, WorkforceEntry } from '@/types/project';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
@@ -18,6 +18,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const [paymentReceipts, setPaymentReceipts] = useState<PaymentReceipt[]>([]);
   const [resources, setResources] = useState<ProjectResource[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [supplyPackages, setSupplyPackages] = useState<SupplyPackage[]>([]);
+  const [workforceEntries, setWorkforceEntries] = useState<WorkforceEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   const isFetching = React.useRef(false);
@@ -50,6 +52,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       const { data: receiptData } = await supabase.from('payment_receipts').select('*').order('received_at', { ascending: false });
       const { data: resData } = await supabase.from('project_resources').select('*').order('name', { ascending: true });
       const { data: userData, error: userErr } = await supabase.from('profiles').select('id, full_name, email').in('status', ['active', 'pending']);
+      const { data: supplyData } = await supabase.from('supply_packages').select('*').order('created_at', { ascending: true });
+      const { data: workforceData } = await supabase.from('workforce_entries').select('*').order('month', { ascending: true });
 
       if (projErr) throw projErr;
       if (taskErr) throw taskErr;
@@ -207,6 +211,43 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
 
       if (userData) {
         setUsersList(userData);
+      }
+
+      // Supply packages
+      if (supplyData) {
+        setSupplyPackages(supplyData.map((s: any) => ({
+          id: s.id,
+          projectId: s.project_id,
+          taskId: s.task_id || undefined,
+          name: s.name,
+          supplier: s.supplier || undefined,
+          estimatedValue: s.estimated_value || undefined,
+          isCritical: s.is_critical || false,
+          leadTimeDays: s.lead_time_days || 30,
+          quantitativeDoneDate: s.quantitative_done_date || undefined,
+          orderDeadline: s.order_deadline || undefined,
+          orderDate: s.order_date || undefined,
+          expectedDeliveryDate: s.expected_delivery_date || undefined,
+          actualDeliveryDate: s.actual_delivery_date || undefined,
+          status: s.status as any,
+          notes: s.notes || undefined,
+          createdAt: s.created_at,
+        })));
+      }
+
+      // Workforce entries
+      if (workforceData) {
+        setWorkforceEntries(workforceData.map((w: any) => ({
+          id: w.id,
+          projectId: w.project_id,
+          month: w.month,
+          phase: w.phase,
+          activity: w.activity || undefined,
+          ownWorkers: w.own_workers || 0,
+          thirdPartyWorkers: w.third_party_workers || 0,
+          notes: w.notes || undefined,
+          createdAt: w.created_at,
+        })));
       }
     } catch (error: any) {
       console.error('Error fetching data:', error);
@@ -1081,6 +1122,195 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [resources]);
 
+  // ============================================================
+  // SUPPLY PACKAGES CRUD
+  // ============================================================
+
+  const getSupplyPackagesForProject = useCallback((projectId: string) =>
+    supplyPackages.filter(s => s.projectId === projectId), [supplyPackages]);
+
+  const addSupplyPackage = useCallback(async (pkg: Omit<SupplyPackage, 'id' | 'createdAt'>): Promise<SupplyPackage | null> => {
+    const { data, error } = await supabase
+      .from('supply_packages')
+      .insert([{
+        project_id: pkg.projectId,
+        task_id: pkg.taskId || null,
+        name: pkg.name,
+        supplier: pkg.supplier || null,
+        estimated_value: pkg.estimatedValue || null,
+        is_critical: pkg.isCritical,
+        lead_time_days: pkg.leadTimeDays,
+        quantitative_done_date: pkg.quantitativeDoneDate || null,
+        order_deadline: pkg.orderDeadline || null,
+        order_date: pkg.orderDate || null,
+        expected_delivery_date: pkg.expectedDeliveryDate || null,
+        actual_delivery_date: pkg.actualDeliveryDate || null,
+        status: pkg.status,
+        notes: pkg.notes || null,
+        created_by: user?.id || null,
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding supply package:', error);
+      toast.error('Erro ao adicionar pacote de suprimento.');
+      return null;
+    }
+
+    const newPkg: SupplyPackage = {
+      id: data.id,
+      projectId: data.project_id,
+      taskId: data.task_id || undefined,
+      name: data.name,
+      supplier: data.supplier || undefined,
+      estimatedValue: data.estimated_value || undefined,
+      isCritical: data.is_critical,
+      leadTimeDays: data.lead_time_days,
+      quantitativeDoneDate: data.quantitative_done_date || undefined,
+      orderDeadline: data.order_deadline || undefined,
+      orderDate: data.order_date || undefined,
+      expectedDeliveryDate: data.expected_delivery_date || undefined,
+      actualDeliveryDate: data.actual_delivery_date || undefined,
+      status: data.status as any,
+      notes: data.notes || undefined,
+      createdAt: data.created_at,
+    };
+    setSupplyPackages(prev => [...prev, newPkg]);
+    toast.success('Pacote de suprimento adicionado!');
+    return newPkg;
+  }, [user, supplyPackages]);
+
+  const updateSupplyPackage = useCallback(async (pkg: SupplyPackage) => {
+    const original = [...supplyPackages];
+    setSupplyPackages(prev => prev.map(s => s.id === pkg.id ? pkg : s));
+
+    const { error } = await supabase
+      .from('supply_packages')
+      .update({
+        task_id: pkg.taskId || null,
+        name: pkg.name,
+        supplier: pkg.supplier || null,
+        estimated_value: pkg.estimatedValue || null,
+        is_critical: pkg.isCritical,
+        lead_time_days: pkg.leadTimeDays,
+        quantitative_done_date: pkg.quantitativeDoneDate || null,
+        order_deadline: pkg.orderDeadline || null,
+        order_date: pkg.orderDate || null,
+        expected_delivery_date: pkg.expectedDeliveryDate || null,
+        actual_delivery_date: pkg.actualDeliveryDate || null,
+        status: pkg.status,
+        notes: pkg.notes || null,
+      })
+      .eq('id', pkg.id);
+
+    if (error) {
+      setSupplyPackages(original);
+      console.error('Error updating supply package:', error);
+      toast.error('Erro ao atualizar pacote de suprimento.');
+    } else {
+      toast.success('Pacote atualizado!');
+    }
+  }, [supplyPackages]);
+
+  const deleteSupplyPackage = useCallback(async (id: string) => {
+    const original = [...supplyPackages];
+    setSupplyPackages(prev => prev.filter(s => s.id !== id));
+    const { error } = await supabase.from('supply_packages').delete().eq('id', id);
+    if (error) {
+      setSupplyPackages(original);
+      toast.error('Erro ao excluir pacote.');
+    } else {
+      toast.success('Pacote removido.');
+    }
+  }, [supplyPackages]);
+
+  // ============================================================
+  // WORKFORCE ENTRIES CRUD
+  // ============================================================
+
+  const getWorkforceForProject = useCallback((projectId: string) =>
+    workforceEntries.filter(e => e.projectId === projectId), [workforceEntries]);
+
+  const addWorkforceEntry = useCallback(async (entry: Omit<WorkforceEntry, 'id' | 'createdAt'>): Promise<WorkforceEntry | null> => {
+    const { data, error } = await supabase
+      .from('workforce_entries')
+      .insert([{
+        project_id: entry.projectId,
+        month: entry.month,
+        phase: entry.phase,
+        activity: entry.activity || null,
+        own_workers: entry.ownWorkers,
+        third_party_workers: entry.thirdPartyWorkers,
+        notes: entry.notes || null,
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding workforce entry:', error);
+      // Handle unique constraint violation gracefully
+      if ((error as any).code === '23505') {
+        toast.error('Já existe um registro para esta fase/mês. Edite o existente.');
+      } else {
+        toast.error('Erro ao adicionar registro de efetivo.');
+      }
+      return null;
+    }
+
+    const newEntry: WorkforceEntry = {
+      id: data.id,
+      projectId: data.project_id,
+      month: data.month,
+      phase: data.phase,
+      activity: data.activity || undefined,
+      ownWorkers: data.own_workers,
+      thirdPartyWorkers: data.third_party_workers,
+      notes: data.notes || undefined,
+      createdAt: data.created_at,
+    };
+    setWorkforceEntries(prev => [...prev, newEntry].sort((a, b) => a.month.localeCompare(b.month)));
+    toast.success('Registro de efetivo adicionado!');
+    return newEntry;
+  }, [workforceEntries]);
+
+  const updateWorkforceEntry = useCallback(async (entry: WorkforceEntry) => {
+    const original = [...workforceEntries];
+    setWorkforceEntries(prev => prev.map(e => e.id === entry.id ? entry : e));
+
+    const { error } = await supabase
+      .from('workforce_entries')
+      .update({
+        month: entry.month,
+        phase: entry.phase,
+        activity: entry.activity || null,
+        own_workers: entry.ownWorkers,
+        third_party_workers: entry.thirdPartyWorkers,
+        notes: entry.notes || null,
+      })
+      .eq('id', entry.id);
+
+    if (error) {
+      setWorkforceEntries(original);
+      console.error('Error updating workforce entry:', error);
+      toast.error('Erro ao atualizar registro de efetivo.');
+    } else {
+      toast.success('Registro atualizado!');
+    }
+  }, [workforceEntries]);
+
+  const deleteWorkforceEntry = useCallback(async (id: string) => {
+    const original = [...workforceEntries];
+    setWorkforceEntries(prev => prev.filter(e => e.id !== id));
+    const { error } = await supabase.from('workforce_entries').delete().eq('id', id);
+    if (error) {
+      setWorkforceEntries(original);
+      toast.error('Erro ao excluir registro.');
+    } else {
+      toast.success('Registro removido.');
+    }
+  }, [workforceEntries]);
+
   return (
     <ProjectsContext.Provider value={{
       projects, loading, tasks, constraints, resources,
@@ -1101,8 +1331,21 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       paymentReceipts,
       getReceiptsForProject, addPaymentReceipt, deletePaymentReceipt,
       getResourcesForProject, addResource, updateResource, deleteResource,
+      // Supply chain
+      supplyPackages,
+      getSupplyPackagesForProject,
+      addSupplyPackage,
+      updateSupplyPackage,
+      deleteSupplyPackage,
+      // Workforce
+      workforceEntries,
+      getWorkforceForProject,
+      addWorkforceEntry,
+      updateWorkforceEntry,
+      deleteWorkforceEntry,
     }}>
       {children}
     </ProjectsContext.Provider>
   );
 }
+
