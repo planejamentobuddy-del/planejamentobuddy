@@ -565,6 +565,19 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
                 </div>
               </div>
 
+              <div className="bg-card border border-border/50 p-4 rounded-xl shadow-sm space-y-2">
+                <label className="text-xs font-bold uppercase text-muted-foreground">Nome da Atividade</label>
+                <Input
+                  value={localTask.name}
+                  onChange={e => {
+                    const updated = { ...localTask, name: e.target.value };
+                    setLocalTask(updated);
+                    onUpdate(updated);
+                  }}
+                  className="rounded-lg h-10 text-sm bg-transparent"
+                />
+              </div>
+
               {localTask.observations && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">

@@ -234,11 +234,11 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: 'Término', align: 'left', width: 120 },
     { label: 'Duração', align: 'center', width: 80 },
     { label: '% Execução', align: 'left', width: 140 },
-    { label: 'Efetivo', align: 'center', width: 110 },
     { label: 'Status', align: 'left', width: 150 },
     { label: 'Predecessoras', align: 'left', width: 160 },
     { label: 'Sucessoras', align: 'left', width: 160 },
     { label: 'Observações', align: 'left', width: 200 },
+    { label: 'Efetivo', align: 'center', width: 110 },
     { label: 'Responsável', align: 'left', width: 140 },
     { label: 'Ações', align: 'center', width: 130 },
   ];
@@ -583,17 +583,18 @@ export default function PlanningTab({ project }: { project: Project }) {
             <Input
               className={`h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 truncate ${isStage ? 'font-bold text-foreground' : 'text-foreground/80 cursor-pointer hover:underline decoration-primary/45 decoration-2'}`}
               defaultValue={task.name}
+              readOnly={!isStage}
+              onClick={() => {
+                if (!isStage) {
+                  setSelectedDetailTask(task);
+                }
+              }}
               onBlur={e => {
                 if (e.target.value !== task.name) {
                   handleChange(task, 'name', e.target.value);
                 }
               }}
-              onDoubleClick={() => {
-                if (!isStage) {
-                  setSelectedDetailTask(task);
-                }
-              }}
-              title={isStage ? undefined : "Dê duplo clique para abrir frentes de serviço e detalhes"}
+              title={isStage ? undefined : "Clique para abrir detalhes, efetivo e suprimentos"}
               placeholder={isStage ? "Nova Etapa..." : "Nova Subetapa..."}
             />
           </div>
@@ -694,19 +695,7 @@ export default function PlanningTab({ project }: { project: Project }) {
           </div>
         </td>
 
-        {/* Efetivo */}
-        <td className="py-2.5 px-3 border-r border-border/70 text-center font-medium">
-          {!isStage && (
-            <div 
-              className="flex items-center justify-center gap-1 cursor-pointer hover:underline text-xs font-semibold"
-              onClick={() => setSelectedDetailTask(task)}
-              title="Clique para gerenciar o efetivo desta tarefa"
-            >
-              👷 {totalWorkers} colab.
-            </div>
-          )}
-          {isStage && <span className="text-muted-foreground/35">—</span>}
-        </td>
+
 
         {/* 7. Status */}
         <td className="py-2.5 px-3 border-r border-border/70">
@@ -760,6 +749,20 @@ export default function PlanningTab({ project }: { project: Project }) {
             }}
             placeholder="..."
           />
+        </td>
+
+        {/* Efetivo */}
+        <td className="py-2.5 px-3 border-r border-border/70 text-center font-medium">
+          {!isStage && (
+            <div 
+              className="flex items-center justify-center gap-1 cursor-pointer hover:underline text-xs font-semibold"
+              onClick={() => setSelectedDetailTask(task)}
+              title="Clique para gerenciar o efetivo desta tarefa"
+            >
+              👷 {totalWorkers} colab.
+            </div>
+          )}
+          {isStage && <span className="text-muted-foreground/35">—</span>}
         </td>
 
         {/* 2. Responsável */}
@@ -1003,21 +1006,21 @@ export default function PlanningTab({ project }: { project: Project }) {
                               <span className="text-xs text-primary font-bold">{projectAggregate.percent}%</span>
                             </div>
                           </td>
-                          {/* Efetivo */}
-                          <td className="p-0 border-r border-border/10 text-center">
-                            <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[5] }}>
-                              {projectWorkforce.reduce((sum, e) => sum + e.ownWorkers + e.thirdPartyWorkers, 0)} colab.
-                            </div>
-                          </td>
                           {/* Status */}
                           <td className="p-0 border-r border-border/40">
-                            <div className="px-3" style={{ width: colWidths[6] }}>
+                            <div className="px-3" style={{ width: colWidths[5] }}>
                               <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase">GERAL</Badge>
                             </div>
                           </td>
                           <td className="p-0 border-r border-border/40" />
                           <td className="p-0 border-r border-border/40" />
                           <td className="p-0 border-r border-border/40" />
+                          {/* Efetivo */}
+                          <td className="p-0 border-r border-border/10 text-center">
+                            <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[9] }}>
+                              {projectWorkforce.reduce((sum, e) => sum + e.ownWorkers + e.thirdPartyWorkers, 0)} colab.
+                            </div>
+                          </td>
                           <td className="p-0 border-r border-border/40" />
                           <td className="p-0" />
                         </tr>
