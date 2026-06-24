@@ -240,6 +240,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         setWorkforceEntries(workforceData.map((w: any) => ({
           id: w.id,
           projectId: w.project_id,
+          taskId: w.task_id || undefined,
           month: w.month,
           phase: w.phase,
           activity: w.activity || undefined,
@@ -1237,6 +1238,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       .from('workforce_entries')
       .insert([{
         project_id: entry.projectId,
+        task_id: entry.taskId || null,
         month: entry.month,
         phase: entry.phase,
         activity: entry.activity || null,
@@ -1261,6 +1263,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     const newEntry: WorkforceEntry = {
       id: data.id,
       projectId: data.project_id,
+      taskId: data.task_id || undefined,
       month: data.month,
       phase: data.phase,
       activity: data.activity || undefined,
@@ -1281,6 +1284,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase
       .from('workforce_entries')
       .update({
+        task_id: entry.taskId || null,
         month: entry.month,
         phase: entry.phase,
         activity: entry.activity || null,

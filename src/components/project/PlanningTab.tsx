@@ -154,10 +154,14 @@ function PredecessorPicker({
 
 
 export default function PlanningTab({ project }: { project: Project }) {
-  const { getTasksForProject, addTask, updateTask, updateTasksBatch, deleteTask, reorderTasks, users, getResourcesForProject } = useProjects();
+  const { getTasksForProject, addTask, updateTask, updateTasksBatch, deleteTask, reorderTasks, users, getResourcesForProject, workforceEntries } = useProjects();
   const { isAdmin } = useAuth();
   const allTasks = getTasksForProject(project.id);
   const resources = getResourcesForProject(project.id);
+
+  const projectWorkforce = useMemo(() => {
+    return workforceEntries.filter(e => e.projectId === project.id);
+  }, [workforceEntries, project.id]);
 
   // Reschedule modal state
   const [rescheduleTask, setRescheduleTask] = useState<Task | null>(null);
@@ -230,7 +234,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: 'Término', align: 'left', width: 120 },
     { label: 'Duração', align: 'center', width: 80 },
     { label: '% Execução', align: 'left', width: 140 },
-    { label: 'Frentes', align: 'center', width: 110 },
+    { label: 'Efetivo', align: 'center', width: 110 },
     { label: 'Status', align: 'left', width: 150 },
     { label: 'Predecessoras', align: 'left', width: 160 },
     { label: 'Sucessoras', align: 'left', width: 160 },
@@ -520,6 +524,8 @@ export default function PlanningTab({ project }: { project: Project }) {
   const renderRow = (task: Task, isSubtask: boolean, number: string, dragHandleProps?: any) => {
     const overdue = isOverdue(task);
     const isStage = !isSubtask;
+    const taskWf = projectWorkforce.filter(e => e.taskId === task.id);
+    const totalWorkers = taskWf.reduce((sum, e) => sum + e.ownWorkers + e.thirdPartyWorkers, 0);
     const agg = isStage ? getStageAggregates(task.id) : null;
     const percent = agg ? agg.percent : task.percentComplete;
     const effectiveOverdue = agg ? agg.hasOverdue : overdue;
@@ -688,33 +694,15 @@ export default function PlanningTab({ project }: { project: Project }) {
           </div>
         </td>
 
-        {/* Frentes */}
+        {/* Efetivo */}
         <td className="py-2.5 px-3 border-r border-border/70 text-center font-medium">
           {!isStage && (
-            <div className="flex items-center justify-center gap-1.5">
-              <span className="text-xs font-semibold">
-                {task.frentes && task.frentes.length > 0 ? `👷 ${task.frentes.length} Frentes` : '0 frentes'}
-              </span>
-              {task.frentes && task.frentes.length > 0 && (
-                <button 
-                  onClick={() => {
-                    setExpandedFrentes(prev => {
-                      const next = new Set(prev);
-                      if (next.has(task.id)) next.delete(task.id);
-                      else next.add(task.id);
-                      return next;
-                    });
-                  }} 
-                  className="p-0.5 hover:bg-muted rounded transition-colors"
-                  title="Expandir frentes de serviço"
-                >
-                  {expandedFrentes.has(task.id) ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                  )}
-                </button>
-              )}
+            <div 
+              className="flex items-center justify-center gap-1 cursor-pointer hover:underline text-xs font-semibold"
+              onClick={() => setSelectedDetailTask(task)}
+              title="Clique para gerenciar o efetivo desta tarefa"
+            >
+              👷 {totalWorkers} colab.
             </div>
           )}
           {isStage && <span className="text-muted-foreground/35">—</span>}
@@ -1015,10 +1003,10 @@ export default function PlanningTab({ project }: { project: Project }) {
                               <span className="text-xs text-primary font-bold">{projectAggregate.percent}%</span>
                             </div>
                           </td>
-                          {/* Frentes */}
+                          {/* Efetivo */}
                           <td className="p-0 border-r border-border/10 text-center">
                             <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[5] }}>
-                              {allTasks.reduce((sum, t) => sum + (t.frentes?.length || 0), 0)} frentes
+                              {projectWorkforce.reduce((sum, e) => sum + e.ownWorkers + e.thirdPartyWorkers, 0)} colab.
                             </div>
                           </td>
                           {/* Status */}

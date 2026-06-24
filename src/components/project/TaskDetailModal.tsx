@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Task, ChecklistItem, generateId, ServiceFront, safeParseDate } from '@/types/project';
 import {
   Dialog,
@@ -74,8 +74,82 @@ interface TaskDetailModalProps {
 }
 
 export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailModalProps) {
-  const { tasks: allTasksGlobal, users: usersList } = useProjects();
+  const { 
+    tasks: allTasksGlobal, 
+    users: usersList,
+    workforceEntries,
+    addWorkforceEntry,
+    updateWorkforceEntry,
+    deleteWorkforceEntry,
+    supplyPackages,
+    addSupplyPackage,
+    updateSupplyPackage,
+    deleteSupplyPackage
+  } = useProjects();
   const [localTask, setLocalTask] = useState<Task | null>(null);
+
+  const taskWorkforce = useMemo(() => (workforceEntries || []).filter(w => w.taskId === localTask?.id), [workforceEntries, localTask?.id]);
+  const taskSupplies = useMemo(() => (supplyPackages || []).filter(s => s.taskId === localTask?.id), [supplyPackages, localTask?.id]);
+
+  // Workforce state inside modal
+  const [wfMonth, setWfMonth] = useState('');
+  const [wfOwn, setWfOwn] = useState('0');
+  const [wfThirdParty, setWfThirdParty] = useState('0');
+  const [wfNotes, setWfNotes] = useState('');
+
+  // Supply state inside modal
+  const [supplyName, setSupplyName] = useState('');
+  const [supplySupplier, setSupplySupplier] = useState('');
+  const [supplyVal, setSupplyVal] = useState('0');
+  const [supplyLead, setSupplyLead] = useState('30');
+  const [supplyDeadline, setSupplyDeadline] = useState('');
+  const [supplyStatus, setSupplyStatus] = useState<'pending_quantitative' | 'pending_order' | 'ordered' | 'in_production' | 'delivered' | 'cancelled'>('pending_quantitative');
+
+  const handleAddWorkforce = async () => {
+    if (!wfMonth) {
+      toast.error('Selecione o mês.');
+      return;
+    }
+    if (!localTask) return;
+    await addWorkforceEntry({
+      projectId: localTask.projectId,
+      taskId: localTask.id,
+      month: wfMonth,
+      phase: localTask.name,
+      ownWorkers: parseInt(wfOwn) || 0,
+      thirdPartyWorkers: parseInt(wfThirdParty) || 0,
+      notes: wfNotes || undefined
+    });
+    setWfMonth('');
+    setWfOwn('0');
+    setWfThirdParty('0');
+    setWfNotes('');
+  };
+
+  const handleAddSupply = async () => {
+    if (!supplyName.trim()) {
+      toast.error('Informe o nome do suprimento.');
+      return;
+    }
+    if (!localTask) return;
+    await addSupplyPackage({
+      projectId: localTask.projectId,
+      taskId: localTask.id,
+      name: supplyName.trim(),
+      supplier: supplySupplier.trim() || undefined,
+      estimatedValue: parseFloat(supplyVal) || undefined,
+      leadTimeDays: parseInt(supplyLead) || 30,
+      orderDeadline: supplyDeadline || undefined,
+      isCritical: false,
+      status: supplyStatus
+    });
+    setSupplyName('');
+    setSupplySupplier('');
+    setSupplyVal('0');
+    setSupplyLead('30');
+    setSupplyDeadline('');
+    setSupplyStatus('pending_quantitative');
+  };
   
   // Checklist State
   const [newItemTitle, setNewItemTitle] = useState('');
@@ -443,10 +517,11 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
         </DialogHeader>
 
         <Tabs defaultValue="geral" className="flex-1 flex flex-col overflow-hidden mt-4">
-          <TabsList className="grid grid-cols-6 h-11 bg-muted/50 p-1 rounded-lg border border-border/40">
+          <TabsList className="grid grid-cols-7 h-11 bg-muted/50 p-1 rounded-lg border border-border/40">
             <TabsTrigger value="geral" className="text-xs font-medium">Geral</TabsTrigger>
             <TabsTrigger value="dependencias" className="text-xs font-medium">Dependências</TabsTrigger>
-            <TabsTrigger value="frentes" className="text-xs font-medium">Frentes ({totalFrentes})</TabsTrigger>
+            <TabsTrigger value="efetivo" className="text-xs font-medium">Efetivo ({taskWorkforce.length})</TabsTrigger>
+            <TabsTrigger value="suprimentos" className="text-xs font-medium">Suprimentos ({taskSupplies.length})</TabsTrigger>
             <TabsTrigger value="custos" className="text-xs font-medium">Custos</TabsTrigger>
             <TabsTrigger value="anexos" className="text-xs font-medium">Anexos</TabsTrigger>
             <TabsTrigger value="historico" className="text-xs font-medium">Histórico</TabsTrigger>
@@ -636,442 +711,200 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
                 </div>
               </div>
             </TabsContent>
-
-            {/* TAB FRENTES DE SERVIÇO */}
-            <TabsContent value="frentes" className="space-y-6 outline-none">
-              {/* Dashboard/Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <div className="bg-muted/10 border border-border/30 p-3 rounded-xl text-center shadow-sm">
-                  <FolderOpen className="w-5 h-5 text-primary mx-auto mb-1.5" />
-                  <span className="text-2xl font-extrabold text-foreground block">{totalFrentes}</span>
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase">Frentes</span>
-                </div>
-                <div className="bg-muted/10 border border-border/30 p-3 rounded-xl text-center shadow-sm">
-                  <Users className="w-5 h-5 text-sky-500 mx-auto mb-1.5" />
-                  <span className="text-2xl font-extrabold text-foreground block">{totalWorkers}</span>
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase">Colaboradores</span>
-                </div>
-                <div className="bg-muted/10 border border-border/30 p-3 rounded-xl text-center shadow-sm">
-                  <Percent className="w-5 h-5 text-emerald-500 mx-auto mb-1.5" />
-                  <span className="text-2xl font-extrabold text-foreground block">{avgProgress}%</span>
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase">Progresso Médio</span>
-                </div>
-                <div className="bg-muted/10 border border-border/30 p-3 rounded-xl text-center shadow-sm">
-                  <CheckCircle className="w-5 h-5 text-teal-500 mx-auto mb-1.5" />
-                  <span className="text-2xl font-extrabold text-foreground block">{completedFrentes}</span>
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase">Concluídas</span>
-                </div>
-                <div className="bg-muted/10 border border-border/30 p-3 rounded-xl text-center shadow-sm col-span-2 md:col-span-1">
-                  <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto mb-1.5" />
-                  <span className="text-2xl font-extrabold text-foreground block">{delayedFrentes}</span>
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase">Atrasadas</span>
-                </div>
+            {/* TAB EFETIVO */}
+            <TabsContent value="efetivo" className="space-y-6 outline-none">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-1">Mão de Obra Alocada (Efetivo)</h4>
+                <p className="text-xs text-muted-foreground">Gerencie o efetivo mensal previsto para esta atividade</p>
               </div>
 
-              {/* Progress Mode Setting */}
-              <div className="bg-muted/20 border border-border/40 p-4 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-sm">
+              {/* Registro Form */}
+              <div className="bg-muted/20 border border-border/40 p-4 rounded-xl space-y-4">
+                <h5 className="text-xs font-bold uppercase text-primary">Registrar Efetivo para esta Tarefa</h5>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Mês *</label>
+                    <Input type="month" value={wfMonth} onChange={e => setWfMonth(e.target.value)} className="h-9 rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Trabalhadores Próprios</label>
+                    <Input type="number" min="0" value={wfOwn} onChange={e => setWfOwn(e.target.value)} className="h-9 rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Terceirizados</label>
+                    <Input type="number" min="0" value={wfThirdParty} onChange={e => setWfThirdParty(e.target.value)} className="h-9 rounded-lg" />
+                  </div>
+                  <div className="flex items-end">
+                    <Button onClick={handleAddWorkforce} className="w-full h-9 rounded-lg gap-2 text-xs font-semibold">
+                      <Plus className="w-3.5 h-3.5" /> Adicionar
+                    </Button>
+                  </div>
+                </div>
                 <div>
-                  <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                    <Settings className="w-4 h-4 text-primary animate-spin-slow" />
-                    Cálculo Automático de Progresso
-                  </h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">Define como o progresso geral da tarefa principal será calculado</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant={localTask.frentesMode === 'manual' ? 'default' : 'outline'} 
-                    size="sm" 
-                    onClick={() => handleFrentesModeToggle('manual')}
-                    className="rounded-lg text-xs"
-                  >
-                    Atualização Manual
-                  </Button>
-                  <Button 
-                    variant={localTask.frentesMode === 'auto' ? 'default' : 'outline'} 
-                    size="sm" 
-                    onClick={() => handleFrentesModeToggle('auto')}
-                    className="rounded-lg text-xs"
-                  >
-                    Automático pelas Frentes
-                  </Button>
+                  <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Observações / Funções (ex: 2 pedreiros, 1 carpinteiro)</label>
+                  <Input value={wfNotes} onChange={e => setWfNotes(e.target.value)} placeholder="Descreva as funções ou notas aqui..." className="h-9 rounded-lg" />
                 </div>
               </div>
 
-              {/* Adding / Editing Form */}
-              {isAddingFrente ? (
-                <div className="bg-card border border-primary/30 p-5 rounded-xl space-y-4 shadow-md transition-all">
-                  <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                    <h5 className="font-bold text-foreground flex items-center gap-1.5 text-sm">
-                      <Edit2 className="w-4 h-4 text-primary" />
-                      {editingFrenteId ? 'Editar Frente de Serviço' : 'Cadastrar Nova Frente de Serviço'}
-                    </h5>
-                    <Button variant="ghost" size="sm" onClick={() => setIsAddingFrente(false)} className="h-8 text-muted-foreground text-xs hover:text-foreground">
-                      Cancelar
-                    </Button>
+              {/* Table of Entries */}
+              <div className="border border-border/70 rounded-xl overflow-hidden">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="bg-muted/50 border-b border-border/70 text-muted-foreground font-bold">
+                      <th className="px-4 py-3">Mês</th>
+                      <th className="px-4 py-3 text-right">Próprios</th>
+                      <th className="px-4 py-3 text-right">Terceiros</th>
+                      <th className="px-4 py-3 text-right">Total</th>
+                      <th className="px-4 py-3">Observações/Funções</th>
+                      <th className="px-4 py-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {taskWorkforce.map(entry => (
+                      <tr key={entry.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-2.5 font-semibold">
+                          {(() => {
+                            const [y, m] = entry.month.split('-');
+                            const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+                            return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase();
+                          })()}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-medium">{entry.ownWorkers}</td>
+                        <td className="px-4 py-2.5 text-right font-medium text-purple-600">{entry.thirdPartyWorkers}</td>
+                        <td className="px-4 py-2.5 text-right font-bold">{entry.ownWorkers + entry.thirdPartyWorkers}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground truncate max-w-[200px]" title={entry.notes}>{entry.notes || '—'}</td>
+                        <td className="px-4 py-2.5 text-center">
+                          <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive rounded-lg" onClick={() => deleteWorkforceEntry(entry.id)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {taskWorkforce.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-muted-foreground bg-muted/5 italic">
+                          Nenhum efetivo registrado para esta atividade.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </TabsContent>
+
+            {/* TAB SUPRIMENTOS */}
+            <TabsContent value="suprimentos" className="space-y-6 outline-none">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-1">Suprimentos e Pacotes de Compra</h4>
+                <p className="text-xs text-muted-foreground">Acompanhe a cadeia de suprimentos vinculada a esta atividade</p>
+              </div>
+
+              {/* Registro Form */}
+              <div className="bg-muted/20 border border-border/40 p-4 rounded-xl space-y-4">
+                <h5 className="text-xs font-bold uppercase text-primary">Vincular Pacote de Suprimento</h5>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Item/Insumo *</label>
+                    <Input value={supplyName} onChange={e => setSupplyName(e.target.value)} placeholder="Ex: Piso de Deck de Madeira" className="h-9 rounded-lg" />
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Nome da Frente *</label>
-                      <Input 
-                        placeholder="Ex: Quarto 01 / Frente A" 
-                        value={frenteForm.name} 
-                        onChange={e => setFrenteForm({ ...frenteForm, name: e.target.value })}
-                        className="h-9 rounded-lg"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Responsável *</label>
-                      <Input 
-                        placeholder="Nome do responsável" 
-                        value={frenteForm.responsible} 
-                        onChange={e => setFrenteForm({ ...frenteForm, responsible: e.target.value })}
-                        className="h-9 rounded-lg"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Equipe</label>
-                      <Input 
-                        placeholder="Nome da equipe" 
-                        value={frenteForm.team} 
-                        onChange={e => setFrenteForm({ ...frenteForm, team: e.target.value })}
-                        className="h-9 rounded-lg"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Mestre de Obras</label>
-                      <Input 
-                        placeholder="Nome do mestre" 
-                        value={frenteForm.mestreObras} 
-                        onChange={e => setFrenteForm({ ...frenteForm, mestreObras: e.target.value })}
-                        className="h-9 rounded-lg"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Encarregado</label>
-                      <Input 
-                        placeholder="Nome do encarregado" 
-                        value={frenteForm.encarregado} 
-                        onChange={e => setFrenteForm({ ...frenteForm, encarregado: e.target.value })}
-                        className="h-9 rounded-lg"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Colaboradores (Qtd.)</label>
-                      <Input 
-                        type="number" 
-                        value={frenteForm.workersCount} 
-                        onChange={e => setFrenteForm({ ...frenteForm, workersCount: Number(e.target.value) })}
-                        className="h-9 rounded-lg"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Início</label>
-                      <Input 
-                        type="date" 
-                        value={frenteForm.startDate} 
-                        onChange={e => {
-                          const newStart = e.target.value;
-                          const newEnd = frenteForm.duration > 0 ? addBusinessDays(newStart, frenteForm.duration) : newStart;
-                          setFrenteForm({ ...frenteForm, startDate: newStart, endDate: newEnd });
-                        }}
-                        className="h-9 rounded-lg"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Fim</label>
-                      <Input 
-                        type="date" 
-                        value={frenteForm.endDate} 
-                        onChange={e => {
-                          const newEnd = e.target.value;
-                          const newDur = getBusinessDays(frenteForm.startDate, newEnd);
-                          setFrenteForm({ ...frenteForm, endDate: newEnd, duration: newDur });
-                        }}
-                        className="h-9 rounded-lg"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Duração (dias)</label>
-                      <Input 
-                        type="number" 
-                        value={frenteForm.duration} 
-                        onChange={e => {
-                          const newDur = Math.max(1, Number(e.target.value));
-                          const newEnd = addBusinessDays(frenteForm.startDate, newDur);
-                          setFrenteForm({ ...frenteForm, duration: newDur, endDate: newEnd });
-                        }}
-                        className="h-9 rounded-lg"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Status</label>
-                      <select 
-                        value={frenteForm.status} 
-                        onChange={e => setFrenteForm({ ...frenteForm, status: e.target.value as any })}
-                        className="w-full h-9 px-3 border border-border rounded-lg bg-background text-sm focus:outline-none"
-                      >
-                        <option value="not_started">Não Iniciada</option>
-                        <option value="in_progress">Em Andamento</option>
-                        <option value="completed">Concluída</option>
-                        <option value="delayed">Atrasada</option>
-                        <option value="paused">Pausada</option>
-                      </select>
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Frente Predecessora (Dependência)</label>
-                      <select 
-                        value={(frenteForm as any).predecessorId || ''} 
-                        onChange={e => {
-                          const predId = e.target.value;
-                          const predFrente = frentesList.find(f => f.id === predId);
-                          let newStart = frenteForm.startDate;
-                          let newEnd = frenteForm.endDate;
-                          
-                          if (predFrente && predFrente.endDate) {
-                            // Default: start next day after predecessor finishes
-                            const predEnd = new Date(predFrente.endDate + 'T12:00:00');
-                            predEnd.setDate(predEnd.getDate() + 1);
-                            newStart = predEnd.toISOString().split('T')[0];
-                            
-                            const nextEnd = new Date(newStart + 'T12:00:00');
-                            nextEnd.setDate(nextEnd.getDate() + (frenteForm.duration > 0 ? frenteForm.duration - 1 : 0));
-                            newEnd = nextEnd.toISOString().split('T')[0];
-                          }
-                          
-                          setFrenteForm({ 
-                            ...frenteForm, 
-                            predecessorId: predId || undefined,
-                            startDate: newStart,
-                            endDate: newEnd
-                          } as any);
-                        }}
-                        className="w-full h-9 px-3 border border-border rounded-lg bg-background text-sm focus:outline-none"
-                      >
-                        <option value="">Nenhuma dependência</option>
-                        {frentesList
-                          .filter(f => f.id !== editingFrenteId)
-                          .map(f => (
-                            <option key={f.id} value={f.id}>{f.name} (Termina {formatDate(f.endDate)})</option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-muted-foreground">Percentual Executado ({frenteForm.percentComplete}%)</label>
-                      <Input 
-                        type="range" 
-                        min="0" 
-                        max="100" 
-                        value={frenteForm.percentComplete} 
-                        onChange={e => {
-                          const percent = Number(e.target.value);
-                          let status = frenteForm.status;
-                          if (percent >= 100) status = 'completed';
-                          else if (percent > 0 && status === 'not_started') status = 'in_progress';
-                          setFrenteForm({ ...frenteForm, percentComplete: percent, status });
-                        }}
-                        className="h-9"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Fornecedor / Fabricante</label>
+                    <Input value={supplySupplier} onChange={e => setSupplySupplier(e.target.value)} placeholder="Ex: MADO Esquadrias" className="h-9 rounded-lg" />
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-muted-foreground">Observações</label>
-                    <Textarea 
-                      placeholder="Observações adicionais da frente de serviço..." 
-                      value={frenteForm.observations} 
-                      onChange={e => setFrenteForm({ ...frenteForm, observations: e.target.value })}
-                      className="rounded-lg min-h-[60px]"
-                    />
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Prazo de Pedido Limite</label>
+                    <Input type="date" value={supplyDeadline} onChange={e => setSupplyDeadline(e.target.value)} className="h-9 rounded-lg" />
                   </div>
-
-                  <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
-                    <Button variant="outline" size="sm" onClick={() => setIsAddingFrente(false)} className="rounded-lg">
-                      Cancelar
-                    </Button>
-                    <Button size="sm" onClick={handleSaveFrente} className="rounded-lg">
-                      {editingFrenteId ? 'Salvar Alterações' : 'Adicionar Frente'}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Valor Estimado (R$)</label>
+                    <Input type="number" min="0" value={supplyVal} onChange={e => setSupplyVal(e.target.value)} className="h-9 rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Lead Time (dias de produção)</label>
+                    <Input type="number" min="0" value={supplyLead} onChange={e => setSupplyLead(e.target.value)} className="h-9 rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Status de Compra</label>
+                    <select
+                      value={supplyStatus}
+                      onChange={e => setSupplyStatus(e.target.value as any)}
+                      className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="pending_quantitative">Aguard. Quantitativo</option>
+                      <option value="pending_order">Aguard. Pedido</option>
+                      <option value="ordered">Pedido Realizado</option>
+                      <option value="in_production">Em Produção/Lead</option>
+                      <option value="delivered">Entregue na Obra</option>
+                      <option value="cancelled">Cancelado</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button onClick={handleAddSupply} className="w-full h-9 rounded-lg gap-2 text-xs font-semibold">
+                      <Plus className="w-3.5 h-3.5" /> Vincular
                     </Button>
                   </div>
                 </div>
-              ) : (
-                <div className="flex justify-between items-center">
-                  <h5 className="font-bold text-foreground text-sm">Frentes Cadastradas</h5>
-                  <Button 
-                    size="sm" 
-                    onClick={() => {
-                      setFrenteForm({
-                        name: '',
-                        responsible: '',
-                        mestreObras: '',
-                        encarregado: '',
-                        team: '',
-                        workersCount: 0,
-                        startDate: localTask.startDate || new Date().toISOString().split('T')[0],
-                        endDate: localTask.endDate || new Date().toISOString().split('T')[0],
-                        duration: localTask.duration || 1,
-                        percentComplete: 0,
-                        status: 'not_started',
-                        observations: '',
-                      });
-                      setIsAddingFrente(true);
-                    }} 
-                    className="rounded-lg gap-1.5 text-xs"
-                  >
-                    <Plus className="w-4 h-4" /> Nova Frente
-                  </Button>
-                </div>
-              )}
+              </div>
 
-              {/* Frentes List */}
-              <div className="space-y-3">
-                {frentesList.map(frente => (
-                  <div key={frente.id} className="bg-card hover:bg-muted/5 border border-border/50 p-4 rounded-xl shadow-sm space-y-3 transition-all">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-border/30 pb-2">
-                      <div>
-                        <h6 className="font-bold text-foreground flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block"></span>
-                          {frente.name}
-                        </h6>
-                        <span className="text-[11px] text-muted-foreground">
-                          Mestre: {frente.mestreObras || '-'} | Encarregado: {frente.encarregado || '-'}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {/* Status Badge */}
-                        <span className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shadow-sm ${
-                          frente.status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600' :
-                          frente.status === 'in_progress' ? 'bg-sky-500/10 border-sky-500/20 text-sky-600' :
-                          frente.status === 'delayed' ? 'bg-rose-500/10 border-rose-500/20 text-rose-600' :
-                          frente.status === 'paused' ? 'bg-amber-500/10 border-amber-500/20 text-amber-600' :
-                          'bg-zinc-500/10 border-zinc-500/20 text-zinc-600'
-                        }`}>
-                          {frente.status === 'completed' ? 'Concluída' :
-                           frente.status === 'in_progress' ? 'Em Andamento' :
-                           frente.status === 'delayed' ? 'Atrasada' :
-                           frente.status === 'paused' ? 'Pausada' : 'Não Iniciada'}
-                        </span>
-
-                        {/* Quick Progress Slider */}
-                        <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-lg border border-border/20 min-w-[170px] select-none" onClick={e => e.stopPropagation()}>
-                          <span className="text-[10px] font-bold text-muted-foreground shrink-0 uppercase tracking-widest mr-1">Prog:</span>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={frente.percentComplete || 0}
-                            onChange={async (e) => {
-                              const newPercent = Number(e.target.value);
-                              let newStatus = frente.status;
-                              if (newPercent >= 100) newStatus = 'completed';
-                              else if (newPercent > 0 && newStatus === 'not_started') newStatus = 'in_progress';
-                              
-                              const updatedFrentes = (localTask.frentes || []).map(f => {
-                                if (f.id === frente.id) {
-                                  return { ...f, percentComplete: newPercent, status: newStatus };
-                                }
-                                return f;
-                              });
-
-                              // Compute progress automatically if mode is 'auto'
-                              let finalPercent = localTask.percentComplete;
-                              let finalStatus = localTask.status;
-                              if (localTask.frentesMode === 'auto' && updatedFrentes.length > 0) {
-                                const avg = Math.round(updatedFrentes.reduce((sum, f) => sum + (f.percentComplete || 0), 0) / updatedFrentes.length);
-                                finalPercent = avg;
-                                if (avg >= 100) finalStatus = 'completed';
-                                else if (avg > 0) finalStatus = 'in_progress';
-                              }
-
-                              const updatedTask = {
-                                ...localTask,
-                                frentes: updatedFrentes,
-                                percentComplete: finalPercent,
-                                status: finalStatus,
-                              } as any;
-
-                              setLocalTask(updatedTask);
-                              await onUpdate(updatedTask);
-                            }}
-                            className="w-20 h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-                          />
-                          <span className="text-xs font-black text-foreground tabular-nums w-8 text-right shrink-0">
-                            {frente.percentComplete || 0}%
+              {/* Table of Entries */}
+              <div className="border border-border/70 rounded-xl overflow-hidden">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="bg-muted/50 border-b border-border/70 text-muted-foreground font-bold">
+                      <th className="px-4 py-3">Insumo / Pacote</th>
+                      <th className="px-4 py-3">Fornecedor</th>
+                      <th className="px-4 py-3 text-right">Valor Est.</th>
+                      <th className="px-4 py-3">Prazo Pedido</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                      <th className="px-4 py-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {taskSupplies.map(pack => (
+                      <tr key={pack.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-2.5 font-semibold">{pack.name}</td>
+                        <td className="px-4 py-2.5">{pack.supplier || '—'}</td>
+                        <td className="px-4 py-2.5 text-right font-medium">
+                          {pack.estimatedValue ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(pack.estimatedValue) : '—'}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {pack.orderDeadline ? new Date(pack.orderDeadline + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            pack.status === 'delivered' ? 'bg-emerald-500/10 text-emerald-700' :
+                            pack.status === 'ordered' ? 'bg-blue-500/10 text-blue-700' :
+                            pack.status === 'in_production' ? 'bg-purple-500/10 text-purple-700' :
+                            pack.status === 'pending_order' ? 'bg-amber-500/10 text-amber-700' :
+                            pack.status === 'cancelled' ? 'bg-red-500/10 text-red-700' :
+                            'bg-slate-500/10 text-slate-700'
+                          }`}>
+                            {pack.status === 'delivered' ? 'Entregue' :
+                             pack.status === 'ordered' ? 'Pedido' :
+                             pack.status === 'in_production' ? 'Produção' :
+                             pack.status === 'pending_order' ? 'Aguard. Pedido' :
+                             pack.status === 'cancelled' ? 'Cancelado' :
+                             'Aguard. Quant.'}
                           </span>
-                        </div>
-
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
-                          onClick={() => handleEditFrenteClick(frente)}
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-muted"
-                          onClick={() => handleDeleteFrente(frente.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                      <div>
-                        <span className="text-muted-foreground block font-medium">Responsável</span>
-                        <span className="font-semibold text-foreground">{frente.responsible}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block font-medium">Equipe / Colab.</span>
-                        <span className="font-semibold text-foreground">
-                          {frente.team || 'Geral'} ({frente.workersCount || 0} colab.)
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block font-medium">Período</span>
-                        <span className="font-semibold text-foreground">
-                          {formatDate(frente.startDate)} - {formatDate(frente.endDate)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block font-medium">Duração</span>
-                        <span className="font-semibold text-foreground">{frente.duration || 1} dias</span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 items-center">
-                      {frente.predecessorId && (() => {
-                        const pred = frentesList.find(f => f.id === frente.predecessorId);
-                        return pred ? (
-                          <span className="text-[10px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
-                            Depende de: {pred.name}
-                          </span>
-                        ) : null;
-                      })()}
-                      
-                      {frente.observations && (
-                        <p className="text-[11px] text-muted-foreground bg-muted/10 p-2 rounded-lg italic flex-1">
-                          Obs: {frente.observations}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                {frentesList.length === 0 && !isAddingFrente && (
-                  <div className="text-center py-10 text-sm text-muted-foreground bg-muted/10 rounded-xl border border-dashed border-border/50">
-                    Nenhuma frente de serviço cadastrada para esta atividade.
-                  </div>
-                )}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive rounded-lg" onClick={() => deleteSupplyPackage(pack.id)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {taskSupplies.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-muted-foreground bg-muted/5 italic">
+                          Nenhum suprimento vinculado a esta atividade.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </TabsContent>
 

@@ -582,6 +582,7 @@ export interface SupplyPackage {
 export interface WorkforceEntry {
   id: string;
   projectId: string;
+  taskId?: string;             // Linked task
   month: string;               // 'YYYY-MM'
   phase: string;               // 'Fundações & Subsolo'
   activity?: string;           // specific activity
