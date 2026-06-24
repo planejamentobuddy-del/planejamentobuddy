@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
-import { Project, Task, getCriticalTaskIds, safeParseDate, calculateSCurve, getProjectProgress } from '@/types/project';
+import { Project, Task, ServiceFront, getCriticalTaskIds, safeParseDate, calculateSCurve, getProjectProgress } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Calendar, ChevronDown, ChevronRight, Users, Download, ZoomIn, ZoomOut, Briefcase, Maximize2, Minimize2 } from 'lucide-react';

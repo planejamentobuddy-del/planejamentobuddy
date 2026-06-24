@@ -75,7 +75,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           createdAt: p.created_at,
           adminCostTotal: p.admin_cost_total || undefined,
           adminCostReceived: p.admin_cost_received || undefined,
-          status: p.status || 'active',
+          status: (p.status as 'active' | 'archived') || 'active',
         })));
       }
       
