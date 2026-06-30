@@ -171,6 +171,8 @@ export default function PlanningTab({ project }: { project: Project }) {
   const [filterResponsible, setFilterResponsible] = useState<string>('_all');
   const [expandedFrentes, setExpandedFrentes] = useState<Set<string>>(new Set());
   const [showAllColumns, setShowAllColumns] = useState(false);
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
+  const clickTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const uniqueResponsibles = useMemo(() => {
     const resps = new Set<string>();
@@ -237,6 +239,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: '% Execução', align: 'left' as const, width: 140, always: true },
     { label: 'Status', align: 'left' as const, width: 150, always: true },
     { label: 'Predecessoras', align: 'left' as const, width: 160, always: true },
+    { label: '', align: 'center' as const, width: 40, always: true },
     { label: 'Sucessoras', align: 'left' as const, width: 160, always: false },
     { label: 'Custo (R$)', align: 'right' as const, width: 140, always: false },
     { label: 'Observações', align: 'left' as const, width: 200, always: false },
@@ -587,21 +590,41 @@ export default function PlanningTab({ project }: { project: Project }) {
               </span>
             )}
             <Input
-              className={`h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 truncate ${isStage ? 'font-bold text-foreground' : 'text-foreground/80 cursor-pointer hover:underline decoration-primary/45 decoration-2'}`}
+              className={`h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 truncate ${isStage ? 'font-bold text-foreground' : inlineEditId === task.id ? 'text-foreground/90 ring-1 ring-primary/40 rounded bg-primary/5' : 'text-foreground/80 cursor-pointer hover:underline decoration-primary/45 decoration-2'}`}
               defaultValue={task.name}
-              readOnly={!isStage}
+              key={task.id + '_name'}
+              readOnly={!isStage && inlineEditId !== task.id}
               onClick={() => {
                 if (!isStage) {
-                  setSelectedDetailTask(task);
+                  if (clickTimerRef.current) {
+                    // Second click = double click → open detail
+                    clearTimeout(clickTimerRef.current);
+                    clickTimerRef.current = null;
+                    setInlineEditId(null);
+                    setSelectedDetailTask(task);
+                  } else {
+                    // First click → start timer, set inline edit
+                    clickTimerRef.current = setTimeout(() => {
+                      clickTimerRef.current = null;
+                      setInlineEditId(task.id);
+                    }, 220);
+                  }
                 }
               }}
               onBlur={e => {
-                if (e.target.value !== task.name) {
-                  handleChange(task, 'name', e.target.value);
+                if (isStage || inlineEditId === task.id) {
+                  if (e.target.value !== task.name) {
+                    handleChange(task, 'name', e.target.value);
+                  }
+                  setInlineEditId(null);
                 }
               }}
-              title={isStage ? undefined : "Clique para abrir detalhes, efetivo e suprimentos"}
-              placeholder={isStage ? "Nova Etapa..." : "Nova Subetapa..."}
+              onKeyDown={e => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                if (e.key === 'Escape') { setInlineEditId(null); }
+              }}
+              title={isStage ? undefined : inlineEditId === task.id ? 'Enter para salvar · Esc para cancelar · Duplo clique para abrir detalhes' : '1× renomear · 2× abrir detalhes'}
+              placeholder={isStage ? 'Nova Etapa...' : 'Nova Subetapa...'}
             />
           </div>
         </td>
@@ -732,6 +755,19 @@ export default function PlanningTab({ project }: { project: Project }) {
             allTasks={allTasks}
             onChange={(v) => handleChange(task, 'predecessors', v === '_none' ? [] : [v])}
           />
+        </td>
+
+        {/* ── Always-visible quick-delete ── */}
+        <td className="py-2.5 px-2 border-r border-border/70 w-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100"
+            onClick={() => isStage ? handleDeleteStage(task.id) : deleteTask(task.id)}
+            title={isStage ? 'Excluir etapa e todas as subetapas' : 'Excluir subetapa'}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
         </td>
 
         {showAllColumns && (
