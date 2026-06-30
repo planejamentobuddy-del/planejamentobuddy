@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy } from 'lucide-react';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy, GripVertical } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -30,10 +30,62 @@ export default function Index() {
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editForm, setEditForm] = useState({ name: '', startDate: '', endDate: '', description: '' });
   const [showArchived, setShowArchived] = useState(false);
+  const [projectOrder, setProjectOrder] = useState<string[]>([]);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const dragSourceId = useRef<string | null>(null);
 
   const activeProjects = projects.filter(p => p.status !== 'archived');
   const archivedProjects = projects.filter(p => p.status === 'archived');
-  const displayedProjects = showArchived ? archivedProjects : activeProjects;
+
+  // Load saved order from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('buddy_project_order');
+    if (saved) {
+      try { setProjectOrder(JSON.parse(saved)); } catch {}
+    }
+  }, []);
+
+  // Build ordered list for active projects
+  const orderedActive = (() => {
+    if (projectOrder.length === 0) return activeProjects;
+    const orderMap = new Map(projectOrder.map((id, i) => [id, i]));
+    return [...activeProjects].sort((a, b) => {
+      const ia = orderMap.has(a.id) ? orderMap.get(a.id)! : 9999;
+      const ib = orderMap.has(b.id) ? orderMap.get(b.id)! : 9999;
+      return ia - ib;
+    });
+  })();
+
+  const displayedProjects = showArchived ? archivedProjects : orderedActive;
+
+  function handleDragStart(id: string) {
+    dragSourceId.current = id;
+  }
+
+  function handleDragOver(e: React.DragEvent, overId: string) {
+    e.preventDefault();
+    if (dragSourceId.current !== overId) setDragOverId(overId);
+  }
+
+  function handleDrop(overId: string) {
+    const srcId = dragSourceId.current;
+    if (!srcId || srcId === overId) { setDragOverId(null); return; }
+    const currentOrder = orderedActive.map(p => p.id);
+    const srcIdx  = currentOrder.indexOf(srcId);
+    const overIdx = currentOrder.indexOf(overId);
+    const newOrder = [...currentOrder];
+    newOrder.splice(srcIdx, 1);
+    newOrder.splice(overIdx, 0, srcId);
+    setProjectOrder(newOrder);
+    localStorage.setItem('buddy_project_order', JSON.stringify(newOrder));
+    setDragOverId(null);
+    dragSourceId.current = null;
+  }
+
+  function handleDragEnd() {
+    setDragOverId(null);
+    dragSourceId.current = null;
+  }
   
   const activeTasks = tasks.filter(t => activeProjects.some(p => p.id === t.projectId));
   const generalProgress = getProjectProgress(activeTasks);
@@ -216,7 +268,15 @@ export default function Index() {
         ) : (
           <>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display font-semibold text-lg text-foreground/80">{showArchived ? 'Obras Arquivadas' : 'Obras Ativas'}</h3>
+              <div className="flex items-center gap-3">
+                <h3 className="font-display font-semibold text-lg text-foreground/80">{showArchived ? 'Obras Arquivadas' : 'Obras Ativas'}</h3>
+                {!showArchived && orderedActive.length > 1 && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground/60 select-none">
+                    <GripVertical className="w-3.5 h-3.5" />
+                    arraste para reordenar
+                  </span>
+                )}
+              </div>
               {archivedProjects.length > 0 && (
                 <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => setShowArchived(!showArchived)}>
                   {showArchived ? <Building2 className="w-4 h-4"/> : <Archive className="w-4 h-4"/>}
@@ -241,16 +301,34 @@ export default function Index() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ delay: i * 0.05 }}
-                  className="card-elevated p-6 cursor-pointer group hover:border-primary/40 relative overflow-hidden"
+                  draggable={!showArchived}
+                  onDragStart={() => !showArchived && handleDragStart(project.id)}
+                  onDragOver={(e) => !showArchived && handleDragOver(e, project.id)}
+                  onDrop={() => !showArchived && handleDrop(project.id)}
+                  onDragEnd={handleDragEnd}
+                  className={`card-elevated p-6 cursor-pointer group hover:border-primary/40 relative overflow-hidden transition-all ${
+                    dragOverId === project.id ? 'ring-2 ring-primary/60 scale-[1.02] shadow-lg shadow-primary/10' : ''
+                  }`}
                   onClick={() => navigate(`/obra/${project.id}`)}
                 >
                   <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-8 -mt-8 transition-all group-hover:scale-110" />
                   
                   <div className="flex items-start justify-between mb-6 relative z-10">
-                    <h3 className="font-display font-black text-foreground text-xl leading-tight group-hover:text-primary transition-colors">
-                      {project.name}
-                    </h3>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {!showArchived && (
+                        <div
+                          className="opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-muted-foreground shrink-0 -ml-1"
+                          title="Arraste para reordenar"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </div>
+                      )}
+                      <h3 className="font-display font-black text-foreground text-xl leading-tight group-hover:text-primary transition-colors">
+                        {project.name}
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-[10px] px-2.5 py-1 rounded-lg font-black uppercase tracking-widest ${cfg.class}`}>
                          {cfg.label}
                       </span>
