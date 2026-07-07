@@ -283,9 +283,14 @@ export default function CurvaSWidget({ projects, allTasks, printMode = false }: 
     [projects]
   );
 
+  const activeTasks = useMemo(
+    () => allTasks.filter(t => activeProjects.some(p => p.id === t.projectId)),
+    [allTasks, activeProjects]
+  );
+
   const data = useMemo(
-    () => computeCurva(activeProjects, allTasks, gran),
-    [activeProjects, allTasks, gran]
+    () => computeCurva(activeProjects, activeTasks, gran),
+    [activeProjects, activeTasks, gran]
   );
 
   // Today's reference line
@@ -307,7 +312,7 @@ export default function CurvaSWidget({ projects, allTasks, printMode = false }: 
     return todayPt ? todayPt.executed - todayPt.planned : null;
   }, [data, todayLabel]);
 
-  if (!activeProjects.length || allTasks.length === 0) return null;
+  if (!activeProjects.length || activeTasks.length === 0) return null;
   if (data.length === 0) return null;
 
   const chartHeight = printMode ? 260 : 320;
