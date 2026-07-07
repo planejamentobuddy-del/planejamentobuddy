@@ -293,6 +293,18 @@ export default function CurvaSWidget({ projects, allTasks, printMode = false }: 
     [activeProjects, activeTasks, gran]
   );
 
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  // Find tasks that were scheduled to start in June 2026 or earlier but are not complete
+  const oldPendingTasks = useMemo(() => {
+    return activeTasks.filter(t => 
+      t.startDate && 
+      t.startDate <= '2026-06-30' && 
+      t.percentComplete < 100
+    ).sort((a, b) => a.startDate.localeCompare(b.startDate));
+  }, [activeTasks]);
+
+
   // Today's reference line
   const todayLabel = useMemo(() => {
     const today = new Date();
@@ -498,6 +510,59 @@ export default function CurvaSWidget({ projects, allTasks, printMode = false }: 
               {proj.name}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Diagnostics: June tasks check */}
+      {!printMode && oldPendingTasks.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-border/80">
+          <button
+            onClick={() => setShowDiagnostics(v => !v)}
+            className="flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 bg-amber-500/5 hover:bg-amber-500/10 px-3 py-2 rounded-xl transition-all w-full justify-between"
+          >
+            <span className="flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 shrink-0" />
+              Ver {oldPendingTasks.length} tarefa{oldPendingTasks.length !== 1 ? 's' : ''} planejada{oldPendingTasks.length !== 1 ? 's' : ''} para Junho/2026 ou anterior que {oldPendingTasks.length !== 1 ? 'estão pendentes' : 'está pendente'}
+            </span>
+            <span className="text-[10px] uppercase font-bold tracking-wider">
+              {showDiagnostics ? 'Ocultar' : 'Visualizar'}
+            </span>
+          </button>
+
+          {showDiagnostics && (
+            <div className="mt-3 bg-muted/30 rounded-xl border border-border/50 p-3 space-y-2.5 max-h-60 overflow-y-auto">
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                Estas tarefas estão gerando o programado acumulado de Junho/2026:
+              </p>
+              <div className="divide-y divide-border/40">
+                {(() => {
+                  // Group tasks by project
+                  const grouped: Record<string, typeof oldPendingTasks> = {};
+                  oldPendingTasks.forEach(t => {
+                    const pName = activeProjects.find(p => p.id === t.projectId)?.name || 'Obra';
+                    if (!grouped[pName]) grouped[pName] = [];
+                    grouped[pName].push(t);
+                  });
+
+                  return Object.entries(grouped).map(([projName, pTasks]) => (
+                    <div key={projName} className="py-2 first:pt-0 last:pb-0">
+                      <h4 className="text-xs font-bold text-foreground mb-1">📍 {projName}</h4>
+                      <ul className="space-y-1 pl-4">
+                        {pTasks.map(t => (
+                          <li key={t.id} className="text-xs text-muted-foreground flex items-center justify-between gap-4">
+                            <span className="truncate">▪ {t.name}</span>
+                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-500/10 rounded px-1.5 py-0.5 shrink-0">
+                              Início: {formatDate(t.startDate)} ({t.percentComplete}% exec.)
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
