@@ -333,7 +333,11 @@ export default function SuprimentosGeral() {
           prioridade: pkg.isCritical ? 'CRÍTICO 🔴' : 'Normal',
           prazo_pedido: deadlineStr,
           prazo_entrega: arriveStr,
-          observacoes: pkg.notes || 'Nenhuma',
+          observacoes: (pkg.notes || '')
+            .split('\n')
+            .filter(line => !line.trim().startsWith('[Notificação'))
+            .join('\n')
+            .trim() || 'Nenhuma',
           app_url: window.location.origin + '/suprimentos'
         }
       });
