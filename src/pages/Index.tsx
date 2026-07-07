@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate } from '@/types/project';
 import CurvaSWidget from '@/components/dashboard/CurvaSWidget';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const statusConfig = {
   ok: { emoji: '✓', label: 'No Prazo', class: 'status-badge-ok' },
@@ -52,43 +53,91 @@ export default function Index() {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const dragSourceId = useRef<string | null>(null);
 
-  // ── QUADRO BRANCO (LEMBLRETES RÁPIDOS) ──
+  // ── QUADRO BRANCO (LEMBRETES RÁPIDOS) ──
   const [notes, setNotes] = useState<QuickNote[]>([]);
   const [newNoteText, setNewNoteText] = useState('');
   const [newNoteColor, setNewNoteColor] = useState<QuickNote['color']>('yellow');
+  const [loadingNotes, setLoadingNotes] = useState(true);
 
-  // Load notes
-  useEffect(() => {
-    const saved = localStorage.getItem('buddy_quick_notes');
-    if (saved) {
-      try { setNotes(JSON.parse(saved)); } catch {}
+  const fetchNotes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('quick_notes')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      if (data) {
+        setNotes(
+          data.map((item: any) => ({
+            id: item.id,
+            text: item.text,
+            color: item.color as any,
+            rotation: Number(item.rotation),
+            createdAt: new Date(item.created_at).toLocaleDateString('pt-BR'),
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Error fetching notes:', err);
+    } finally {
+      setLoadingNotes(false);
     }
+  };
+
+  useEffect(() => {
+    fetchNotes();
+
+    // Sincronização em tempo real: ouve alterações no banco e atualiza na hora para todos!
+    const channel = supabase
+      .channel('public:quick_notes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'quick_notes' },
+        () => {
+          fetchNotes();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const saveNotes = (updated: QuickNote[]) => {
-    setNotes(updated);
-    localStorage.setItem('buddy_quick_notes', JSON.stringify(updated));
-  };
-
-  const addNote = () => {
+  const addNote = async () => {
     if (!newNoteText.trim()) return;
     const randomRotation = Math.random() * 6 - 3; // -3 to 3 deg
-    const note: QuickNote = {
-      id: Math.random().toString(),
-      text: newNoteText.trim(),
-      color: newNoteColor,
-      rotation: randomRotation,
-      createdAt: new Date().toLocaleDateString('pt-BR'),
-    };
-    const updated = [...notes, note];
-    saveNotes(updated);
-    setNewNoteText('');
-    toast.success('Lembrete colado no quadro!');
+    try {
+      const { error } = await supabase.from('quick_notes').insert([
+        {
+          text: newNoteText.trim(),
+          color: newNoteColor,
+          rotation: randomRotation,
+          created_by: profile?.id || null
+        }
+      ]);
+
+      if (error) throw error;
+      setNewNoteText('');
+      toast.success('Lembrete colado no quadro!');
+    } catch (err: any) {
+      toast.error('Erro ao colar lembrete: ' + err.message);
+    }
   };
 
-  const deleteNote = (id: string) => {
-    const updated = notes.filter(n => n.id !== id);
-    saveNotes(updated);
+  const deleteNote = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('quick_notes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success('Lembrete removido!');
+    } catch (err: any) {
+      toast.error('Erro ao remover lembrete: ' + err.message);
+    }
   };
 
   const activeProjects = projects.filter(p => p.status !== 'archived');
