@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate } from '@/types/project';
+import CurvaSWidget from '@/components/dashboard/CurvaSWidget';
 
 const statusConfig = {
   ok: { emoji: '✓', label: 'No Prazo', class: 'status-badge-ok' },
@@ -252,6 +253,16 @@ export default function Index() {
             <Button variant="outline" className="gap-2 bg-background/50 border-primary/20 text-primary hover:bg-primary/10" onClick={() => navigate('/relatorio-geral')}>
               <Printer className="w-4 h-4" /> Relatório
             </Button>
+          </div>
+        )}
+
+        {/* Curva S — shown when there are active projects with tasks */}
+        {!loading && activeProjects.length > 0 && activeTasks.length > 0 && (
+          <div className="mb-8">
+            <CurvaSWidget
+              projects={activeProjects}
+              allTasks={activeTasks}
+            />
           </div>
         )}
 

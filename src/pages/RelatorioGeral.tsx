@@ -3,6 +3,7 @@ import { getProjectProgress, getProjectStatus, getEstimatedEndDate } from '@/typ
 import { Printer, ArrowLeft, Building2, Calendar, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import CurvaSWidget from '@/components/dashboard/CurvaSWidget';
 
 export default function RelatorioGeral() {
   const { projects, getTasksForProject, tasks, loading } = useProjects();
@@ -83,6 +84,21 @@ export default function RelatorioGeral() {
             </div>
           </div>
         </div>
+
+        {/* Curva S */}
+        {activeTasks.length > 0 && (
+          <div className="mb-10">
+            <h2 className="text-xl font-black text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+              Curva S — Programado vs Executado
+            </h2>
+            <CurvaSWidget
+              projects={activeProjects}
+              allTasks={activeTasks}
+              printMode={true}
+            />
+          </div>
+        )}
 
         {/* Detalhamento das Obras */}
         <div>
