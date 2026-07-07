@@ -16,6 +16,7 @@ import PendingApproval from "./pages/PendingApproval.tsx";
 import AdminUsers from "./pages/AdminUsers.tsx";
 import MyTasks from "./pages/MyTasks.tsx";
 import RelatorioGeral from "./pages/RelatorioGeral.tsx";
+import SuprimentosGeral from "./pages/SuprimentosGeral.tsx";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
