@@ -311,16 +311,30 @@ export default function SuprimentosGeral() {
   async function sendEmailNotification() {
     if (!emailModal.toEmail.trim()) { toast.error('E-mail do destinatário é obrigatório.'); return; }
     
+    const pkg = packages.find(p => p.id === emailModal.pkgId);
+    if (!pkg) { toast.error('Insumo não encontrado.'); return; }
+
     const loadingToast = toast.loading(`Enviando e-mail para ${emailModal.toName}...`);
     let sentSuccessfully = false;
+
+    const projName = activeProjects.find(p => p.id === pkg.projectId)?.name || 'Obra';
+    const deadlineStr = formatDate(getEffectiveDeadline(pkg));
+    const arriveStr = formatDate(pkg.arriveBy);
 
     try {
       const { data, error } = await supabase.functions.invoke('send-supply-alert', {
         body: {
-          to: [emailModal.toEmail],
-          subject: emailModal.subject,
-          text: emailModal.body,
-          from: 'Planejamento Buddy <onboarding@resend.dev>'
+          to_email: emailModal.toEmail,
+          usuario_destino: emailModal.toName,
+          obra_nome: projName,
+          insumo_nome: pkg.name,
+          quantitativo: pkg.quantitative || 'Não informado',
+          status_atual: SUPPLY_STATUS_LABELS[pkg.status],
+          prioridade: pkg.isCritical ? 'CRÍTICO 🔴' : 'Normal',
+          prazo_pedido: deadlineStr,
+          prazo_entrega: arriveStr,
+          observacoes: pkg.notes || 'Nenhuma',
+          app_url: window.location.origin + '/suprimentos'
         }
       });
 

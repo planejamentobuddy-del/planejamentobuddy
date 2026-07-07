@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+const EMAILJS_SERVICE_ID = Deno.env.get('EMAILJS_SERVICE_ID') || 'service_9mqvcmk'
+const EMAILJS_TEMPLATE_ID = Deno.env.get('EMAILJS_TEMPLATE_ID') || 'template_nx3t6k9'
+const EMAILJS_PUBLIC_KEY = Deno.env.get('EMAILJS_PUBLIC_KEY') || 'Qhetc14cLK_AIVJ5d'
+const EMAILJS_PRIVATE_KEY = Deno.env.get('EMAILJS_PRIVATE_KEY') || 'fFCeTJHIRgyA2dOSn0BJ6'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,40 +17,42 @@ serve(async (req) => {
   }
 
   try {
-    const { to, subject, html, text, from } = await req.json()
+    const payload = await req.json()
 
-    if (!RESEND_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: 'RESEND_API_KEY no servidor do Supabase não está configurada.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Default sender to Resend onboarding address if custom is not verified
-    const sender = from || 'onboarding@resend.dev'
-
-    const res = await fetch('https://api.resend.com/emails', {
+    // Dispatch to EmailJS API
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${RESEND_API_KEY}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: sender,
-        to,
-        subject,
-        html: html || `<div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px;">${text.replace(/\n/g, '<br>')}</div>`,
-        text
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        user_id: EMAILJS_PUBLIC_KEY,
+        accessToken: EMAILJS_PRIVATE_KEY,
+        template_params: {
+          to_email: payload.to_email,
+          usuario_destino: payload.usuario_destino,
+          obra_nome: payload.obra_nome,
+          insumo_nome: payload.insumo_nome,
+          quantitativo: payload.quantitativo,
+          status_atual: payload.status_atual,
+          prioridade: payload.prioridade,
+          prazo_pedido: payload.prazo_pedido,
+          prazo_entrega: payload.prazo_entrega,
+          observacoes: payload.observacoes,
+          app_url: payload.app_url || 'https://planejamentobuddy.vercel.app'
+        }
       })
     })
 
-    const data = await res.json()
+    const textResponse = await res.text()
     if (!res.ok) {
-      throw new Error(data.message || JSON.stringify(data))
+      throw new Error(`EmailJS API error (${res.status}): ${textResponse}`)
     }
 
     return new Response(
-      JSON.stringify({ success: true, data }),
+      JSON.stringify({ success: true, response: textResponse }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error: any) {
