@@ -120,6 +120,9 @@ export default function ProjectDetail() {
 
           {/* Notifications */}
           <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-2 rounded-xl text-primary border-primary/20 hover:bg-primary/5 hidden sm:flex" onClick={() => navigate('/suprimentos')}>
+              <ShoppingCart className="w-4 h-4" /> Suprimentos Geral
+            </Button>
             <Button variant="outline" className="gap-2 rounded-xl text-primary border-primary/20 hover:bg-primary/5 relative hidden sm:flex" onClick={() => navigate('/minhas-tarefas')}>
               <ClipboardCheck className="w-4 h-4" /> Minhas Tarefas
               {(() => {

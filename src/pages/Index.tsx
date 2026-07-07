@@ -159,6 +159,9 @@ export default function Index() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" className="gap-2 rounded-xl text-primary font-bold hover:bg-primary/5 relative px-4" onClick={() => navigate('/suprimentos')}>
+              <ShoppingCart className="w-4 h-4" /> Suprimentos
+            </Button>
             <Button variant="ghost" className="gap-2 rounded-xl text-primary font-bold hover:bg-primary/5 relative px-4" onClick={() => navigate('/minhas-tarefas')}>
               <ClipboardCheck className="w-4 h-4" /> Minhas Tarefas
               {(() => {
