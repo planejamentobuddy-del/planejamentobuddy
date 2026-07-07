@@ -289,10 +289,14 @@ export default function CurvaSWidget({ projects, allTasks, printMode = false }: 
     [projects]
   );
 
-  const activeTasks = useMemo(
-    () => allTasks.filter(t => activeProjects.some(p => p.id === t.projectId)),
-    [allTasks, activeProjects]
-  );
+  const activeTasks = useMemo(() => {
+    // Only leaf tasks (subtasks) carry real schedule execution data; ignore stage headers (parent tasks)
+    const parentIds = new Set(allTasks.filter(t => t.parentId).map(t => t.parentId!));
+    return allTasks.filter(t => 
+      !parentIds.has(t.id) && 
+      activeProjects.some(p => p.id === t.projectId)
+    );
+  }, [allTasks, activeProjects]);
 
   const data = useMemo(
     () => computeCurva(activeProjects, activeTasks, gran),
