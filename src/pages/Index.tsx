@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy, GripVertical, ShoppingCart } from 'lucide-react';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy, GripVertical, ShoppingCart, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -12,11 +12,28 @@ import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate } from '@/types/project';
 import CurvaSWidget from '@/components/dashboard/CurvaSWidget';
+import { toast } from 'sonner';
 
 const statusConfig = {
   ok: { emoji: '✓', label: 'No Prazo', class: 'status-badge-ok' },
   warning: { emoji: '!', label: 'Atenção', class: 'status-badge-warning' },
   danger: { emoji: '⚠', label: 'Atrasada', class: 'status-badge-danger' },
+};
+
+interface QuickNote {
+  id: string;
+  text: string;
+  color: 'yellow' | 'blue' | 'green' | 'pink' | 'purple';
+  rotation: number;
+  createdAt: string;
+}
+
+const NOTE_COLORS = {
+  yellow: 'bg-amber-100/90 text-amber-900 border-amber-200/50 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900/30',
+  blue: 'bg-sky-100/90 text-sky-900 border-sky-200/50 dark:bg-sky-950/40 dark:text-sky-200 dark:border-sky-900/30',
+  green: 'bg-emerald-100/90 text-emerald-900 border-emerald-200/50 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900/30',
+  pink: 'bg-rose-100/90 text-rose-900 border-rose-200/50 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-900/30',
+  purple: 'bg-violet-100/90 text-violet-900 border-violet-200/50 dark:bg-violet-950/40 dark:text-violet-200 dark:border-violet-900/30',
 };
 
 export default function Index() {
@@ -34,6 +51,45 @@ export default function Index() {
   const [projectOrder, setProjectOrder] = useState<string[]>([]);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const dragSourceId = useRef<string | null>(null);
+
+  // ── QUADRO BRANCO (LEMBLRETES RÁPIDOS) ──
+  const [notes, setNotes] = useState<QuickNote[]>([]);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [newNoteColor, setNewNoteColor] = useState<QuickNote['color']>('yellow');
+
+  // Load notes
+  useEffect(() => {
+    const saved = localStorage.getItem('buddy_quick_notes');
+    if (saved) {
+      try { setNotes(JSON.parse(saved)); } catch {}
+    }
+  }, []);
+
+  const saveNotes = (updated: QuickNote[]) => {
+    setNotes(updated);
+    localStorage.setItem('buddy_quick_notes', JSON.stringify(updated));
+  };
+
+  const addNote = () => {
+    if (!newNoteText.trim()) return;
+    const randomRotation = Math.random() * 6 - 3; // -3 to 3 deg
+    const note: QuickNote = {
+      id: Math.random().toString(),
+      text: newNoteText.trim(),
+      color: newNoteColor,
+      rotation: randomRotation,
+      createdAt: new Date().toLocaleDateString('pt-BR'),
+    };
+    const updated = [...notes, note];
+    saveNotes(updated);
+    setNewNoteText('');
+    toast.success('Lembrete colado no quadro!');
+  };
+
+  const deleteNote = (id: string) => {
+    const updated = notes.filter(n => n.id !== id);
+    saveNotes(updated);
+  };
 
   const activeProjects = projects.filter(p => p.status !== 'archived');
   const archivedProjects = projects.filter(p => p.status === 'archived');
@@ -268,6 +324,97 @@ export default function Index() {
             />
           </div>
         )}
+
+        {/* ── MURAL DE LEMBRETES (QUADRO BRANCO) ── */}
+        <div className="bg-card border border-border rounded-2xl p-6 mb-8 shadow-sm">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+            <div>
+              <h3 className="font-display font-black text-xl text-foreground flex items-center gap-2">
+                📌 Mural de Lembretes Rápidos
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Notas rápidas e avisos diários do engenheiro de campo</p>
+            </div>
+            
+            {/* Form de colagem rápida */}
+            <div className="flex items-center gap-2 flex-1 max-w-md min-w-[280px]">
+              <Input
+                value={newNoteText}
+                onChange={e => setNewNoteText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addNote()}
+                placeholder="Digitar lembrete de obra..."
+                className="h-9 rounded-lg text-xs"
+              />
+              
+              {/* Color picker */}
+              <div className="flex items-center gap-1 bg-muted rounded-lg p-1 shrink-0">
+                {(['yellow', 'blue', 'green', 'pink', 'purple'] as const).map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setNewNoteColor(color)}
+                    className={`w-4 h-4 rounded-full border transition-all ${
+                      color === 'yellow' ? 'bg-amber-300' :
+                      color === 'blue' ? 'bg-sky-300' :
+                      color === 'green' ? 'bg-emerald-300' :
+                      color === 'pink' ? 'bg-rose-300' : 'bg-violet-300'
+                    } ${newNoteColor === color ? 'ring-2 ring-primary border-transparent scale-110' : 'border-border/60'}`}
+                  />
+                ))}
+              </div>
+              
+              <Button onClick={addNote} size="sm" className="h-9 rounded-lg px-3.5 text-xs font-bold gap-1 shrink-0">
+                Colar 📌
+              </Button>
+            </div>
+          </div>
+
+          {/* Área do Quadro Branco pontilhado */}
+          <div className="min-h-[160px] bg-slate-50/50 dark:bg-slate-950/20 border border-border/80 rounded-xl p-4 relative bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] dark:bg-[radial-gradient(#334155_1.5px,transparent_1.5px)] [background-size:16px_16px] overflow-hidden">
+            {notes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground/50 select-none">
+                <span className="text-3xl mb-1">✍️</span>
+                <p className="text-xs font-semibold">O quadro está limpo</p>
+                <p className="text-[10px]">Escreva um lembrete acima para colar no mural</p>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-4 justify-start">
+                <AnimatePresence>
+                  {notes.map(note => (
+                    <motion.div
+                      key={note.id}
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1, rotate: note.rotation }}
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                      className={`w-40 min-h-36 max-h-44 p-3 rounded-md border shadow-md relative flex flex-col justify-between transition-shadow hover:shadow-lg ${NOTE_COLORS[note.color]} group`}
+                      style={{ transform: `rotate(${note.rotation}deg)` }}
+                    >
+                      {/* Pin visual */}
+                      <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[10px] select-none filter drop-shadow">📍</div>
+                      
+                      {/* Delete button */}
+                      <button
+                        type="button"
+                        onClick={() => deleteNote(note.id)}
+                        className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 hover:opacity-100 text-foreground/40 hover:text-foreground/80 transition-opacity p-0.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Text content */}
+                      <p className="text-[11px] font-medium leading-normal break-words pt-1.5 pr-2 select-text font-serif">
+                        {note.text}
+                      </p>
+
+                      {/* Date footer */}
+                      <span className="text-[8px] opacity-60 self-end mt-2">{note.createdAt}</span>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
+        </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
