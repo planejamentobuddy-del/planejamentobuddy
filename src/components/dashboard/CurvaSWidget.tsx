@@ -330,9 +330,33 @@ export default function CurvaSWidget({ projects, allTasks, printMode = false }: 
   // Current variance
   const currentVariance = useMemo(() => {
     if (!data.length) return null;
-    const todayPt = data.find(d => d.label === todayLabel) || data[data.length - 1];
-    return todayPt ? todayPt.executed - todayPt.planned : null;
-  }, [data, todayLabel]);
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const todayTs = today.getTime();
+
+    const startTs = new Date(data[0].date + 'T12:00:00').getTime();
+    const endTs = new Date(data[data.length - 1].date + 'T12:00:00').getTime();
+
+    // 1. If today is before any project task start date, there's no progress planned yet
+    if (todayTs < startTs) {
+      return 0; 
+    }
+
+    // 2. If today is after the end of all projects
+    if (todayTs > endTs) {
+      const lastPt = data[data.length - 1];
+      return lastPt.executed - lastPt.planned;
+    }
+
+    // 3. Find the closest point in the past or present
+    const pastPoints = data.filter(d => new Date(d.date + 'T12:00:00').getTime() <= todayTs);
+    if (pastPoints.length > 0) {
+      const currentPt = pastPoints[pastPoints.length - 1];
+      return currentPt.executed - currentPt.planned;
+    }
+
+    return 0;
+  }, [data]);
 
   if (!activeProjects.length || activeTasks.length === 0) return null;
   if (data.length === 0) return null;
