@@ -57,6 +57,12 @@ function addDays(d: Date, n: number): Date {
   return r;
 }
 
+function formatDate(d?: string): string {
+  if (!d) return '—';
+  const [y, m, day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+
 /** Generate a series of period-start dates (weekly or monthly) */
 function generatePeriods(startDate: Date, endDate: Date, gran: Granularity): Date[] {
   const periods: Date[] = [];
