@@ -50,6 +50,28 @@ export function serializeQuantitative(items: QuantitativeItem[]): string {
   return JSON.stringify(valid);
 }
 
+export function formatQuantitativeForEmail(val?: string): string {
+  if (!val) return 'Não informado';
+  const trimmed = val.trim();
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      const items = JSON.parse(trimmed);
+      if (Array.isArray(items) && items.length > 0) {
+        return items
+          .map((item: any) => {
+            const qtyStr = item.qty ? `${item.qty} ` : '';
+            const unitStr = item.unit ? `${item.unit} - ` : '';
+            return `${qtyStr}${unitStr}${item.desc}`;
+          })
+          .join('\n');
+      }
+    } catch {
+      return val;
+    }
+  }
+  return val;
+}
+
 const STATUS_ORDER: SupplyStatus[] = [
   'pending_quantitative', 'pending_order', 'ordered', 'in_production', 'delivered', 'cancelled'
 ];
@@ -371,7 +393,8 @@ export default function SuprimentosGeral() {
     const toEmail = userProfile?.email || (pkg.responsible ? `${respName.toLowerCase().replace(/\s+/g, '')}@buddyconstrutora.com.br` : 'compras@buddyconstrutora.com.br');
 
     const subject = `⚠️ ALERTA: Pedido de Insumo Crítico - ${pkg.name} [${projName}]`;
-    const body = `Olá ${respName},\n\nEste é um alerta automático do setor de Compras do Planejamento Buddy.\n\nO seguinte pacote de suprimentos está agendado e requer ação:\n\n▪ Pacote: ${pkg.name}\n📍 Obra: ${projName}\n📊 Quantitativo: ${pkg.quantitative || 'Não informado'}\n🔴 Data-Limite para Pedir: ${deadlineStr}\n📅 Data de Chegada na Obra: ${arriveStr}\n⚡ Status Atual: ${SUPPLY_STATUS_LABELS[pkg.status]}\n\nPor favor, confirme se o quantitativo foi validado e se o pedido de compra já foi realizado para evitar atrasos na execução da etapa.\n\nAtenciosamente,\nSetor de Suprimentos & Planejamento\nBuddy Construtora`;
+    const formattedQty = formatQuantitativeForEmail(pkg.quantitative);
+    const body = `Olá ${respName},\n\nEste é um alerta automático do setor de Compras do Planejamento Buddy.\n\nO seguinte pacote de suprimentos está agendado e requer ação:\n\n▪ Pacote: ${pkg.name}\n📍 Obra: ${projName}\n📊 Quantitativo: ${formattedQty}\n🔴 Data-Limite para Pedir: ${deadlineStr}\n📅 Data de Chegada na Obra: ${arriveStr}\n⚡ Status Atual: ${SUPPLY_STATUS_LABELS[pkg.status]}\n\nPor favor, confirme se o quantitativo foi validado e se o pedido de compra já foi realizado para evitar atrasos na execução da etapa.\n\nAtenciosamente,\nSetor de Suprimentos & Planejamento\nBuddy Construtora`;
 
     setEmailModal({
       isOpen: true,
@@ -403,7 +426,7 @@ export default function SuprimentosGeral() {
           usuario_destino: emailModal.toName,
           obra_nome: projName,
           insumo_nome: pkg.name,
-          quantitativo: pkg.quantitative || 'Não informado',
+          quantitativo: formatQuantitativeForEmail(pkg.quantitative),
           status_atual: SUPPLY_STATUS_LABELS[pkg.status],
           prioridade: pkg.isCritical ? 'CRÍTICO 🔴' : 'Normal',
           prazo_pedido: deadlineStr,

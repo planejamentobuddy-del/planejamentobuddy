@@ -30,6 +30,28 @@ function daysUntil(dateStr?: string | null): number | null {
   return Math.round((target.getTime() - now.getTime()) / 86400000);
 }
 
+function formatQuantitativeForEmail(val?: string | null): string {
+  if (!val) return 'Não informado';
+  const trimmed = val.trim();
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      const items = JSON.parse(trimmed);
+      if (Array.isArray(items) && items.length > 0) {
+        return items
+          .map((item: any) => {
+            const qtyStr = item.qty ? `${item.qty} ` : '';
+            const unitStr = item.unit ? `${item.unit} - ` : '';
+            return `${qtyStr}${unitStr}${item.desc}`;
+          })
+          .join('\n');
+      }
+    } catch {
+      return val;
+    }
+  }
+  return val;
+}
+
 serve(async (req) => {
   // CORS preflight request fallback
   if (req.method === 'OPTIONS') {
@@ -110,7 +132,7 @@ serve(async (req) => {
                 usuario_destino: respName,
                 obra_nome: project.name,
                 insumo_nome: pkg.name,
-                quantitativo: pkg.quantitative || 'Não informado',
+                quantitativo: formatQuantitativeForEmail(pkg.quantitative),
                 status_atual: pkg.status === 'pending_quantitative' ? 'Aguardando Quantitativo' : 'Aguardando Pedido',
                 prioridade: priorityText,
                 prazo_pedido: deadlineStr,
