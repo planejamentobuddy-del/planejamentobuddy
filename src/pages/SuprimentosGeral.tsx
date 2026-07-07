@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProjects } from '@/hooks/useProjects';
+import { supabase } from '@/integrations/supabase/client';
 import { Project, SupplyPackage, SupplyStatus, SUPPLY_STATUS_LABELS, SUPPLY_STATUS_COLORS } from '@/types/project';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -311,19 +312,35 @@ export default function SuprimentosGeral() {
     if (!emailModal.toEmail.trim()) { toast.error('E-mail do destinatário é obrigatório.'); return; }
     
     const loadingToast = toast.loading(`Enviando e-mail para ${emailModal.toName}...`);
-    
-    // Simulate API call to email delivery server (e.g. Resend / SendGrid / NodeMailer)
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    toast.dismiss(loadingToast);
-    toast.success(`E-mail de cobrança enviado com sucesso para ${emailModal.toEmail}!`);
+    let sentSuccessfully = false;
 
-    // Save notification status in package notes log
+    try {
+      const { data, error } = await supabase.functions.invoke('send-supply-alert', {
+        body: {
+          to: [emailModal.toEmail],
+          subject: emailModal.subject,
+          text: emailModal.body,
+          from: 'Planejamento Buddy <onboarding@resend.dev>'
+        }
+      });
+
+      if (error) throw error;
+      
+      toast.success(`E-mail de cobrança enviado com sucesso para ${emailModal.toEmail}!`);
+      sentSuccessfully = true;
+    } catch (err: any) {
+      console.error('Failed to send real email:', err);
+      toast.error(`Falha no envio de e-mail real: ${err.message || 'Erro de comunicação'}. A cobrança foi logada localmente.`);
+    } finally {
+      toast.dismiss(loadingToast);
+    }
+    
     if (emailModal.pkgId) {
       const pkg = packages.find(p => p.id === emailModal.pkgId);
       if (pkg) {
         const timestamp = new Date().toLocaleString('pt-BR');
-        const notificationLog = `\n[Notificação enviada em ${timestamp} para ${emailModal.toEmail}]`;
+        const statusText = sentSuccessfully ? 'Enviada com sucesso' : 'Falhou no envio real (verifique API Key no Supabase)';
+        const notificationLog = `\n[Notificação disparada em ${timestamp} para ${emailModal.toEmail} | Status: ${statusText}]`;
         await updateSupplyPackage({
           ...pkg,
           notes: pkg.notes ? pkg.notes + notificationLog : notificationLog
