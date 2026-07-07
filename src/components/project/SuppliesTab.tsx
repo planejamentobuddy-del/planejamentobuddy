@@ -139,7 +139,7 @@ const EMPTY_FORM: FormState = {
 type ViewMode = 'kanban' | 'timeline' | 'list';
 
 export default function SuppliesTab({ project }: { project: Project }) {
-  const { supplyPackages, addSupplyPackage, updateSupplyPackage, deleteSupplyPackage, getTasksForProject } = useProjects();
+  const { supplyPackages, addSupplyPackage, updateSupplyPackage, deleteSupplyPackage, getTasksForProject, users } = useProjects();
   const tasks = getTasksForProject(project.id);
   const packages = useMemo(() => supplyPackages.filter(p => p.projectId === project.id), [supplyPackages, project.id]);
 
@@ -398,12 +398,17 @@ export default function SuppliesTab({ project }: { project: Project }) {
             {/* Responsável */}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">👤 Responsável pelo Pedido</label>
-              <Input
-                value={form.responsible}
-                onChange={e => setForm(f => ({ ...f, responsible: e.target.value }))}
-                placeholder="Ex: João Silva"
-                className="rounded-lg"
-              />
+              <Select value={form.responsible || 'none'} onValueChange={v => setForm(f => ({ ...f, responsible: v === 'none' ? '' : v }))}>
+                <SelectTrigger className="rounded-lg">
+                  <SelectValue placeholder="Selecione o responsável..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  {users?.map(u => (
+                    <SelectItem key={u.id} value={u.full_name}>{u.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Quantitativo Pronto */}

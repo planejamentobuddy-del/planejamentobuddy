@@ -159,7 +159,7 @@ type ViewMode = 'kanban' | 'timeline' | 'list';
 
 export default function SuprimentosGeral() {
   const navigate = useNavigate();
-  const { projects, supplyPackages, addSupplyPackage, updateSupplyPackage, deleteSupplyPackage, tasks } = useProjects();
+  const { projects, supplyPackages, addSupplyPackage, updateSupplyPackage, deleteSupplyPackage, tasks, users } = useProjects();
 
   const activeProjects = useMemo(() => projects.filter(p => p.status !== 'archived'), [projects]);
 
@@ -291,8 +291,8 @@ export default function SuprimentosGeral() {
     const arriveStr = formatDate(pkg.arriveBy);
     const respName = pkg.responsible || 'Responsável';
 
-    const cleanName = respName.toLowerCase().replace(/\s+/g, '');
-    const toEmail = pkg.responsible ? `${cleanName}@buddyconstrutora.com.br` : 'compras@buddyconstrutora.com.br';
+    const userProfile = users?.find(u => u.full_name === pkg.responsible);
+    const toEmail = userProfile?.email || (pkg.responsible ? `${respName.toLowerCase().replace(/\s+/g, '')}@buddyconstrutora.com.br` : 'compras@buddyconstrutora.com.br');
 
     const subject = `⚠️ ALERTA: Pedido de Insumo Crítico - ${pkg.name} [${projName}]`;
     const body = `Olá ${respName},\n\nEste é um alerta automático do setor de Compras do Planejamento Buddy.\n\nO seguinte pacote de suprimentos está agendado e requer ação:\n\n▪ Pacote: ${pkg.name}\n📍 Obra: ${projName}\n📊 Quantitativo: ${pkg.quantitative || 'Não informado'}\n🔴 Data-Limite para Pedir: ${deadlineStr}\n📅 Data de Chegada na Obra: ${arriveStr}\n⚡ Status Atual: ${SUPPLY_STATUS_LABELS[pkg.status]}\n\nPor favor, confirme se o quantitativo foi validado e se o pedido de compra já foi realizado para evitar atrasos na execução da etapa.\n\nAtenciosamente,\nSetor de Suprimentos & Planejamento\nBuddy Construtora`;
@@ -527,7 +527,17 @@ export default function SuprimentosGeral() {
               {/* Responsável */}
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">👤 Responsável pelo Pedido</label>
-                <Input value={form.responsible} onChange={e => setForm(f => ({ ...f, responsible: e.target.value }))} placeholder="Nome do comprador..." className="rounded-lg" />
+                <Select value={form.responsible || 'none'} onValueChange={v => setForm(f => ({ ...f, responsible: v === 'none' ? '' : v }))}>
+                  <SelectTrigger className="rounded-lg">
+                    <SelectValue placeholder="Selecione o responsável..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {users?.map(u => (
+                      <SelectItem key={u.id} value={u.full_name}>{u.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Data Limite manual */}
