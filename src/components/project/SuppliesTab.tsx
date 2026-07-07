@@ -395,21 +395,24 @@ export default function SuppliesTab({ project }: { project: Project }) {
               <Input type="number" value={form.leadTimeDays} onChange={e => setForm(f => ({ ...f, leadTimeDays: e.target.value }))} placeholder="120" className="rounded-lg" />
             </div>
 
-            {/* Responsável */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">👤 Responsável pelo Pedido</label>
-              <Select value={form.responsible || 'none'} onValueChange={v => setForm(f => ({ ...f, responsible: v === 'none' ? '' : v }))}>
-                <SelectTrigger className="rounded-lg">
-                  <SelectValue placeholder="Selecione o responsável..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
-                  {users?.map(u => (
-                    <SelectItem key={u.id} value={u.full_name}>{u.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+             {/* Responsável */}
+             <div>
+               <label className="text-xs font-medium text-muted-foreground mb-1 block">👤 Responsável pelo Pedido</label>
+               <Select value={form.responsible || 'none'} onValueChange={v => setForm(f => ({ ...f, responsible: v === 'none' ? '' : v }))}>
+                 <SelectTrigger className="rounded-lg">
+                   <SelectValue placeholder="Selecione o responsável..." />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="none">Nenhum</SelectItem>
+                   {users?.filter(u => u.full_name || u.email).map(u => {
+                     const name = u.full_name || u.email || 'Usuário Sem Nome';
+                     return (
+                       <SelectItem key={u.id} value={name}>{name}</SelectItem>
+                     );
+                   })}
+                 </SelectContent>
+               </Select>
+             </div>
 
             {/* Quantitativo Pronto */}
             <div>

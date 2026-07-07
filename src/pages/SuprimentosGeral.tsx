@@ -533,9 +533,12 @@ export default function SuprimentosGeral() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum</SelectItem>
-                    {users?.map(u => (
-                      <SelectItem key={u.id} value={u.full_name}>{u.full_name}</SelectItem>
-                    ))}
+                    {users?.filter(u => u.full_name || u.email).map(u => {
+                      const name = u.full_name || u.email || 'Usuário Sem Nome';
+                      return (
+                        <SelectItem key={u.id} value={name}>{name}</SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
