@@ -563,10 +563,14 @@ export interface SupplyPackage {
   projectId: string;
   taskId?: string;             // optional link to a task
   name: string;                // 'Esquadrias MADO'
-  supplier?: string;           // 'MADO Esquadrias'
-  estimatedValue?: number;     // R$ 3.000.000
+  supplier?: string;           // 'MADO Esquadrias' (kept for legacy)
+  estimatedValue?: number;     // R$ 3.000.000 (kept for legacy)
   isCritical: boolean;
   leadTimeDays: number;        // 120 = 4 months lead time
+  quantitative?: string;       // e.g. '280 UND - SACO CIMENTO CPII'
+  arriveBy?: string;           // YYYY-MM-DD when material must be on site
+  daysBeforeOrder?: number;    // how many days before arriveBy to place order
+  responsible?: string;        // user name/id responsible for placing the order
   quantitativeDoneDate?: string;   // YYYY-MM-DD when QTO was finalized
   orderDeadline?: string;          // YYYY-MM-DD last date to place order
   orderDate?: string;              // YYYY-MM-DD actual order placement

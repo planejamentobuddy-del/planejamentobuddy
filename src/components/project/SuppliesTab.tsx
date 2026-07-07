@@ -7,9 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import {
   Plus, Trash2, Edit2, Package, AlertTriangle, CheckCircle2,
-  Clock, TrendingUp, DollarSign, ShoppingCart, Truck, X, Save,
+  Clock, TrendingUp, ShoppingCart, Truck, X, Save,
   ChevronDown, ChevronUp, Filter, Star, LayoutGrid, List,
-  ArrowRight, Zap, PackageCheck, Factory, BarChart2
+  ArrowRight, Zap, PackageCheck, Factory, BarChart2, User
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -38,11 +38,6 @@ const DOT_COLORS: Record<string, string> = {
   cancelled: 'bg-red-400',
 };
 
-function formatBRL(v?: number) {
-  if (!v) return '—';
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
-}
-
 function formatDate(d?: string) {
   if (!d) return '—';
   const [y, m, day] = d.split('-');
@@ -57,26 +52,41 @@ function daysUntil(dateStr?: string): number | null {
   return Math.round((target.getTime() - now.getTime()) / 86400000);
 }
 
+/** Given arriveBy and daysBeforeOrder, compute the order deadline */
+function computeOrderDeadline(arriveBy?: string, daysBeforeOrder?: number): string | undefined {
+  if (!arriveBy || !daysBeforeOrder) return undefined;
+  const d = new Date(arriveBy + 'T12:00:00');
+  d.setDate(d.getDate() - daysBeforeOrder);
+  return d.toISOString().split('T')[0];
+}
+
 function isOrderLate(pkg: SupplyPackage) {
-  const d = daysUntil(pkg.orderDeadline);
+  const deadline = pkg.orderDeadline || computeOrderDeadline(pkg.arriveBy, pkg.daysBeforeOrder);
+  const d = daysUntil(deadline);
   return d !== null && d < 0 && pkg.status !== 'ordered' && pkg.status !== 'delivered' && pkg.status !== 'cancelled';
 }
 
 function isDeliveryLate(pkg: SupplyPackage) {
-  const d = daysUntil(pkg.expectedDeliveryDate);
+  const d = daysUntil(pkg.expectedDeliveryDate || pkg.arriveBy);
   return d !== null && d < 0 && pkg.status !== 'delivered' && pkg.status !== 'cancelled';
 }
 
 function isUrgent(pkg: SupplyPackage) {
-  const d = daysUntil(pkg.orderDeadline);
+  const deadline = pkg.orderDeadline || computeOrderDeadline(pkg.arriveBy, pkg.daysBeforeOrder);
+  const d = daysUntil(deadline);
   return d !== null && d >= 0 && d <= 10 && pkg.status !== 'ordered' && pkg.status !== 'delivered' && pkg.status !== 'cancelled';
+}
+
+function getEffectiveDeadline(pkg: SupplyPackage) {
+  return pkg.orderDeadline || computeOrderDeadline(pkg.arriveBy, pkg.daysBeforeOrder);
 }
 
 function DeadlineBadge({ pkg }: { pkg: SupplyPackage }) {
   if (pkg.status === 'ordered' || pkg.status === 'delivered' || pkg.status === 'cancelled') return null;
-  const days = daysUntil(pkg.orderDeadline);
+  const deadline = getEffectiveDeadline(pkg);
+  const days = daysUntil(deadline);
   if (days === null) return null;
-  if (days < 0)  return <span className="inline-flex items-center gap-1 text-[10px] text-red-600 font-bold bg-red-500/10 rounded px-1.5 py-0.5"><AlertTriangle className="w-2.5 h-2.5" /> Atrasado {Math.abs(days)}d</span>;
+  if (days < 0)   return <span className="inline-flex items-center gap-1 text-[10px] text-red-600 font-bold bg-red-500/10 rounded px-1.5 py-0.5"><AlertTriangle className="w-2.5 h-2.5" /> Atrasado {Math.abs(days)}d</span>;
   if (days <= 10) return <span className="inline-flex items-center gap-1 text-[10px] text-orange-600 font-bold bg-orange-500/10 rounded px-1.5 py-0.5"><Zap className="w-2.5 h-2.5" /> {days}d URGENTE</span>;
   if (days <= 30) return <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 font-semibold bg-amber-500/10 rounded px-1.5 py-0.5"><Clock className="w-2.5 h-2.5" /> {days}d</span>;
   return <span className="text-[10px] text-muted-foreground">{days}d restantes</span>;
@@ -87,16 +97,39 @@ function DeadlineBadge({ pkg }: { pkg: SupplyPackage }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface FormState {
-  name: string; supplier: string; estimatedValue: string; isCritical: boolean;
-  leadTimeDays: string; quantitativeDoneDate: string; orderDeadline: string;
-  orderDate: string; expectedDeliveryDate: string; actualDeliveryDate: string;
-  status: SupplyStatus; notes: string; taskId: string;
+  name: string;
+  quantitative: string;       // e.g. "280 UND - SACO CIMENTO CPII POTY"
+  isCritical: boolean;
+  leadTimeDays: string;
+  arriveBy: string;           // when material must be on site
+  daysBeforeOrder: string;    // days before arriveBy to order
+  responsible: string;        // who places the order
+  quantitativeDoneDate: string;
+  orderDeadline: string;      // overrides computed deadline if set manually
+  orderDate: string;
+  expectedDeliveryDate: string;
+  actualDeliveryDate: string;
+  status: SupplyStatus;
+  notes: string;
+  taskId: string;
 }
 
 const EMPTY_FORM: FormState = {
-  name: '', supplier: '', estimatedValue: '', isCritical: false, leadTimeDays: '30',
-  quantitativeDoneDate: '', orderDeadline: '', orderDate: '', expectedDeliveryDate: '',
-  actualDeliveryDate: '', status: 'pending_quantitative', notes: '', taskId: '',
+  name: '',
+  quantitative: '',
+  isCritical: false,
+  leadTimeDays: '30',
+  arriveBy: '',
+  daysBeforeOrder: '',
+  responsible: '',
+  quantitativeDoneDate: '',
+  orderDeadline: '',
+  orderDate: '',
+  expectedDeliveryDate: '',
+  actualDeliveryDate: '',
+  status: 'pending_quantitative',
+  notes: '',
+  taskId: '',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,12 +153,12 @@ export default function SuppliesTab({ project }: { project: Project }) {
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
-    const urgent       = packages.filter(isUrgent);
-    const orderLate    = packages.filter(isOrderLate);
-    const deliveryLate = packages.filter(isDeliveryLate);
-    const criticalVal  = packages.filter(p => p.isCritical).reduce((s, p) => s + (p.estimatedValue || 0), 0);
-    const totalVal     = packages.reduce((s, p) => s + (p.estimatedValue || 0), 0);
-    return { urgent: urgent.length, orderLate: orderLate.length, deliveryLate: deliveryLate.length, criticalVal, totalVal };
+    const urgent        = packages.filter(isUrgent);
+    const orderLate     = packages.filter(isOrderLate);
+    const deliveryLate  = packages.filter(isDeliveryLate);
+    const totalPkg      = packages.filter(p => p.status !== 'cancelled').length;
+    const deliveredPkg  = packages.filter(p => p.status === 'delivered').length;
+    return { urgent: urgent.length, orderLate: orderLate.length, deliveryLate: deliveryLate.length, totalPkg, deliveredPkg };
   }, [packages]);
 
   const filtered = useMemo(() => {
@@ -134,9 +167,9 @@ export default function SuppliesTab({ project }: { project: Project }) {
     if (filterCritical) list = list.filter(p => p.isCritical);
     return list.sort((a, b) => {
       if (a.isCritical !== b.isCritical) return a.isCritical ? -1 : 1;
-      if (!a.orderDeadline && !b.orderDeadline) return 0;
-      if (!a.orderDeadline) return 1; if (!b.orderDeadline) return -1;
-      return a.orderDeadline.localeCompare(b.orderDeadline);
+      const da = getEffectiveDeadline(a) || '9999';
+      const db = getEffectiveDeadline(b) || '9999';
+      return da.localeCompare(db);
     });
   }, [packages, filterStatus, filterCritical]);
 
@@ -145,28 +178,57 @@ export default function SuppliesTab({ project }: { project: Project }) {
 
   function openEdit(pkg: SupplyPackage) {
     setForm({
-      name: pkg.name, supplier: pkg.supplier || '', estimatedValue: pkg.estimatedValue?.toString() || '',
-      isCritical: pkg.isCritical, leadTimeDays: pkg.leadTimeDays.toString(),
-      quantitativeDoneDate: pkg.quantitativeDoneDate || '', orderDeadline: pkg.orderDeadline || '',
-      orderDate: pkg.orderDate || '', expectedDeliveryDate: pkg.expectedDeliveryDate || '',
-      actualDeliveryDate: pkg.actualDeliveryDate || '', status: pkg.status, notes: pkg.notes || '',
+      name: pkg.name,
+      quantitative: pkg.quantitative || '',
+      isCritical: pkg.isCritical,
+      leadTimeDays: pkg.leadTimeDays.toString(),
+      arriveBy: pkg.arriveBy || '',
+      daysBeforeOrder: pkg.daysBeforeOrder?.toString() || '',
+      responsible: pkg.responsible || '',
+      quantitativeDoneDate: pkg.quantitativeDoneDate || '',
+      orderDeadline: pkg.orderDeadline || '',
+      orderDate: pkg.orderDate || '',
+      expectedDeliveryDate: pkg.expectedDeliveryDate || '',
+      actualDeliveryDate: pkg.actualDeliveryDate || '',
+      status: pkg.status,
+      notes: pkg.notes || '',
       taskId: pkg.taskId || '',
     });
-    setEditingId(pkg.id); setShowForm(true);
+    setEditingId(pkg.id);
+    setShowForm(true);
   }
 
   async function handleSave() {
     if (!form.name.trim()) { toast.error('Nome do pacote é obrigatório.'); return; }
+
+    // Compute orderDeadline from arriveBy + daysBeforeOrder if not set manually
+    const computedDeadline = form.orderDeadline || computeOrderDeadline(form.arriveBy || undefined, form.daysBeforeOrder ? parseInt(form.daysBeforeOrder) : undefined);
+
     const payload: Omit<SupplyPackage, 'id' | 'createdAt'> = {
-      projectId: project.id, taskId: form.taskId || undefined, name: form.name.trim(),
-      supplier: form.supplier || undefined, estimatedValue: form.estimatedValue ? parseFloat(form.estimatedValue) : undefined,
-      isCritical: form.isCritical, leadTimeDays: parseInt(form.leadTimeDays) || 30,
-      quantitativeDoneDate: form.quantitativeDoneDate || undefined, orderDeadline: form.orderDeadline || undefined,
-      orderDate: form.orderDate || undefined, expectedDeliveryDate: form.expectedDeliveryDate || undefined,
-      actualDeliveryDate: form.actualDeliveryDate || undefined, status: form.status, notes: form.notes || undefined,
+      projectId: project.id,
+      taskId: form.taskId || undefined,
+      name: form.name.trim(),
+      quantitative: form.quantitative || undefined,
+      isCritical: form.isCritical,
+      leadTimeDays: parseInt(form.leadTimeDays) || 30,
+      arriveBy: form.arriveBy || undefined,
+      daysBeforeOrder: form.daysBeforeOrder ? parseInt(form.daysBeforeOrder) : undefined,
+      responsible: form.responsible || undefined,
+      quantitativeDoneDate: form.quantitativeDoneDate || undefined,
+      orderDeadline: computedDeadline || undefined,
+      orderDate: form.orderDate || undefined,
+      expectedDeliveryDate: form.expectedDeliveryDate || undefined,
+      actualDeliveryDate: form.actualDeliveryDate || undefined,
+      status: form.status,
+      notes: form.notes || undefined,
     };
-    if (editingId) { const ex = packages.find(p => p.id === editingId)!; await updateSupplyPackage({ ...ex, ...payload }); }
-    else await addSupplyPackage(payload);
+
+    if (editingId) {
+      const ex = packages.find(p => p.id === editingId)!;
+      await updateSupplyPackage({ ...ex, ...payload });
+    } else {
+      await addSupplyPackage(payload);
+    }
     setShowForm(false); setEditingId(null); setForm(EMPTY_FORM);
   }
 
@@ -177,7 +239,7 @@ export default function SuppliesTab({ project }: { project: Project }) {
 
   async function advanceStatus(pkg: SupplyPackage) {
     const idx = STATUS_ORDER.indexOf(pkg.status);
-    if (idx < 0 || idx >= STATUS_ORDER.length - 2) return; // don't advance past in_production into delivered automatically, and skip cancelled
+    if (idx < 0 || idx >= STATUS_ORDER.length - 2) return;
     const next = STATUS_ORDER[idx + 1];
     await updateSupplyPackage({ ...pkg, status: next });
   }
@@ -192,7 +254,13 @@ export default function SuppliesTab({ project }: { project: Project }) {
       if (!d) return null;
       return Math.max(0, Math.min(100, ((new Date(d).getTime() - ps) / total) * 100));
     };
-    return { qto: pct(pkg.quantitativeDoneDate), order: pct(pkg.orderDeadline), leadStart: pct(pkg.orderDate || pkg.orderDeadline), delivery: pct(pkg.expectedDeliveryDate) };
+    const deadline = getEffectiveDeadline(pkg);
+    return {
+      qto: pct(pkg.quantitativeDoneDate),
+      order: pct(deadline),
+      leadStart: pct(pkg.orderDate || deadline),
+      delivery: pct(pkg.expectedDeliveryDate || pkg.arriveBy),
+    };
   }
 
   // ── RENDER ────────────────────────────────────────────────────────────────
@@ -211,9 +279,9 @@ export default function SuppliesTab({ project }: { project: Project }) {
           {/* View mode switcher */}
           <div className="flex items-center bg-muted rounded-lg p-1 gap-0.5">
             {([
-              { mode: 'kanban' as ViewMode,   icon: <LayoutGrid className="w-3.5 h-3.5" />, label: 'Kanban' },
+              { mode: 'kanban'   as ViewMode, icon: <LayoutGrid className="w-3.5 h-3.5" />, label: 'Kanban' },
               { mode: 'timeline' as ViewMode, icon: <BarChart2 className="w-3.5 h-3.5" />,  label: 'Timeline' },
-              { mode: 'list' as ViewMode,     icon: <List className="w-3.5 h-3.5" />,       label: 'Lista' },
+              { mode: 'list'     as ViewMode, icon: <List className="w-3.5 h-3.5" />,       label: 'Lista' },
             ]).map(({ mode, icon, label }) => (
               <button
                 key={mode}
@@ -232,13 +300,13 @@ export default function SuppliesTab({ project }: { project: Project }) {
         </div>
       </div>
 
-      {/* ── KPI Alert Bar ── */}
+      {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Compras Urgentes (<10d)', value: kpis.urgent,       icon: Zap,          color: 'text-orange-600', bg: 'bg-orange-500/10', ring: kpis.urgent > 0 ? 'ring-1 ring-orange-400/50' : '' },
-          { label: 'Pedidos Atrasados',        value: kpis.orderLate,   icon: AlertTriangle, color: 'text-red-600',    bg: 'bg-red-500/10',    ring: kpis.orderLate > 0 ? 'ring-1 ring-red-400/50' : '' },
-          { label: 'Entregas Atrasadas',       value: kpis.deliveryLate, icon: Truck,         color: 'text-purple-600', bg: 'bg-purple-500/10', ring: kpis.deliveryLate > 0 ? 'ring-1 ring-purple-400/50' : '' },
-          { label: 'Volume Financeiro Total',  value: formatBRL(kpis.totalVal), icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-500/10', ring: '' },
+          { label: 'Compras Urgentes (<10d)', value: kpis.urgent,        icon: Zap,           color: 'text-orange-600', bg: 'bg-orange-500/10', ring: kpis.urgent > 0 ? 'ring-1 ring-orange-400/50' : '' },
+          { label: 'Pedidos Atrasados',        value: kpis.orderLate,    icon: AlertTriangle,  color: 'text-red-600',    bg: 'bg-red-500/10',    ring: kpis.orderLate > 0 ? 'ring-1 ring-red-400/50' : '' },
+          { label: 'Entregas Atrasadas',       value: kpis.deliveryLate, icon: Truck,          color: 'text-purple-600', bg: 'bg-purple-500/10', ring: kpis.deliveryLate > 0 ? 'ring-1 ring-purple-400/50' : '' },
+          { label: `Entregues (${kpis.deliveredPkg}/${kpis.totalPkg})`,  value: `${kpis.totalPkg > 0 ? Math.round((kpis.deliveredPkg / kpis.totalPkg) * 100) : 0}%`, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-500/10', ring: '' },
         ].map((k, i) => (
           <div key={i} className={`bg-card rounded-xl border border-border p-4 flex items-center gap-3 ${k.ring}`}>
             <div className={`w-10 h-10 rounded-lg ${k.bg} flex items-center justify-center shrink-0`}>
@@ -274,23 +342,16 @@ export default function SuppliesTab({ project }: { project: Project }) {
               <X className="w-4 h-4" />
             </Button>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+            {/* Nome */}
             <div className="lg:col-span-2">
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Nome do Pacote *</label>
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Esquadrias MADO (alumínio/vidro)" className="rounded-lg" />
+              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Esquadrias de Alumínio" className="rounded-lg" />
             </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Fornecedor</label>
-              <Input value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="MADO Esquadrias" className="rounded-lg" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Valor Estimado (R$)</label>
-              <Input type="number" value={form.estimatedValue} onChange={e => setForm(f => ({ ...f, estimatedValue: e.target.value }))} placeholder="3000000" className="rounded-lg" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Lead Time (dias)</label>
-              <Input type="number" value={form.leadTimeDays} onChange={e => setForm(f => ({ ...f, leadTimeDays: e.target.value }))} placeholder="120" className="rounded-lg" />
-            </div>
+
+            {/* Status */}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Status</label>
               <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as SupplyStatus }))}>
@@ -298,47 +359,114 @@ export default function SuppliesTab({ project }: { project: Project }) {
                 <SelectContent>{STATUS_ORDER.map(s => <SelectItem key={s} value={s}>{SUPPLY_STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+
+            {/* Quantitativo */}
+            <div className="lg:col-span-3">
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Quantitativo</label>
+              <Input value={form.quantitative} onChange={e => setForm(f => ({ ...f, quantitative: e.target.value }))} placeholder="Ex: 280 UND - SACO CIMENTO CPII POTY" className="rounded-lg" />
+            </div>
+
+            {/* Chegar até */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Quantitativo Pronto</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">📅 Chegar até (na obra)</label>
+              <Input type="date" value={form.arriveBy} onChange={e => setForm(f => ({ ...f, arriveBy: e.target.value }))} className="rounded-lg" />
+            </div>
+
+            {/* Dias antes para pedir */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">🔴 Pedir com antecedência (dias)</label>
+              <Input
+                type="number"
+                value={form.daysBeforeOrder}
+                onChange={e => setForm(f => ({ ...f, daysBeforeOrder: e.target.value }))}
+                placeholder="Ex: 30"
+                className="rounded-lg"
+              />
+              {form.arriveBy && form.daysBeforeOrder && (
+                <p className="text-[10px] text-primary mt-1">
+                  → Pedir até: {formatDate(computeOrderDeadline(form.arriveBy, parseInt(form.daysBeforeOrder)))}
+                </p>
+              )}
+            </div>
+
+            {/* Lead Time */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Lead Time (dias fabricação)</label>
+              <Input type="number" value={form.leadTimeDays} onChange={e => setForm(f => ({ ...f, leadTimeDays: e.target.value }))} placeholder="120" className="rounded-lg" />
+            </div>
+
+            {/* Responsável */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">👤 Responsável pelo Pedido</label>
+              <Input
+                value={form.responsible}
+                onChange={e => setForm(f => ({ ...f, responsible: e.target.value }))}
+                placeholder="Ex: João Silva"
+                className="rounded-lg"
+              />
+            </div>
+
+            {/* Quantitativo Pronto */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Quantitativo Pronto em</label>
               <Input type="date" value={form.quantitativeDoneDate} onChange={e => setForm(f => ({ ...f, quantitativeDoneDate: e.target.value }))} className="rounded-lg" />
             </div>
+
+            {/* Data Limite pedido manual */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">🔴 Data-Limite do Pedido</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Data-Limite do Pedido (manual)</label>
               <Input type="date" value={form.orderDeadline} onChange={e => setForm(f => ({ ...f, orderDeadline: e.target.value }))} className="rounded-lg border-red-300 focus:border-red-500" />
+              <p className="text-[10px] text-muted-foreground mt-1">Deixe vazio para calcular automaticamente</p>
             </div>
+
+            {/* Data do Pedido real */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Data do Pedido (real)</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Data do Pedido (realizado)</label>
               <Input type="date" value={form.orderDate} onChange={e => setForm(f => ({ ...f, orderDate: e.target.value }))} className="rounded-lg" />
             </div>
+
+            {/* Entrega Prevista */}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrega Prevista</label>
               <Input type="date" value={form.expectedDeliveryDate} onChange={e => setForm(f => ({ ...f, expectedDeliveryDate: e.target.value }))} className="rounded-lg" />
             </div>
+
+            {/* Entrega Real */}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrega Real</label>
               <Input type="date" value={form.actualDeliveryDate} onChange={e => setForm(f => ({ ...f, actualDeliveryDate: e.target.value }))} className="rounded-lg" />
             </div>
+
+            {/* Vincular Tarefa */}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Vincular à Tarefa</label>
               <Select value={form.taskId || 'none'} onValueChange={v => setForm(f => ({ ...f, taskId: v === 'none' ? '' : v }))}>
                 <SelectTrigger className="rounded-lg"><SelectValue placeholder="Nenhuma" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhuma</SelectItem>
-                  {(() => { const parentIds = new Set(tasks.map(t => t.parentId).filter(Boolean) as string[]); return tasks.filter(t => !parentIds.has(t.id)).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>); })()}
+                  {(() => {
+                    const parentIds = new Set(tasks.map(t => t.parentId).filter(Boolean) as string[]);
+                    return tasks.filter(t => !parentIds.has(t.id)).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>);
+                  })()}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Crítico */}
             <div className="flex items-center gap-3 pt-5">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.isCritical} onChange={e => setForm(f => ({ ...f, isCritical: e.target.checked }))} className="w-4 h-4 rounded accent-amber-500" />
                 <span className="text-sm font-medium flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500" /> Item Crítico</span>
               </label>
             </div>
+
+            {/* Observações */}
             <div className="md:col-span-2 lg:col-span-3">
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>
               <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Informações adicionais..." className="rounded-lg" />
             </div>
           </div>
+
           <div className="flex gap-3 mt-5 justify-end">
             <Button variant="outline" className="rounded-xl" onClick={() => { setShowForm(false); setEditingId(null); }}>Cancelar</Button>
             <Button className="rounded-xl gap-2" onClick={handleSave}><Save className="w-4 h-4" /> {editingId ? 'Salvar Alterações' : 'Adicionar Pacote'}</Button>
@@ -357,20 +485,19 @@ export default function SuppliesTab({ project }: { project: Project }) {
                 {KANBAN_COLUMNS.map(col => {
                   const colPkgs = packages.filter(p => p.status === col.id).sort((a, b) => {
                     if (a.isCritical !== b.isCritical) return a.isCritical ? -1 : 1;
-                    return (a.orderDeadline || '9999').localeCompare(b.orderDeadline || '9999');
+                    return (getEffectiveDeadline(a) || '9999').localeCompare(getEffectiveDeadline(b) || '9999');
                   });
                   return (
                     <div key={col.id} className={`flex-1 min-w-[200px] rounded-xl border-t-2 ${col.color} bg-card border border-border overflow-hidden`}>
-                      {/* Column header */}
                       <div className={`${col.headerBg} px-3 py-2.5 flex items-center justify-between`}>
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">{col.icon} {col.label}</div>
                         <span className="text-xs text-muted-foreground bg-background/60 rounded-full px-2 py-0.5">{colPkgs.length}</span>
                       </div>
-                      {/* Cards */}
                       <div className="p-2 space-y-2 min-h-[120px]">
                         {colPkgs.map(pkg => {
                           const late = isOrderLate(pkg);
                           const urg  = isUrgent(pkg);
+                          const deadline = getEffectiveDeadline(pkg);
                           return (
                             <div
                               key={pkg.id}
@@ -378,23 +505,34 @@ export default function SuppliesTab({ project }: { project: Project }) {
                                 late ? 'border-red-400/50 bg-red-500/5' : urg ? 'border-orange-400/50 bg-orange-500/5' : 'border-border bg-background'
                               }`}
                             >
-                              {/* Top row: critical star + name */}
+                              {/* Name + critical */}
                               <div className="flex items-start gap-1.5">
                                 {pkg.isCritical && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0 mt-0.5" />}
                                 <span className="font-semibold text-foreground leading-tight">{pkg.name}</span>
                               </div>
-                              {/* Supplier */}
-                              {pkg.supplier && <div className="text-muted-foreground">{pkg.supplier}</div>}
-                              {/* Value */}
-                              {pkg.estimatedValue && <div className="text-emerald-600 font-semibold">{formatBRL(pkg.estimatedValue)}</div>}
-                              {/* Lead time + deadline badge */}
+                              {/* Quantitativo */}
+                              {pkg.quantitative && (
+                                <div className="text-muted-foreground bg-muted/40 rounded px-1.5 py-0.5 text-[10px] font-medium">{pkg.quantitative}</div>
+                              )}
+                              {/* Lead time */}
                               <div className="flex items-center justify-between flex-wrap gap-1">
                                 <span className="text-muted-foreground">Lead: {pkg.leadTimeDays}d</span>
                                 <DeadlineBadge pkg={pkg} />
                               </div>
-                              {/* Deadline date */}
-                              {pkg.orderDeadline && (
-                                <div className="text-muted-foreground">Pedir até: <span className="font-medium text-foreground">{formatDate(pkg.orderDeadline)}</span></div>
+                              {/* Pedir até */}
+                              {deadline && (
+                                <div className="text-muted-foreground">Pedir até: <span className="font-medium text-foreground">{formatDate(deadline)}</span></div>
+                              )}
+                              {/* Chegar até */}
+                              {pkg.arriveBy && (
+                                <div className="text-muted-foreground">Chegar até: <span className="font-medium text-foreground">{formatDate(pkg.arriveBy)}</span></div>
+                              )}
+                              {/* Responsável */}
+                              {pkg.responsible && (
+                                <div className="flex items-center gap-1 text-muted-foreground">
+                                  <User className="w-2.5 h-2.5 shrink-0" />
+                                  <span className="truncate">{pkg.responsible}</span>
+                                </div>
                               )}
                               {/* Actions */}
                               <div className="flex items-center gap-1 pt-1 border-t border-border/60">
@@ -432,7 +570,6 @@ export default function SuppliesTab({ project }: { project: Project }) {
         <>
           {packages.length === 0 ? <EmptyState onAdd={openNew} /> : (
             <div className="bg-card rounded-xl border border-border overflow-hidden">
-              {/* Timeline legend */}
               <div className="border-b border-border px-4 py-2.5 flex items-center gap-4 text-[10px] text-muted-foreground flex-wrap">
                 <span className="font-semibold text-foreground text-xs">Linha do Tempo — {formatDate(project.startDate)} → {formatDate(project.endDate)}</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> QTO pronto</span>
@@ -442,56 +579,38 @@ export default function SuppliesTab({ project }: { project: Project }) {
               </div>
               <div className="divide-y divide-border">
                 {filtered.map(pkg => {
-                  const tl = getTimelinePos(pkg);
+                  const tl   = getTimelinePos(pkg);
                   const late = isOrderLate(pkg);
                   const urg  = isUrgent(pkg);
+                  const deadline = getEffectiveDeadline(pkg);
                   return (
                     <div key={pkg.id} className={`px-4 py-3 ${late ? 'bg-red-500/5' : urg ? 'bg-orange-500/5' : ''}`}>
                       <div className="flex items-center gap-3 mb-2">
                         <div className={`w-2 h-2 rounded-full shrink-0 ${DOT_COLORS[pkg.status]}`} />
                         {pkg.isCritical && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />}
                         <span className="text-sm font-semibold text-foreground flex-1">{pkg.name}</span>
-                        {pkg.supplier && <span className="text-xs text-muted-foreground">{pkg.supplier}</span>}
-                        {pkg.estimatedValue && <span className="text-xs font-semibold text-emerald-600">{formatBRL(pkg.estimatedValue)}</span>}
+                        {pkg.quantitative && <span className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-0.5">{pkg.quantitative}</span>}
+                        {pkg.responsible && <span className="text-xs text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" />{pkg.responsible}</span>}
                         <DeadlineBadge pkg={pkg} />
                         <button onClick={() => openEdit(pkg)} className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
                       </div>
-                      {/* Timeline bar */}
                       {tl ? (
                         <div className="relative h-8 bg-muted/60 rounded-lg overflow-visible ml-5">
-                          {/* Lead time bar */}
                           {tl.leadStart !== null && tl.delivery !== null && (
                             <div className="absolute top-2 bottom-2 bg-purple-400/40 rounded"
                               style={{ left: `${tl.leadStart}%`, width: `${Math.max(1, (tl.delivery || 0) - tl.leadStart)}%` }} />
                           )}
-                          {/* QTO marker */}
-                          {tl.qto !== null && (
-                            <div className="absolute top-0 bottom-0 w-0.5 bg-amber-500" style={{ left: `${tl.qto}%` }}>
-                              <span className="absolute -top-4 -translate-x-1/2 text-[9px] text-amber-600 font-bold whitespace-nowrap">QTO</span>
-                            </div>
-                          )}
-                          {/* Order deadline marker */}
-                          {tl.order !== null && (
-                            <div className="absolute top-0 bottom-0 w-0.5 bg-red-500" style={{ left: `${tl.order}%` }}>
-                              <span className="absolute -top-4 -translate-x-1/2 text-[9px] text-red-600 font-bold whitespace-nowrap">PEDIDO</span>
-                            </div>
-                          )}
-                          {/* Delivery marker */}
-                          {tl.delivery !== null && (
-                            <div className="absolute top-0 bottom-0 w-0.5 bg-emerald-500" style={{ left: `${tl.delivery}%` }}>
-                              <span className="absolute -top-4 -translate-x-1/2 text-[9px] text-emerald-600 font-bold whitespace-nowrap">ENTREGA</span>
-                            </div>
-                          )}
+                          {tl.qto !== null && <div className="absolute top-0 bottom-0 w-0.5 bg-amber-500" style={{ left: `${tl.qto}%` }}><span className="absolute -top-4 -translate-x-1/2 text-[9px] text-amber-600 font-bold whitespace-nowrap">QTO</span></div>}
+                          {tl.order !== null && <div className="absolute top-0 bottom-0 w-0.5 bg-red-500" style={{ left: `${tl.order}%` }}><span className="absolute -top-4 -translate-x-1/2 text-[9px] text-red-600 font-bold whitespace-nowrap">PEDIDO</span></div>}
+                          {tl.delivery !== null && <div className="absolute top-0 bottom-0 w-0.5 bg-emerald-500" style={{ left: `${tl.delivery}%` }}><span className="absolute -top-4 -translate-x-1/2 text-[9px] text-emerald-600 font-bold whitespace-nowrap">ENTREGA</span></div>}
                         </div>
                       ) : (
-                        <div className="ml-5 h-8 bg-muted/40 rounded-lg flex items-center justify-center text-xs text-muted-foreground/50">
-                          Sem datas cadastradas
-                        </div>
+                        <div className="ml-5 h-8 bg-muted/40 rounded-lg flex items-center justify-center text-xs text-muted-foreground/50">Sem datas cadastradas</div>
                       )}
-                      {/* Date chips */}
                       <div className="flex gap-3 mt-2 ml-5 flex-wrap text-[10px]">
                         {pkg.quantitativeDoneDate && <span className="text-amber-600">◆ QTO: {formatDate(pkg.quantitativeDoneDate)}</span>}
-                        {pkg.orderDeadline && <span className={late ? 'text-red-600 font-bold' : 'text-red-500'}>⚡ Limite: {formatDate(pkg.orderDeadline)}</span>}
+                        {deadline && <span className={late ? 'text-red-600 font-bold' : 'text-red-500'}>⚡ Pedir até: {formatDate(deadline)}</span>}
+                        {pkg.arriveBy && <span className="text-blue-600">📅 Chegar até: {formatDate(pkg.arriveBy)}</span>}
                         {pkg.orderDate && <span className="text-blue-600">✓ Pedido: {formatDate(pkg.orderDate)}</span>}
                         {pkg.expectedDeliveryDate && <span className="text-purple-600">◆ Prev.: {formatDate(pkg.expectedDeliveryDate)}</span>}
                         {pkg.actualDeliveryDate && <span className="text-emerald-600">✓ Real: {formatDate(pkg.actualDeliveryDate)}</span>}
@@ -507,11 +626,10 @@ export default function SuppliesTab({ project }: { project: Project }) {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          LIST VIEW (Classic)
+          LIST VIEW
       ═══════════════════════════════════════════════════════════════════════ */}
       {viewMode === 'list' && (
         <>
-          {/* Filters */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1 text-sm text-muted-foreground"><Filter className="w-4 h-4" /> Filtrar:</div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -530,10 +648,11 @@ export default function SuppliesTab({ project }: { project: Project }) {
           {filtered.length === 0 ? <EmptyState onAdd={openNew} /> : (
             <div className="space-y-2">
               {filtered.map(pkg => {
-                const late = isOrderLate(pkg);
-                const urg  = isUrgent(pkg);
-                const isExp = expandedId === pkg.id;
-                const tl   = getTimelinePos(pkg);
+                const late    = isOrderLate(pkg);
+                const urg     = isUrgent(pkg);
+                const isExp   = expandedId === pkg.id;
+                const tl      = getTimelinePos(pkg);
+                const deadline = getEffectiveDeadline(pkg);
                 return (
                   <div key={pkg.id} className={`bg-card rounded-xl border transition-all ${late ? 'border-red-500/40 bg-red-500/5' : urg ? 'border-orange-400/40 bg-orange-500/5' : pkg.status === 'delivered' ? 'border-emerald-500/30' : 'border-border'}`}>
                     <div className="flex items-center gap-3 p-4">
@@ -545,13 +664,14 @@ export default function SuppliesTab({ project }: { project: Project }) {
                           <Badge className={`text-[10px] px-2 py-0 h-5 ${SUPPLY_STATUS_COLORS[pkg.status]}`}>{SUPPLY_STATUS_LABELS[pkg.status]}</Badge>
                         </div>
                         <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                          {pkg.supplier && <span className="text-xs text-muted-foreground">{pkg.supplier}</span>}
-                          {pkg.estimatedValue && <span className="text-xs font-semibold text-emerald-600">{formatBRL(pkg.estimatedValue)}</span>}
+                          {pkg.quantitative && <span className="text-xs text-muted-foreground bg-muted/40 rounded px-1.5 py-0.5">{pkg.quantitative}</span>}
+                          {pkg.responsible && <span className="text-xs text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" />{pkg.responsible}</span>}
                           <span className="text-xs text-muted-foreground">Lead: {pkg.leadTimeDays}d</span>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        {pkg.orderDeadline && <div className="text-xs text-muted-foreground mb-0.5">Pedir até: <span className="font-semibold">{formatDate(pkg.orderDeadline)}</span></div>}
+                        {deadline && <div className="text-xs text-muted-foreground mb-0.5">Pedir até: <span className="font-semibold">{formatDate(deadline)}</span></div>}
+                        {pkg.arriveBy && <div className="text-xs text-muted-foreground">Chegar até: <span className="font-semibold">{formatDate(pkg.arriveBy)}</span></div>}
                         <DeadlineBadge pkg={pkg} />
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
@@ -577,12 +697,13 @@ export default function SuppliesTab({ project }: { project: Project }) {
                             </div>
                           </div>
                         )}
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                           {[
-                            { label: '◆ Quantit. pronto', value: formatDate(pkg.quantitativeDoneDate), color: 'text-amber-600' },
-                            { label: '🔴 Data-limite pedido', value: formatDate(pkg.orderDeadline), color: 'text-red-600' },
-                            { label: '✓ Pedido realizado', value: formatDate(pkg.orderDate), color: 'text-blue-600' },
-                            { label: '◆ Entrega prevista', value: formatDate(pkg.expectedDeliveryDate), color: 'text-purple-600' },
+                            { label: '◆ QTO pronto', value: formatDate(pkg.quantitativeDoneDate), color: 'text-amber-600' },
+                            { label: '🔴 Pedir até', value: formatDate(deadline), color: 'text-red-600' },
+                            { label: '📅 Chegar até', value: formatDate(pkg.arriveBy), color: 'text-blue-600' },
+                            { label: '✓ Pedido', value: formatDate(pkg.orderDate), color: 'text-blue-600' },
+                            { label: '◆ Entrega prev.', value: formatDate(pkg.expectedDeliveryDate), color: 'text-purple-600' },
                             { label: '✓ Entrega real', value: formatDate(pkg.actualDeliveryDate), color: 'text-emerald-600' },
                           ].map((item, i) => (
                             <div key={i} className="bg-muted/50 rounded-lg p-2">
@@ -619,8 +740,6 @@ export default function SuppliesTab({ project }: { project: Project }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EmptyState sub-component
 // ─────────────────────────────────────────────────────────────────────────────
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
