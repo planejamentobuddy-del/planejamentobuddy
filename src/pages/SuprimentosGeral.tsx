@@ -338,7 +338,7 @@ export default function SuprimentosGeral() {
             .filter(line => !line.trim().startsWith('[Notificação'))
             .join('\n')
             .trim() || 'Nenhuma',
-          app_url: window.location.origin + '/suprimentos'
+          app_url: 'https://planejamentobuddy.vercel.app/suprimentos'
         }
       });
 
