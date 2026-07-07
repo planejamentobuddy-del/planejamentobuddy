@@ -9,13 +9,41 @@ import {
   Plus, Trash2, Edit2, Package, AlertTriangle, CheckCircle2,
   Clock, TrendingUp, ShoppingCart, Truck, X, Save,
   ChevronDown, ChevronUp, Filter, Star, LayoutGrid, List,
-  ArrowRight, Zap, PackageCheck, Factory, BarChart2, User
+  ArrowRight, Zap, PackageCheck, Factory, BarChart2, User,
+  ListTodo, Paperclip, FileText, Mail
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants & helpers
+// Constants, helpers & structured types
 // ─────────────────────────────────────────────────────────────────────────────
+
+export interface QuantitativeItem {
+  desc: string;
+  qty: string;
+  unit: string;
+}
+
+export function parseQuantitative(val?: string): QuantitativeItem[] {
+  if (!val) return [];
+  const trimmed = val.trim();
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return [{ desc: val, qty: '', unit: '' }];
+    }
+  }
+  return [{ desc: val, qty: '', unit: '' }];
+}
+
+export function serializeQuantitative(items: QuantitativeItem[]): string {
+  const valid = items.filter(i => i.desc.trim() !== '');
+  if (valid.length === 1 && !valid[0].qty && !valid[0].unit) {
+    return valid[0].desc;
+  }
+  return JSON.stringify(valid);
+}
 
 const STATUS_ORDER: SupplyStatus[] = [
   'pending_quantitative', 'pending_order', 'ordered', 'in_production', 'delivered', 'cancelled'
@@ -98,20 +126,22 @@ function DeadlineBadge({ pkg }: { pkg: SupplyPackage }) {
 
 interface FormState {
   name: string;
-  quantitative: string;       // e.g. "280 UND - SACO CIMENTO CPII POTY"
+  quantitative: string;
   isCritical: boolean;
   leadTimeDays: string;
-  arriveBy: string;           // when material must be on site
-  daysBeforeOrder: string;    // days before arriveBy to order
-  responsible: string;        // who places the order
+  arriveBy: string;
+  daysBeforeOrder: string;
+  responsible: string;
   quantitativeDoneDate: string;
-  orderDeadline: string;      // overrides computed deadline if set manually
+  orderDeadline: string;
   orderDate: string;
   expectedDeliveryDate: string;
   actualDeliveryDate: string;
   status: SupplyStatus;
   notes: string;
   taskId: string;
+  pdfUrl: string;
+  quantitativeItems: QuantitativeItem[];
 }
 
 const EMPTY_FORM: FormState = {
@@ -130,6 +160,8 @@ const EMPTY_FORM: FormState = {
   status: 'pending_quantitative',
   notes: '',
   taskId: '',
+  pdfUrl: '',
+  quantitativeItems: [{ desc: '', qty: '', unit: '' }],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -177,6 +209,7 @@ export default function SuppliesTab({ project }: { project: Project }) {
   function openNew() { setForm(EMPTY_FORM); setEditingId(null); setShowForm(true); }
 
   function openEdit(pkg: SupplyPackage) {
+    const qItems = parseQuantitative(pkg.quantitative);
     setForm({
       name: pkg.name,
       quantitative: pkg.quantitative || '',
@@ -193,6 +226,8 @@ export default function SuppliesTab({ project }: { project: Project }) {
       status: pkg.status,
       notes: pkg.notes || '',
       taskId: pkg.taskId || '',
+      pdfUrl: pkg.pdfUrl || '',
+      quantitativeItems: qItems.length > 0 ? qItems : [{ desc: '', qty: '', unit: '' }],
     });
     setEditingId(pkg.id);
     setShowForm(true);
@@ -201,14 +236,14 @@ export default function SuppliesTab({ project }: { project: Project }) {
   async function handleSave() {
     if (!form.name.trim()) { toast.error('Nome do pacote é obrigatório.'); return; }
 
-    // Compute orderDeadline from arriveBy + daysBeforeOrder if not set manually
+    const quantitativeValue = serializeQuantitative(form.quantitativeItems);
     const computedDeadline = form.orderDeadline || computeOrderDeadline(form.arriveBy || undefined, form.daysBeforeOrder ? parseInt(form.daysBeforeOrder) : undefined);
 
     const payload: Omit<SupplyPackage, 'id' | 'createdAt'> = {
       projectId: project.id,
       taskId: form.taskId || undefined,
       name: form.name.trim(),
-      quantitative: form.quantitative || undefined,
+      quantitative: quantitativeValue || undefined,
       isCritical: form.isCritical,
       leadTimeDays: parseInt(form.leadTimeDays) || 30,
       arriveBy: form.arriveBy || undefined,
@@ -221,6 +256,7 @@ export default function SuppliesTab({ project }: { project: Project }) {
       actualDeliveryDate: form.actualDeliveryDate || undefined,
       status: form.status,
       notes: form.notes || undefined,
+      pdfUrl: form.pdfUrl.trim() || undefined,
     };
 
     if (editingId) {
@@ -360,10 +396,102 @@ export default function SuppliesTab({ project }: { project: Project }) {
               </Select>
             </div>
 
-            {/* Quantitativo */}
-            <div className="lg:col-span-3">
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Quantitativo</label>
-              <Input value={form.quantitative} onChange={e => setForm(f => ({ ...f, quantitative: e.target.value }))} placeholder="Ex: 280 UND - SACO CIMENTO CPII POTY" className="rounded-lg" />
+            {/* Quantitativo - Múltiplos Itens */}
+            <div className="lg:col-span-3 border border-border bg-muted/20 rounded-xl p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <ListTodo className="w-4 h-4 text-primary" /> Múltiplos Itens de Quantitativos (Tabela)
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1 rounded-lg"
+                  onClick={() => setForm(f => ({
+                    ...f,
+                    quantitativeItems: [...f.quantitativeItems, { desc: '', qty: '', unit: '' }]
+                  }))}
+                >
+                  <Plus className="w-3.5 h-3.5" /> Adicionar Item
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                {form.quantitativeItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input
+                      value={item.desc}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setForm(f => {
+                          const copy = [...f.quantitativeItems];
+                          copy[idx].desc = val;
+                          return { ...f, quantitativeItems: copy };
+                        });
+                      }}
+                      placeholder="Ex: Cimento CP-II"
+                      className="rounded-lg text-xs flex-1"
+                    />
+                    <Input
+                      type="number"
+                      value={item.qty}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setForm(f => {
+                          const copy = [...f.quantitativeItems];
+                          copy[idx].qty = val;
+                          return { ...f, quantitativeItems: copy };
+                        });
+                      }}
+                      placeholder="Qtd (Ex: 280)"
+                      className="rounded-lg text-xs w-24"
+                    />
+                    <Input
+                      value={item.unit}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setForm(f => {
+                          const copy = [...f.quantitativeItems];
+                          copy[idx].unit = val;
+                          return { ...f, quantitativeItems: copy };
+                        });
+                      }}
+                      placeholder="Unid (Ex: sacos)"
+                      className="rounded-lg text-xs w-24"
+                    />
+                    {form.quantitativeItems.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-lg shrink-0"
+                        onClick={() => setForm(f => {
+                          const copy = f.quantitativeItems.filter((_, i) => i !== idx);
+                          return { ...f, quantitativeItems: copy };
+                        })}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* PDF/Calculation memory URL */}
+              <div className="pt-2 border-t border-border">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-1.5">
+                  <FileText className="w-4 h-4 text-red-500" /> Link do PDF / Memória de Cálculo (Opcional)
+                </label>
+                <div className="relative">
+                  <Paperclip className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={form.pdfUrl}
+                    onChange={e => setForm(f => ({ ...f, pdfUrl: e.target.value }))}
+                    placeholder="Ex: https://link-do-seu-documento.pdf"
+                    className="pl-9 rounded-lg text-xs"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Chegar até */}
@@ -519,8 +647,42 @@ export default function SuppliesTab({ project }: { project: Project }) {
                                 <span className="font-semibold text-foreground leading-tight">{pkg.name}</span>
                               </div>
                               {/* Quantitativo */}
-                              {pkg.quantitative && (
-                                <div className="text-muted-foreground bg-muted/40 rounded px-1.5 py-0.5 text-[10px] font-medium">{pkg.quantitative}</div>
+                              {pkg.quantitative && (() => {
+                                const qItems = parseQuantitative(pkg.quantitative);
+                                if (qItems.length === 1 && !qItems[0].qty && !qItems[0].unit) {
+                                  return (
+                                    <div className="text-muted-foreground bg-muted/40 rounded px-1.5 py-0.5 text-[10px] font-medium">
+                                      {qItems[0].desc}
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div className="space-y-1 bg-muted/30 border border-border/40 rounded-lg p-2 text-[10px] text-muted-foreground">
+                                    <div className="font-semibold text-foreground border-b border-border/30 pb-1 mb-1 flex items-center gap-1">
+                                      <ListTodo className="w-3.5 h-3.5 text-primary" /> Detalhamento:
+                                    </div>
+                                    {qItems.map((item, idx) => (
+                                      <div key={idx} className="flex justify-between gap-2">
+                                        <span className="truncate">• {item.desc}</span>
+                                        <span className="font-semibold text-foreground shrink-0">{item.qty} {item.unit}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Link do PDF */}
+                              {pkg.pdfUrl && (
+                                <div className="pt-1">
+                                  <a
+                                    href={pkg.pdfUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[10px] text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/15 rounded-lg px-2 py-1 font-semibold transition-colors"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" /> PDF do Quantitativo
+                                  </a>
+                                </div>
                               )}
                               {/* Lead time */}
                               <div className="flex items-center justify-between flex-wrap gap-1">
@@ -591,14 +753,30 @@ export default function SuppliesTab({ project }: { project: Project }) {
                   const late = isOrderLate(pkg);
                   const urg  = isUrgent(pkg);
                   const deadline = getEffectiveDeadline(pkg);
+                  const qItems = parseQuantitative(pkg.quantitative);
                   return (
                     <div key={pkg.id} className={`px-4 py-3 ${late ? 'bg-red-500/5' : urg ? 'bg-orange-500/5' : ''}`}>
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <div className={`w-2 h-2 rounded-full shrink-0 ${DOT_COLORS[pkg.status]}`} />
                         {pkg.isCritical && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />}
-                        <span className="text-sm font-semibold text-foreground flex-1">{pkg.name}</span>
-                        {pkg.quantitative && <span className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-0.5">{pkg.quantitative}</span>}
-                        {pkg.responsible && <span className="text-xs text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" />{pkg.responsible}</span>}
+                        <span className="text-sm font-semibold text-foreground">{pkg.name}</span>
+                        {pkg.quantitative && (() => {
+                          if (qItems.length === 1 && !qItems[0].qty && !qItems[0].unit) {
+                            return <span className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-0.5">{qItems[0].desc}</span>;
+                          }
+                          return <span className="text-xs text-primary bg-primary/5 border border-primary/20 rounded px-2 py-0.5 font-medium flex items-center gap-1"><ListTodo className="w-3 h-3" /> {qItems.length} itens</span>;
+                        })()}
+                        {pkg.pdfUrl && (
+                          <a
+                            href={pkg.pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/15 rounded-lg px-2 py-0.5 font-semibold text-[10px] flex items-center gap-1 transition-colors"
+                          >
+                            <FileText className="w-3 h-3" /> PDF
+                          </a>
+                        )}
+                        {pkg.responsible && <span className="text-xs text-muted-foreground flex items-center gap-1 ml-auto"><User className="w-3 h-3" />{pkg.responsible}</span>}
                         <DeadlineBadge pkg={pkg} />
                         <button onClick={() => openEdit(pkg)} className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
                       </div>
@@ -672,7 +850,23 @@ export default function SuppliesTab({ project }: { project: Project }) {
                           <Badge className={`text-[10px] px-2 py-0 h-5 ${SUPPLY_STATUS_COLORS[pkg.status]}`}>{SUPPLY_STATUS_LABELS[pkg.status]}</Badge>
                         </div>
                         <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                          {pkg.quantitative && <span className="text-xs text-muted-foreground bg-muted/40 rounded px-1.5 py-0.5">{pkg.quantitative}</span>}
+                          {pkg.quantitative && (() => {
+                            const qItems = parseQuantitative(pkg.quantitative);
+                            if (qItems.length === 1 && !qItems[0].qty && !qItems[0].unit) {
+                              return <span className="text-xs text-muted-foreground bg-muted/40 rounded px-1.5 py-0.5">{qItems[0].desc}</span>;
+                            }
+                            return <span className="text-xs text-primary bg-primary/5 border border-primary/20 rounded px-1.5 py-0.5 font-medium flex items-center gap-1"><ListTodo className="w-3.5 h-3.5" /> {qItems.length} itens de quantitativo</span>;
+                          })()}
+                          {pkg.pdfUrl && (
+                            <a
+                              href={pkg.pdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/15 rounded-lg px-2 py-0.5 font-semibold text-[11px] flex items-center gap-1 transition-colors"
+                            >
+                              <FileText className="w-3.5 h-3.5" /> PDF do Quantitativo
+                            </a>
+                          )}
                           {pkg.responsible && <span className="text-xs text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" />{pkg.responsible}</span>}
                           <span className="text-xs text-muted-foreground">Lead: {pkg.leadTimeDays}d</span>
                         </div>
@@ -720,6 +914,26 @@ export default function SuppliesTab({ project }: { project: Project }) {
                             </div>
                           ))}
                         </div>
+                        {(() => {
+                          const qItems = parseQuantitative(pkg.quantitative);
+                          if (qItems.length > 1 || (qItems.length === 1 && (qItems[0].qty || qItems[0].unit))) {
+                            return (
+                              <div className="bg-muted/30 border rounded-lg p-3 space-y-2 text-xs">
+                                <span className="font-semibold text-foreground flex items-center gap-1.5"><ListTodo className="w-3.5 h-3.5 text-primary" /> Tabela Detalhada de Quantitativos:</span>
+                                <div className="divide-y divide-border/60">
+                                  {qItems.map((item, idx) => (
+                                    <div key={idx} className="flex justify-between py-1.5 text-muted-foreground">
+                                      <span>{item.desc}</span>
+                                      <span className="font-semibold text-foreground">{item.qty} {item.unit}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+
                         {pkg.notes && <div className="bg-muted/50 rounded-lg p-2.5 text-xs text-muted-foreground"><span className="font-medium text-foreground">Obs.: </span>{pkg.notes}</div>}
                         {pkg.taskId && (
                           <div className="text-xs text-muted-foreground flex items-center gap-1">

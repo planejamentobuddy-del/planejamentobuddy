@@ -579,6 +579,7 @@ export interface SupplyPackage {
   status: SupplyStatus;
   notes?: string;
   createdAt: string;
+  pdfUrl?: string;             // Link to PDF or calculation memory
 }
 
 // ============================================================

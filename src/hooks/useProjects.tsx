@@ -238,6 +238,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           status: s.status as any,
           notes: s.notes || undefined,
           createdAt: s.created_at,
+          pdfUrl: s.pdf_url || undefined,
         })));
       }
 
@@ -1279,6 +1280,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         status: pkg.status,
         notes: pkg.notes || null,
         created_by: user?.id || null,
+        pdf_url: pkg.pdfUrl || null,
       }])
       .select()
       .single();
@@ -1310,6 +1312,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       status: data.status as any,
       notes: data.notes || undefined,
       createdAt: data.created_at,
+      pdfUrl: data.pdf_url || undefined,
     };
     setSupplyPackages(prev => [...prev, newPkg]);
     toast.success('Pacote de suprimento adicionado!');
@@ -1341,6 +1344,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         actual_delivery_date: pkg.actualDeliveryDate || null,
         status: pkg.status,
         notes: pkg.notes || null,
+        pdf_url: pkg.pdfUrl || null,
       })
       .eq('id', pkg.id);
 
