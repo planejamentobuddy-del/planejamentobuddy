@@ -309,7 +309,13 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
   // 1. Setup Network (Consider only leaf tasks for CPM math)
   const parentIds = new Set(allTasks.filter(t => t.parentId).map(t => t.parentId!));
   const leaves = allTasks.filter(t => !parentIds.has(t.id));
-  if (leaves.length === 0) return new Set();
+  
+  console.log("[CPM Debug] Iniciando CPM com", allTasks.length, "tarefas | Folhas (leaves):", leaves.length);
+
+  if (leaves.length === 0) {
+    console.warn("[CPM Debug] Sem tarefas folha.");
+    return new Set();
+  }
 
   const toDay = (s: string) => Math.round(safeParseDate(s) / 86400000);
   
@@ -360,7 +366,13 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
   }
 
   if (sorted.length < n) {
-    console.error("[CPM] Ciclo detectado nas dependências!");
+    console.error("[CPM Debug] Ciclo detectado nas dependências!");
+    console.warn(`[CPM Debug] Total de folhas: ${n} | Processadas sem ciclo: ${sorted.length}`);
+    inDegree.forEach((deg, idx) => {
+      if (deg > 0) {
+        console.warn(`[CPM Debug] Tarefa cíclica ou travada: "${leaves[idx].name}" (ID: ${leaves[idx].id}) | Predecessores:`, leaves[idx].predecessors);
+      }
+    });
     return new Set();
   }
 
@@ -424,6 +436,7 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
     }
   }
 
+  console.log("[CPM Debug] CPM rodou com sucesso! Encontradas", critical.size, "tarefas críticas.");
   return critical;
 }
 
