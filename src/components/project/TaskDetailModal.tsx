@@ -99,11 +99,25 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
 
   // Supply state inside modal
   const [supplyName, setSupplyName] = useState('');
-  const [supplySupplier, setSupplySupplier] = useState('');
-  const [supplyVal, setSupplyVal] = useState('0');
+  const [supplyResponsible, setSupplyResponsible] = useState('');
   const [supplyLead, setSupplyLead] = useState('30');
   const [supplyDeadline, setSupplyDeadline] = useState('');
   const [supplyStatus, setSupplyStatus] = useState<'pending_quantitative' | 'pending_order' | 'ordered' | 'in_production' | 'delivered' | 'cancelled'>('pending_quantitative');
+
+  // Efeito para auto-calcular o Prazo de Pedido Limite com base no início da tarefa e no Lead Time
+  useEffect(() => {
+    if (localTask?.startDate && supplyLead) {
+      const leadDays = parseInt(supplyLead) || 0;
+      const [year, month, day] = localTask.startDate.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      date.setDate(date.getDate() - leadDays);
+      
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      setSupplyDeadline(`${y}-${m}-${d}`);
+    }
+  }, [localTask?.startDate, supplyLead]);
 
   const handleAddWorkforce = async () => {
     if (!wfMonth) {
@@ -136,16 +150,14 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
       projectId: localTask.projectId,
       taskId: localTask.id,
       name: supplyName.trim(),
-      supplier: supplySupplier.trim() || undefined,
-      estimatedValue: parseFloat(supplyVal) || undefined,
       leadTimeDays: parseInt(supplyLead) || 30,
       orderDeadline: supplyDeadline || undefined,
+      responsible: supplyResponsible || undefined,
       isCritical: false,
       status: supplyStatus
     });
     setSupplyName('');
-    setSupplySupplier('');
-    setSupplyVal('0');
+    setSupplyResponsible('');
     setSupplyLead('30');
     setSupplyDeadline('');
     setSupplyStatus('pending_quantitative');
@@ -822,22 +834,27 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
                     <Input value={supplyName} onChange={e => setSupplyName(e.target.value)} placeholder="Ex: Piso de Deck de Madeira" className="h-9 rounded-lg" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Fornecedor / Fabricante</label>
-                    <Input value={supplySupplier} onChange={e => setSupplySupplier(e.target.value)} placeholder="Ex: MADO Esquadrias" className="h-9 rounded-lg" />
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Lead Time (dias de produção)</label>
+                    <Input type="number" min="0" value={supplyLead} onChange={e => setSupplyLead(e.target.value)} className="h-9 rounded-lg" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Prazo de Pedido Limite</label>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Prazo de Pedido Limite (Auto-calculado)</label>
                     <Input type="date" value={supplyDeadline} onChange={e => setSupplyDeadline(e.target.value)} className="h-9 rounded-lg" />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Valor Estimado (R$)</label>
-                    <Input type="number" min="0" value={supplyVal} onChange={e => setSupplyVal(e.target.value)} className="h-9 rounded-lg" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Lead Time (dias de produção)</label>
-                    <Input type="number" min="0" value={supplyLead} onChange={e => setSupplyLead(e.target.value)} className="h-9 rounded-lg" />
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Responsável</label>
+                    <select
+                      value={supplyResponsible}
+                      onChange={e => setSupplyResponsible(e.target.value)}
+                      className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione o Responsável...</option>
+                      {usersList.map(u => (
+                        <option key={u.id} value={u.full_name}>{u.full_name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">Status de Compra</label>
@@ -868,8 +885,7 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
                   <thead>
                     <tr className="bg-muted/50 border-b border-border/70 text-muted-foreground font-bold">
                       <th className="px-4 py-3">Insumo / Pacote</th>
-                      <th className="px-4 py-3">Fornecedor</th>
-                      <th className="px-4 py-3 text-right">Valor Est.</th>
+                      <th className="px-4 py-3">Responsável</th>
                       <th className="px-4 py-3">Prazo Pedido</th>
                       <th className="px-4 py-3 text-center">Status</th>
                       <th className="px-4 py-3 text-center">Ações</th>
@@ -879,10 +895,7 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
                     {taskSupplies.map(pack => (
                       <tr key={pack.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-2.5 font-semibold">{pack.name}</td>
-                        <td className="px-4 py-2.5">{pack.supplier || '—'}</td>
-                        <td className="px-4 py-2.5 text-right font-medium">
-                          {pack.estimatedValue ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(pack.estimatedValue) : '—'}
-                        </td>
+                        <td className="px-4 py-2.5">{pack.responsible || '—'}</td>
                         <td className="px-4 py-2.5">
                           {pack.orderDeadline ? new Date(pack.orderDeadline + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
                         </td>
@@ -912,7 +925,7 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
                     ))}
                     {taskSupplies.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-muted-foreground bg-muted/5 italic">
+                        <td colSpan={5} className="py-8 text-center text-muted-foreground bg-muted/5 italic">
                           Nenhum suprimento vinculado a esta atividade.
                         </td>
                       </tr>

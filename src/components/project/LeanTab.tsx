@@ -9,7 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ChevronLeft, ChevronRight, Calendar, Eye, BarChart3, 
   AlertTriangle, CheckCircle2, Plus, Trash2, Filter,
-  Lock, Unlock, Clock, AlertCircle, MessageSquare
+  Lock, Unlock, Clock, AlertCircle, MessageSquare,
+  ChevronDown, ChevronUp, Pencil, ListTodo, Printer,
+  EyeOff, HelpCircle
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { toast } from 'sonner';
@@ -113,11 +115,96 @@ export default function LeanTab({ project }: { project: Project }) {
     dueDate: ''
   });
 
+  // ── SUBTAREFAS & PROGRAMAÇÃO DIÁRIA SEMANAL ESTADOS ──
+  const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
+  const [showAddSubtaskTaskId, setShowAddSubtaskTaskId] = useState<string | null>(null);
+  const [newSubtaskName, setNewSubtaskName] = useState('');
+  const [ignoredDiscrepancyTaskIds, setIgnoredDiscrepancyTaskIds] = useState<string[]>([]);
+
   const weekRange = getWeekRange(currentWeekStr);
   const weekPlans = plans.filter(p => p.week === currentWeekStr);
-  const weekCompleted = weekPlans.filter(p => p.status === 'completed' || p.status === 'in_progress').length;
-  const ppc = weekPlans.length > 0 ? Math.round((weekCompleted / weekPlans.length) * 100) : null;
+  
+  // PPC no Lean = planos concluídos (progresso atual >= progresso esperado ou progresso atual >= 100) / planos planejados
+  const completedPlansCount = weekPlans.filter(p => (p.currentProgress !== undefined ? p.currentProgress : 0) >= (p.expectedProgress !== undefined ? p.expectedProgress : 100)).length;
+  const weekCompleted = completedPlansCount;
+  const ppc = weekPlans.length > 0 ? Math.round((completedPlansCount / weekPlans.length) * 100) : null;
   const ppcColor = ppc === null ? 'text-muted-foreground' : ppc >= 80 ? 'text-status-ok' : ppc >= 60 ? 'text-status-warning' : 'text-status-danger';
+
+  // Médias de previsto e executado
+  const previstoMedia = useMemo(() => {
+    if (weekPlans.length === 0) return 0;
+    const sum = weekPlans.reduce((acc, p) => acc + (p.expectedProgress !== undefined ? p.expectedProgress : 100), 0);
+    return Number((sum / weekPlans.length).toFixed(2));
+  }, [weekPlans]);
+
+  const executadoMedia = useMemo(() => {
+    if (weekPlans.length === 0) return 0;
+    const sum = weekPlans.reduce((acc, p) => acc + (p.currentProgress !== undefined ? p.currentProgress : 0), 0);
+    return Number((sum / weekPlans.length).toFixed(2));
+  }, [weekPlans]);
+
+  // ── HELPERS PARA SUBTAREFAS DO PLANO SEMANAL ──
+  const getSubtasks = (plan: WeeklyPlan): { name: string; completed: boolean }[] => {
+    if (!plan.subtasks) return [];
+    try {
+      const parsed = JSON.parse(plan.subtasks);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const updateSubtaskStatus = async (plan: WeeklyPlan, subtaskIdx: number, completed: boolean) => {
+    const subtasks = getSubtasks(plan);
+    if (subtasks[subtaskIdx]) {
+      subtasks[subtaskIdx].completed = completed;
+      
+      // Auto-calcular progresso com base nas subtarefas concluídas
+      const completedCount = subtasks.filter(s => s.completed).length;
+      const progressPct = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
+      
+      await updateWeeklyPlan({
+        ...plan,
+        subtasks: JSON.stringify(subtasks),
+        currentProgress: progressPct // Sincroniza automaticamente o progresso real
+      });
+    }
+  };
+
+  const handleAddSubtask = async (plan: WeeklyPlan) => {
+    if (!newSubtaskName.trim()) return;
+    const subtasks = getSubtasks(plan);
+    subtasks.push({ name: newSubtaskName.trim(), completed: false });
+    
+    // Auto-calcular progresso com base nas subtarefas
+    const completedCount = subtasks.filter(s => s.completed).length;
+    const progressPct = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
+    
+    await updateWeeklyPlan({
+      ...plan,
+      subtasks: JSON.stringify(subtasks),
+      currentProgress: progressPct
+    });
+    setNewSubtaskName('');
+    setShowAddSubtaskTaskId(null);
+    toast.success('Subtarefa adicionada!');
+  };
+
+  const handleDeleteSubtask = async (plan: WeeklyPlan, subtaskIdx: number) => {
+    const subtasks = getSubtasks(plan);
+    const updated = subtasks.filter((_, i) => i !== subtaskIdx);
+    
+    // Auto-calcular progresso após deletar
+    const completedCount = updated.filter(s => s.completed).length;
+    const progressPct = updated.length > 0 ? Math.round((completedCount / updated.length) * 100) : 0;
+    
+    await updateWeeklyPlan({
+      ...plan,
+      subtasks: JSON.stringify(updated),
+      currentProgress: progressPct
+    });
+    toast.success('Subtarefa removida!');
+  };
 
   const isTaskInWeek = (task: Task) => {
     if (!task.startDate || !task.endDate) return false;
@@ -284,10 +371,36 @@ export default function LeanTab({ project }: { project: Project }) {
 
         {/* Semanal Tab Contents */}
         <TabsContent value="semanal" className="mt-6 space-y-6">
+          {/* Métricas e Estatísticas Semanal */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 border border-border rounded-2xl p-4 shadow-inner">
+            <div className="flex flex-col justify-center p-3 bg-card border rounded-xl shadow-sm text-center">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">PPC Semanal</span>
+              <span className={`text-3xl font-black mt-1 ${ppcColor}`}>{ppc !== null ? `${ppc}%` : '0%'}</span>
+              <span className="text-[10px] text-muted-foreground mt-1">Percentual de Planos Concluídos</span>
+            </div>
+            <div className="flex flex-col justify-center p-3 bg-card border rounded-xl shadow-sm text-center">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Previsto Médio</span>
+              <span className="text-3xl font-black text-blue-600 mt-1">{previstoMedia}%</span>
+              <span className="text-[10px] text-muted-foreground mt-1">Progresso médio planejado</span>
+            </div>
+            <div className="flex flex-col justify-center p-3 bg-card border rounded-xl shadow-sm text-center">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Executado Médio</span>
+              <span className="text-3xl font-black text-amber-600 mt-1">{executadoMedia}%</span>
+              <span className="text-[10px] text-muted-foreground mt-1">Progresso médio executado</span>
+            </div>
+            <div className="flex flex-col justify-center p-3 bg-card border rounded-xl shadow-sm text-center">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Concluídas</span>
+              <span className="text-3xl font-black text-emerald-600 mt-1">
+                {completedPlansCount} de {weekPlans.length}
+              </span>
+              <span className="text-[10px] text-muted-foreground mt-1">Atividades 100% finalizadas</span>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <div className="bg-primary/10 p-2 rounded-lg">
-                <Plus className="w-5 h-5 text-primary" />
+                <Calendar className="w-5 h-5 text-primary" />
               </div>
               <div>
                 <h3 className="text-base font-bold text-foreground leading-tight">Plano de Trabalho Semanal</h3>
@@ -333,6 +446,10 @@ export default function LeanTab({ project }: { project: Project }) {
                   status: 'planned',
                   reason: '',
                   observations: '',
+                  scheduledDays: '[]',
+                  subtasks: '[]',
+                  expectedProgress: 100,
+                  currentProgress: 0,
                 })}
                 className="rounded-xl h-10 border-dashed"
               >
@@ -346,190 +463,330 @@ export default function LeanTab({ project }: { project: Project }) {
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {weekPlans.length > 0 ? (
-              <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-muted/30 border-b border-border/50">
-                      <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
-                        <div className="py-4 px-4 min-w-[200px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Atividade</span>
-                        </div>
-                      </th>
-                      <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
-                        <div className="py-4 px-4 min-w-[120px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Responsável</span>
-                        </div>
-                      </th>
-                      <th className="p-0 text-center border-r border-border/50 last:border-0 relative group">
-                        <div className="py-4 px-4 min-w-[180px] overflow-hidden flex justify-center" style={{ resize: 'horizontal' }}>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground shrink-0">Status</span>
-                        </div>
-                      </th>
-                      <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
-                        <div className="py-4 px-4 min-w-[140px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Restrições</span>
-                        </div>
-                      </th>
-                      <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
-                        <div className="py-4 px-4 min-w-[250px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Situação Atual</span>
-                        </div>
-                      </th>
-                      <th className="p-0 text-left border-r border-border/50 last:border-0 relative group">
-                        <div className="py-4 px-4 min-w-[200px] overflow-hidden flex items-center" style={{ resize: 'horizontal' }}>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Observações</span>
-                        </div>
-                      </th>
-                      <th className="py-4 px-4 text-right w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {weekPlans.map(plan => {
-                      const linkedTask = tasks.find(t => t.id === plan.taskId);
-                      const stOpt = statusOptions.find(s => s.value === plan.status) || statusOptions[0];
-                      const taskConstraints = constraints.filter(c => c.taskId === plan.taskId && c.status === 'open');
-                      // Supply package alerts for this task
-                      const taskSupplies = plan.taskId ? supplyPackages.filter(sp => sp.projectId === project.id && sp.taskId === plan.taskId) : [];
-                      const pendingSupplies = taskSupplies.filter(sp => {
-                        if (sp.status === 'delivered' || sp.status === 'cancelled') return false;
-                        const d = sp.orderDeadline ? Math.round((new Date(sp.orderDeadline + 'T12:00:00').getTime() - Date.now()) / 86400000) : null;
-                        return d === null || d <= 30;
-                      });
-                      
-                      return (
-                        <tr key={plan.id} className="group hover:bg-muted/10 transition-colors">
-                          <td className="py-4 px-6">
-                            <div className="flex flex-col">
-                              {plan.taskId ? (
-                                <span className="text-sm font-bold text-foreground">{plan.taskName}</span>
-                              ) : (
-                                <Input 
-                                  className="h-7 text-sm p-0 border-0 bg-transparent font-bold focus-visible:ring-1 focus-visible:ring-primary/20 rounded px-1"
-                                  value={plan.taskName}
-                                  onChange={e => updateWeeklyPlan({ ...plan, taskName: e.target.value })}
-                                />
-                              )}
-                              <div className="flex items-center gap-2 mt-1">
-                                {plan.taskId && <Clock className="w-3 h-3 text-muted-foreground" />}
-                                <span className="text-[10px] font-medium text-muted-foreground uppercase tabular-nums">
-                                  {linkedTask ? `${formatDate(linkedTask.startDate)} → ${formatDate(linkedTask.endDate)}` : 'Atividade Avulsa'}
-                                </span>
-                              </div>
-                            </div>
-                          </td>
+            {weekPlans.length > 0 ? (() => {
+              // 7 dias da semana de Domingo a Sábado
+              const baseDate = new Date(weekRange.start);
+              baseDate.setDate(baseDate.getDate() - 1); // Volta 1 dia de segunda para domingo
+              
+              const weekdays = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+              const daysOfWeek = Array.from({ length: 7 }).map((_, idx) => {
+                const d = new Date(baseDate);
+                d.setDate(baseDate.getDate() + idx);
+                const dayLabel = weekdays[idx];
+                const dateLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                return {
+                  index: idx,
+                  dateStr: d.toISOString().split('T')[0],
+                  label: `${dayLabel}, ${dateLabel}`
+                };
+              });
 
-                          <td className="py-4 px-6 text-sm text-muted-foreground font-medium">
-                            <Input 
-                              list="users-list-lean"
-                              className={`h-7 text-sm p-0 border-0 bg-transparent rounded px-1 ${plan.taskId ? 'opacity-70 cursor-not-allowed font-bold text-primary' : 'focus-visible:ring-1 focus-visible:ring-primary/20'}`}
-                              value={plan.responsible || ''}
-                              onChange={e => !plan.taskId && updateWeeklyPlan({ ...plan, responsible: e.target.value })}
-                              placeholder="Responsável..."
-                              disabled={!!plan.taskId}
-                              title={plan.taskId ? "Responsável definido no planejamento mestre" : ""}
-                            />
-                          </td>
-
-                          <td className="py-4 px-6">
-                            <div className="space-y-1.5">
-                              <Select 
-                                value={plan.status} 
-                                onValueChange={v => updateWeeklyPlan({ 
-                                  ...plan, 
-                                  status: v as any, 
-                                  reason: v === 'not_completed' ? plan.reason || 'Outros' : '' 
-                                })}
-                              >
-                                <SelectTrigger className="h-8 w-full min-w-[150px] rounded-lg border-0 bg-transparent hover:bg-muted font-bold text-xs mx-auto">
-                                  <span className={`flex items-center justify-center px-3 py-1 rounded-full w-full ${stOpt.color}`}>
-                                    {stOpt.label}
-                                  </span>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {statusOptions.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
-
-                              {plan.status === 'not_completed' && (
-                                <Select 
-                                  value={plan.reason || 'Outros'} 
-                                  onValueChange={r => updateWeeklyPlan({ ...plan, reason: r })}
-                                >
-                                  <SelectTrigger className="h-7 w-full min-w-[150px] rounded-lg border border-destructive/20 bg-destructive/5 text-destructive font-semibold text-[10px] mx-auto focus:ring-1 focus:ring-destructive/30">
-                                    <SelectValue placeholder="Motivo (CNC)..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {DELAY_REASONS.map(reason => (
-                                      <SelectItem key={reason} value={reason} className="text-xs">
-                                        {reason}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
-                            </div>
-                          </td>
-
-                          <td className="py-4 px-6">
-                            <div className="flex flex-col gap-1">
-                              {taskConstraints.length > 0 ? (
-                                <button 
-                                  onClick={() => handleTabChange('restricoes')}
-                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-status-danger/10 text-status-danger hover:bg-status-danger/20 transition-colors"
-                                >
-                                  <AlertTriangle className="w-3 h-3" />
-                                  <span className="text-[10px] font-bold">{taskConstraints.length} Pendentes</span>
-                                </button>
-                              ) : (
-                                <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600">
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  <span className="text-[10px] font-bold">Liberada</span>
-                                </div>
-                              )}
-                              {pendingSupplies.length > 0 && (
-                                <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700" title={pendingSupplies.map(s => s.name).join(', ')}>
-                                  <span className="text-[10px]">📦</span>
-                                  <span className="text-[10px] font-bold">{pendingSupplies.length} Suprimento{pendingSupplies.length > 1 ? 's' : ''}</span>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-
-                          <td className="py-2 px-4 min-w-[300px] border-r border-border/50">
-                            <StatusCommentLog 
-                              compact 
-                              comments={plan.statusComments || []} 
-                              onAddComment={(newComments) => updateWeeklyPlan({ ...plan, statusComments: newComments })}
-                            />
-                          </td>
-
-                          <td className="py-4 px-6">
-                            <Input
-                              className="h-8 text-xs bg-transparent border-0 border-b border-transparent focus-visible:border-primary shadow-none rounded-none p-0 italic text-muted-foreground placeholder:text-muted-foreground/30"
-                              defaultValue={plan.observations || ''}
-                              onBlur={e => {
-                                const val = e.target.value;
-                                if (val !== (plan.observations || '')) {
-                                  updateWeeklyPlan({ ...plan, observations: val });
-                                }
-                              }}
-                              placeholder="Observações..."
-                            />
-                          </td>
-
-                          <td className="py-4 px-6 text-right">
-                            <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteWeeklyPlan(plan.id)}>
-                              <Trash2 className="w-4 h-4 text-destructive/60 hover:text-destructive" />
-                            </Button>
-                          </td>
+              return (
+                <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-left text-xs">
+                      <thead>
+                        <tr className="bg-muted/40 border-b border-border/50 text-muted-foreground select-none">
+                          <th className="py-3 px-3 w-8 text-center"><input type="checkbox" className="rounded border-gray-300" disabled /></th>
+                          <th className="py-3 px-3 w-28">Status</th>
+                          <th className="py-3 px-3 w-10 text-center">#</th>
+                          <th className="py-3 px-4 min-w-[220px]">Nome</th>
+                          <th className="py-3 px-3 w-20">Início</th>
+                          <th className="py-3 px-3 w-20">Término</th>
+                          <th className="py-3 px-3 w-16 text-center">Esperado</th>
+                          <th className="py-3 px-3 w-20 text-center">Progresso</th>
+                          <th className="py-3 px-3 w-28">Responsável</th>
+                          
+                          {/* Dias de Domingo a Sábado */}
+                          {daysOfWeek.map(day => (
+                            <th key={day.index} className="py-3 px-1 w-14 text-center border-l border-border/40 font-semibold text-[10px]">
+                              <div>{day.label.split(',')[0]}</div>
+                              <div className="opacity-60 font-mono">{day.label.split(',')[1]}</div>
+                            </th>
+                          ))}
+                          
+                          <th className="py-3 px-3 w-10 text-right"></th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
+                      </thead>
+                      <tbody className="divide-y divide-border/40">
+                        {weekPlans.map((plan, idx) => {
+                          const linkedTask = tasks.find(t => t.id === plan.taskId);
+                          const taskConstraints = constraints.filter(c => c.taskId === plan.taskId && c.status === 'open');
+                          const taskSupplies = plan.taskId ? supplyPackages.filter(sp => sp.projectId === project.id && sp.taskId === plan.taskId) : [];
+                          const pendingSupplies = taskSupplies.filter(sp => sp.status !== 'delivered' && sp.status !== 'cancelled');
+
+                          const expProg = plan.expectedProgress !== undefined ? plan.expectedProgress : 100;
+                          const curProg = plan.currentProgress !== undefined ? plan.currentProgress : 0;
+                          
+                          // Lógica de cálculo de Status inteligente
+                          let statusLabel = 'Planejado';
+                          let statusColor = 'bg-slate-100 text-slate-700 dark:bg-slate-900/60 dark:text-slate-400';
+                          
+                          if (curProg >= expProg) {
+                            statusLabel = 'Concluído';
+                            statusColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400';
+                          } else {
+                            // Se a data de término do plano (ou da tarefa vinculada) já passou de hoje e não está concluída, está atrasada
+                            const today = new Date().toISOString().split('T')[0];
+                            const deadline = linkedTask?.endDate || today;
+                            if (deadline < today) {
+                              statusLabel = 'Atrasada';
+                              statusColor = 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400';
+                            } else {
+                              statusLabel = 'Atual';
+                              statusColor = 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400';
+                            }
+                          }
+
+                          // Ler dias marcados e subtarefas
+                          const getScheduledDays = (): number[] => {
+                            if (!plan.scheduledDays) return [];
+                            try { const val = JSON.parse(plan.scheduledDays); return Array.isArray(val) ? val : []; } catch { return []; }
+                          };
+                          const scheduledDays = getScheduledDays();
+
+                          const getSubtasksList = (): { name: string; completed: boolean }[] => {
+                            if (!plan.subtasks) return [];
+                            try { const val = JSON.parse(plan.subtasks); return Array.isArray(val) ? val : []; } catch { return []; }
+                          };
+                          const subtasks = getSubtasksList();
+                          const completedSubtasksCount = subtasks.filter(s => s.completed).length;
+                          const subtaskProgressPct = subtasks.length > 0 ? Math.round((completedSubtasksCount / subtasks.length) * 100) : 0;
+                          
+                          // Alerta de desvio de progresso vs subtarefas
+                          const hasDiscrepancy = subtasks.length > 0 && curProg !== subtaskProgressPct && !ignoredDiscrepancyTaskIds.includes(plan.id);
+
+                          const isExpanded = expandedTaskIds.includes(plan.id);
+
+                          return (
+                            <React.Fragment key={plan.id}>
+                              <tr className="group hover:bg-muted/10 transition-colors">
+                                <td className="py-3 px-3 text-center"><input type="checkbox" className="rounded border-gray-300" disabled /></td>
+                                <td className="py-3 px-3">
+                                  <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider w-full text-center ${statusColor}`}>
+                                    {statusLabel}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-center text-muted-foreground font-mono">{idx + 1}</td>
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-2">
+                                    {subtasks.length > 0 && (
+                                      <button 
+                                        type="button"
+                                        onClick={() => setExpandedTaskIds(prev => prev.includes(plan.id) ? prev.filter(id => id !== plan.id) : [...prev, plan.id])}
+                                        className="p-0.5 hover:bg-muted rounded"
+                                      >
+                                        {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                                      </button>
+                                    )}
+                                    <div className="flex flex-col">
+                                      <span className="font-bold text-foreground text-sm flex items-center gap-1.5">
+                                        {plan.taskName}
+                                        {plan.taskId && <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" title="Tarefa vinculada ao planejamento" />}
+                                      </span>
+                                      {/* Restrições / Suprimentos badges */}
+                                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                        {taskConstraints.length > 0 && (
+                                          <span className="inline-flex items-center gap-0.5 text-[9px] text-red-600 bg-red-500/5 px-1.5 rounded">
+                                            <AlertTriangle className="w-2.5 h-2.5" /> {taskConstraints.length} restrições
+                                          </span>
+                                        )}
+                                        {pendingSupplies.length > 0 && (
+                                          <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-600 bg-amber-500/5 px-1.5 rounded">
+                                            📦 {pendingSupplies.length} compras pendentes
+                                          </span>
+                                        )}
+                                        {subtasks.length > 0 && (
+                                          <span className="text-[9px] text-muted-foreground bg-muted/40 px-1 rounded font-medium">
+                                            {completedSubtasksCount}/{subtasks.length} subtarefas ({subtaskProgressPct}%)
+                                          </span>
+                                        )}
+                                        <button 
+                                          type="button"
+                                          onClick={() => setShowAddSubtaskTaskId(plan.id)}
+                                          className="text-[9px] text-primary hover:underline ml-1 font-semibold"
+                                        >
+                                          + Add Subtarefa
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 text-muted-foreground font-mono">
+                                  {linkedTask ? formatDate(linkedTask.startDate) : '—'}
+                                </td>
+                                <td className="py-3 px-3 text-muted-foreground font-mono">
+                                  {linkedTask ? formatDate(linkedTask.endDate) : '—'}
+                                </td>
+                                <td className="py-3 px-3 text-center">
+                                  <input 
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={expProg}
+                                    onChange={e => {
+                                      const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                      updateWeeklyPlan({ ...plan, expectedProgress: val });
+                                    }}
+                                    className="w-12 h-6 text-center border bg-transparent rounded text-xs font-semibold focus:ring-1 focus:ring-primary"
+                                  />
+                                </td>
+                                <td className="py-3 px-3 text-center relative">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <input 
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      value={curProg}
+                                      onChange={e => {
+                                        const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                        updateWeeklyPlan({ ...plan, currentProgress: val });
+                                      }}
+                                      className="w-12 h-6 text-center border bg-transparent rounded text-xs font-semibold focus:ring-1 focus:ring-primary"
+                                    />
+                                    <Pencil className="w-2.5 h-2.5 text-muted-foreground/40" />
+                                  </div>
+
+                                  {/* Alerta de discrepância popup */}
+                                  {hasDiscrepancy && (
+                                    <div className="absolute z-30 bottom-8 left-1/2 -translate-x-1/2 w-64 bg-card border shadow-lg rounded-xl p-3 text-left space-y-2 text-xs">
+                                      <p className="font-medium text-foreground leading-normal">
+                                        ⚠️ O progresso da tarefa ({curProg}%) está diferente da conclusão das subtarefas ({completedSubtasksCount}/{subtasks.length} = {subtaskProgressPct}%).
+                                      </p>
+                                      <div className="flex justify-end gap-1.5 pt-1">
+                                        <Button 
+                                          type="button" 
+                                          variant="outline" 
+                                          size="sm" 
+                                          className="text-[10px] h-6 px-2"
+                                          onClick={() => setIgnoredDiscrepancyTaskIds(prev => [...prev, plan.id])}
+                                        >
+                                          Ignorar
+                                        </Button>
+                                        <Button 
+                                          type="button" 
+                                          size="sm" 
+                                          className="text-[10px] h-6 px-2"
+                                          onClick={() => {
+                                            updateWeeklyPlan({ ...plan, currentProgress: subtaskProgressPct });
+                                          }}
+                                        >
+                                          Usar subtarefas
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-muted-foreground font-medium truncate max-w-[120px]">
+                                  {plan.responsible || 'Sem resp.'}
+                                </td>
+
+                                {/* Células de Domingo a Sábado */}
+                                {daysOfWeek.map(day => {
+                                  const isScheduled = scheduledDays.includes(day.index);
+                                  return (
+                                    <td 
+                                      key={day.index} 
+                                      onClick={() => {
+                                        let updatedDays;
+                                        if (isScheduled) {
+                                          updatedDays = scheduledDays.filter(i => i !== day.index);
+                                        } else {
+                                          updatedDays = [...scheduledDays, day.index].sort();
+                                        }
+                                        updateWeeklyPlan({ ...plan, scheduledDays: JSON.stringify(updatedDays) });
+                                      }}
+                                      className={`py-3 px-1 border-l border-border/45 text-center cursor-pointer hover:bg-muted/10 transition-all ${
+                                        isScheduled ? 'bg-amber-300/80 dark:bg-amber-500/60' : 'bg-transparent'
+                                      }`}
+                                    >
+                                      <div className="h-6 w-full" />
+                                    </td>
+                                  );
+                                })}
+
+                                <td className="py-3 px-3 text-right">
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteWeeklyPlan(plan.id)}>
+                                    <Trash2 className="w-3.5 h-3.5 text-destructive/60 hover:text-destructive" />
+                                  </Button>
+                                </td>
+                              </tr>
+
+                              {/* Diálogo rápido para criar Subtarefa */}
+                              {showAddSubtaskTaskId === plan.id && (
+                                <tr className="bg-muted/5 dark:bg-muted/2">
+                                  <td colSpan={17} className="p-3">
+                                    <div className="flex items-center gap-2 max-w-md ml-8">
+                                      <Input 
+                                        placeholder="Nome da subtarefa... (Ex: Fôrma, Armação)" 
+                                        className="h-8 text-xs rounded-lg"
+                                        value={newSubtaskName}
+                                        onChange={e => setNewSubtaskName(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleAddSubtask(plan)}
+                                      />
+                                      <Button size="sm" className="h-8 text-xs rounded-lg font-bold" onClick={() => handleAddSubtask(plan)}>
+                                        Adicionar
+                                      </Button>
+                                      <Button size="sm" variant="ghost" className="h-8 text-xs rounded-lg" onClick={() => setShowAddSubtaskTaskId(null)}>
+                                        Cancelar
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+
+                              {/* Linhas de Subtarefas expandidas */}
+                              {isExpanded && subtasks.map((sub, sIdx) => (
+                                <tr key={sIdx} className="bg-muted/10 dark:bg-muted/5 border-b border-border/30">
+                                  <td></td>
+                                  <td></td>
+                                  <td></td>
+                                  <td className="py-2 px-4 pl-12 font-medium text-muted-foreground text-xs">
+                                    <div className="flex items-center gap-2">
+                                      <input 
+                                        type="checkbox"
+                                        checked={sub.completed}
+                                        onChange={e => {
+                                          updateSubtaskStatus(plan, sIdx, e.target.checked);
+                                        }}
+                                        className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5 cursor-pointer"
+                                      />
+                                      <span className={sub.completed ? 'line-through opacity-60' : ''}>
+                                        {sub.name}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td></td>
+                                  <td></td>
+                                  <td></td>
+                                  <td className="py-2 px-3 text-center">
+                                    <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-[4px] text-[9px] font-bold uppercase tracking-wider ${
+                                      sub.completed 
+                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                    }`}>
+                                      {sub.completed ? 'Concluído' : 'Não Iniciada'}
+                                    </span>
+                                  </td>
+                                  <td></td>
+                                  {/* Colunas vazias para os dias da semana */}
+                                  {daysOfWeek.map(d => <td key={d.index} className="border-l border-border/30"></td>)}
+                                  <td className="py-2 px-3 text-right">
+                                    <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive/50 hover:text-destructive" onClick={() => handleDeleteSubtask(plan, sIdx)}>
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })() : (
               <div className="py-20 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border/50 bg-muted/20">
                 <Calendar className="w-12 h-12 text-muted-foreground/30 mb-4" />
                 <h4 className="text-base font-bold text-muted-foreground">Nenhuma atividade planejada</h4>
@@ -584,6 +841,11 @@ export default function LeanTab({ project }: { project: Project }) {
                               <span className="text-sm font-bold text-foreground">{t.name}</span>
                               <div className="flex items-center gap-3 mt-1">
                                 <span className="text-[10px] font-bold text-muted-foreground uppercase">{t.responsible || 'Sem resp.'}</span>
+                                {t.startDate && (
+                                  <span className="text-[10px] font-bold text-muted-foreground/80 bg-muted/65 px-1.5 py-0.5 rounded flex items-center gap-0.5 shadow-sm">
+                                    Início: {new Date(t.startDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                  </span>
+                                )}
                                 <div className="flex items-center gap-1.5">
                                   <div className="w-20 h-1 rounded-full bg-muted overflow-hidden">
                                     <div className={`h-full ${progressColor}`} style={{ width: `${t.percentComplete}%` }} />

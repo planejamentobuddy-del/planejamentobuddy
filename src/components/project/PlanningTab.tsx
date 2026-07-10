@@ -415,11 +415,25 @@ export default function PlanningTab({ project }: { project: Project }) {
       }
     }
 
+    const isMilestone = !isStage && task.duration === 0;
+
     if (field === 'startDate' || field === 'endDate') {
-      updated.duration = Math.max(0, getBusinessDays(updated.startDate, updated.endDate));
+      if (isMilestone) {
+        const targetDate = value;
+        updated.startDate = targetDate;
+        updated.endDate = targetDate;
+        updated.duration = 0;
+      } else {
+        updated.duration = Math.max(0, getBusinessDays(updated.startDate, updated.endDate));
+      }
     }
     if (field === 'duration') {
-      updated.endDate = addBusinessDays(updated.startDate, value);
+      if (value === 0) {
+        updated.endDate = updated.startDate;
+        updated.duration = 0;
+      } else {
+        updated.endDate = addBusinessDays(updated.startDate, value);
+      }
     }
     if (field === 'percentComplete') {
       updated.percentComplete = Math.min(100, Math.max(0, value));

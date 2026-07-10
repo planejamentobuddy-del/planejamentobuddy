@@ -127,6 +127,10 @@ export interface WeeklyPlan {
   lastStatus?: string;
   lastStatusDate?: string;
   statusComments?: StatusComment[];
+  scheduledDays?: string; // JSON serializado de números dos dias da semana (ex: [0, 1, 2...])
+  subtasks?: string; // JSON serializado de subtarefas da semana
+  expectedProgress?: number; // esperado da semana, ex: 100%
+  currentProgress?: number; // executado real da semana, ex: 33%
 }
 
 export interface WeeklyHistory {

@@ -1055,21 +1055,40 @@ export default function GanttTab({ project }: { project: Project }) {
                               title={`Planejado original: ${new Date(task.plannedStart! + 'T12:00:00').toLocaleDateString('pt-BR')} → ${new Date(task.plannedEnd! + 'T12:00:00').toLocaleDateString('pt-BR')}`}
                             />
                           )}
-                          {/* Regular Task Bar */}
-                          <div
-                            className={`absolute top-2.5 h-5 rounded-lg flex items-center px-3 z-10 font-black text-[9px] cursor-pointer hover:brightness-110 ${hasNoDates ? 'bg-muted-foreground/10 border-2 border-dashed border-muted-foreground/30 text-muted-foreground/50' : `${barColor} ${textColor}`}`}
-                            style={{ left: startPos, width }}
-                            title={hasNoDates ? `${task.name}: Sem data definida` : `${task.name}: ${task.percentComplete}%`}
-                            onClick={(e) => toggleBarClick(task.id, e)}
-                          >
-                            {!hasNoDates && task.status === 'in_progress' && task.percentComplete > 0 && (
+                          {/* Regular Task Bar or Milestone Diamond */}
+                          {task.duration === 0 && !hasNoDates ? (
+                            <div
+                              className="absolute top-2 w-6 h-6 flex items-center justify-center z-10 cursor-pointer hover:scale-115 transition-transform"
+                              style={{ left: startPos + (width / 2) - 12 }}
+                              title={`${task.name}: Marco`}
+                              onClick={(e) => toggleBarClick(task.id, e)}
+                            >
                               <div 
-                                className="absolute inset-0 bg-white/20 pointer-events-none rounded-lg"
-                                style={{ width: `${task.percentComplete}%` }}
+                                className={`w-3.5 h-3.5 rotate-45 border shadow-[0_2px_4px_rgba(0,0,0,0.1)] ${
+                                  critical 
+                                    ? 'bg-status-danger border-status-danger' 
+                                    : task.status === 'completed'
+                                      ? 'bg-status-ok border-status-ok'
+                                      : 'bg-amber-500 border-amber-600'
+                                }`}
                               />
-                            )}
-                            <span className="relative z-10">{hasNoDates ? 'SEM DATA' : `${task.percentComplete}%`}</span>
-                          </div>
+                            </div>
+                          ) : (
+                            <div
+                              className={`absolute top-2.5 h-5 rounded-lg flex items-center px-3 z-10 font-black text-[9px] cursor-pointer hover:brightness-110 ${hasNoDates ? 'bg-muted-foreground/10 border-2 border-dashed border-muted-foreground/30 text-muted-foreground/50' : `${barColor} ${textColor}`}`}
+                              style={{ left: startPos, width }}
+                              title={hasNoDates ? `${task.name}: Sem data definida` : `${task.name}: ${task.percentComplete}%`}
+                              onClick={(e) => toggleBarClick(task.id, e)}
+                            >
+                              {!hasNoDates && task.status === 'in_progress' && task.percentComplete > 0 && (
+                                <div 
+                                  className="absolute inset-0 bg-white/20 pointer-events-none rounded-lg"
+                                  style={{ width: `${task.percentComplete}%` }}
+                                />
+                              )}
+                              <span className="relative z-10">{hasNoDates ? 'SEM DATA' : `${task.percentComplete}%`}</span>
+                            </div>
+                          )}
                         </>
                       )}
 

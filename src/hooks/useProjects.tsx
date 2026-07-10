@@ -1,8 +1,14 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createClient } from '@supabase/supabase-js';
 import { Project, Task, WeeklyPlan, WeeklyHistory, Constraint, ChecklistItem, getCurrentWeek, DailyLog, PaymentReceipt, ProjectResource, SupplyPackage, WorkforceEntry } from '@/types/project';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
+
+// Inicialização dinâmica do Supabase do app de Estoque (100% de graça!)
+const ESTOQUE_URL = import.meta.env.VITE_SUPABASE_ESTOQUE_URL || '';
+const ESTOQUE_KEY = import.meta.env.VITE_SUPABASE_ESTOQUE_ANON_KEY || '';
+const supabaseEstoque = (ESTOQUE_URL && ESTOQUE_KEY) ? createClient(ESTOQUE_URL, ESTOQUE_KEY) : null;
 
 import { ProjectsContext, ProjectsContextType, useProjects } from './ProjectsContext';
 export { useProjects };
@@ -139,6 +145,10 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
             lastStatus: p.last_status || '',
             lastStatusDate: p.last_status_date || '',
             statusComments: (Array.isArray(p.status_comments) ? p.status_comments : []) as any,
+            scheduledDays: p.scheduled_days || '',
+            subtasks: p.subtasks || '',
+            expectedProgress: p.expected_progress !== undefined ? Number(p.expected_progress) : 100,
+            currentProgress: p.current_progress !== undefined ? Number(p.current_progress) : 0,
           };
         }));
       }
@@ -802,6 +812,10 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         status: plan.status,
         reason: plan.reason,
         observations: plan.observations,
+        scheduled_days: plan.scheduledDays || '',
+        subtasks: plan.subtasks || '',
+        expected_progress: plan.expectedProgress !== undefined ? plan.expectedProgress : 100,
+        current_progress: plan.currentProgress !== undefined ? plan.currentProgress : 0,
       }])
       .select()
       .single();
@@ -819,6 +833,10 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         reason: data.reason || '',
         observations: data.observations || '',
         statusComments: [],
+        scheduledDays: data.scheduled_days || '',
+        subtasks: data.subtasks || '',
+        expectedProgress: data.expected_progress !== undefined ? Number(data.expected_progress) : 100,
+        currentProgress: data.current_progress !== undefined ? Number(data.current_progress) : 0,
       }]);
     } else if (error) {
       toast.error('Erro ao adicionar plano semanal.');
@@ -840,6 +858,10 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         last_status: plan.lastStatus,
         last_status_date: plan.lastStatusDate || null,
         status_comments: (plan.status === 'completed' ? [] : (plan.statusComments as any) || []),
+        scheduled_days: plan.scheduledDays || '',
+        subtasks: plan.subtasks || '',
+        expected_progress: plan.expectedProgress !== undefined ? plan.expectedProgress : 100,
+        current_progress: plan.currentProgress !== undefined ? plan.currentProgress : 0,
       })
       .eq('id', plan.id);
 
@@ -1317,8 +1339,122 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     setSupplyPackages(prev => [...prev, newPkg]);
     toast.success('Pacote de suprimento adicionado!');
     await syncConstraintForSupplyPackage(newPkg);
+
+    // Sincronizar com o Supabase do Estoque de forma assíncrona (100% de graça!)
+    if (supabaseEstoque) {
+      (async () => {
+        try {
+          // 1. Autenticar com a conta robô integradora no Estoque (para passar pelo RLS)
+          const { data: authData, error: authErr } = await supabaseEstoque.auth.signInWithPassword({
+            email: 'integrador@buddy.com',
+            password: 'integradorbuddy123'
+          });
+
+          if (authErr) {
+            console.error('[Estoque Sync] Falha na autenticação do robô no Estoque:', authErr.message);
+            return;
+          }
+
+          const solicitanteId = authData?.user?.id;
+          if (!solicitanteId) return;
+
+          const projectObj = projects.find(p => p.id === newPkg.projectId);
+          const projectName = projectObj ? projectObj.name : '';
+          
+          if (!projectName) return;
+
+          // 2. Buscar todas as obras cadastradas no Estoque para fazer match inteligente
+          const { data: obrasEstoque, error: obrasErr } = await supabaseEstoque
+            .from('obras')
+            .select('id, nome');
+
+          if (obrasErr) {
+            console.error('[Estoque Sync] Obra fetch error:', obrasErr);
+            return;
+          }
+
+          // Algoritmo de correspondência inteligente de nomes de obras
+          const cleanName = (str: string) => 
+            str.toLowerCase()
+               .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+               .replace(/&/g, 'e') // padroniza "n&j" para "nej"
+               .replace(/[^a-z0-9]/g, ""); // remove especiais
+
+          const cleanProject = cleanName(projectName);
+          const matchedObra = obrasEstoque?.find(o => {
+            const cleanObra = cleanName(o.nome);
+            if (cleanObra === cleanProject) return true;
+            if (cleanProject.includes(cleanObra) || cleanObra.includes(cleanProject)) return true;
+            
+            // Match para siglas especiais de obra (ex: "nj" / "nej")
+            const keyword = 'nj';
+            const keyword2 = 'nej';
+            return (cleanProject.includes(keyword) || cleanProject.includes(keyword2)) &&
+                   (cleanObra.includes(keyword) || cleanObra.includes(keyword2));
+          });
+
+          const targetObraId = matchedObra?.id;
+          if (!targetObraId) {
+            console.warn(`[Estoque Sync] Obra "${projectName}" não cadastrada no aplicativo de Estoque.`);
+            return;
+          }
+
+          // 3. Buscar destinatários válidos aprovados no Estoque para satisfazer a constraint NOT NULL
+          const { data: profiles, error: profErr } = await supabaseEstoque
+            .from('profiles')
+            .select('id, email, apelido')
+            .eq('approved', true);
+
+          if (profErr) {
+            console.error('[Estoque Sync] Profiles fetch error:', profErr.message);
+            return;
+          }
+
+          // Procurar o perfil do Felipe no Estoque (por e-mail ou apelido/nome)
+          const felipeProfile = profiles?.find((p: any) => 
+            (p.email && p.email.toLowerCase().includes('felipe')) || 
+            (p.apelido && p.apelido.toLowerCase().includes('felipe'))
+          );
+
+          // Escolhemos preferencialmente o Felipe como destinatário. 
+          // Se ele não for encontrado, usa outro usuário ativo como fallback seguro.
+          const targetDest = felipeProfile || profiles?.find((p: any) => p.email !== 'integrador@buddy.com') || profiles?.[0];
+          const targetDestinatarioId = targetDest ? targetDest.id : solicitanteId;
+
+          // 4. Montar a descrição com as informações do solicitante do Planejamento
+          const solicitanteInfo = user?.full_name ? `De: ${user.full_name} (via Planejamento)` : 'Solicitado via Planejamento';
+          const itemsDesc = newPkg.quantitative 
+            ? `${newPkg.quantitative}\n\n---\n${solicitanteInfo}`
+            : `${newPkg.name}\n\n---\n${solicitanteInfo}`;
+
+          // 5. Inserir a nova solicitação de material no Estoque
+          const { error: extErr } = await supabaseEstoque
+            .from('solicitacoes_material')
+            .insert([{
+              obra_id: targetObraId,
+              solicitante_id: solicitanteId,
+              destinatario_id: targetDestinatarioId,
+              titulo: newPkg.name,
+              descricao_materiais: itemsDesc,
+              urgencia: 'Normal',
+              status: 'SOLICITADO',
+              classificacao: 'OUTROS',
+              data_necessidade: newPkg.orderDeadline || null,
+            }]);
+            
+          if (extErr) {
+            console.error('[Estoque Sync Error]:', extErr);
+          } else {
+            toast.success('Solicitação enviada ao app de Estoque!');
+          }
+        } catch (err) {
+          console.error('[Estoque Sync Exception]:', err);
+        }
+      })();
+    }
+
     return newPkg;
-  }, [user, supplyPackages, syncConstraintForSupplyPackage]);
+  }, [user, supplyPackages, syncConstraintForSupplyPackage, projects]);
 
   const updateSupplyPackage = useCallback(async (pkg: SupplyPackage) => {
     const original = [...supplyPackages];
