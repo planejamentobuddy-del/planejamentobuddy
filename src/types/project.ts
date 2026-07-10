@@ -356,24 +356,40 @@ export function getCriticalTaskIds(allTasks: Task[]): Set<string> {
   const queue: number[] = [];
   inDegree.forEach((deg, i) => { if (deg === 0) queue.push(i); });
   const sorted: number[] = [];
-  while (queue.length > 0) {
+  const brokenCycles: string[] = [];
+
+  while (sorted.length < n) {
+    if (queue.length === 0) {
+      // Ciclo detectado! Para quebrar o ciclo, procuramos a tarefa travada com o menor inDegree > 0
+      let bestIdx = -1;
+      let minDeg = Infinity;
+      for (let i = 0; i < n; i++) {
+        if (inDegree[i] > 0 && inDegree[i] < minDeg) {
+          minDeg = inDegree[i];
+          bestIdx = i;
+        }
+      }
+      if (bestIdx === -1) break; // Segurança contra loop infinito
+      
+      // Quebramos o ciclo zerando o inDegree da tarefa escolhida e colocando-a na fila!
+      brokenCycles.push(leaves[bestIdx].name);
+      inDegree[bestIdx] = 0;
+      queue.push(bestIdx);
+      continue;
+    }
+    
     const u = queue.shift()!;
     sorted.push(u);
     succIndices[u].forEach(v => {
-      inDegree[v]--;
-      if (inDegree[v] === 0) queue.push(v);
+      if (inDegree[v] > 0) {
+        inDegree[v]--;
+        if (inDegree[v] === 0) queue.push(v);
+      }
     });
   }
 
-  if (sorted.length < n) {
-    console.error("[CPM Debug] Ciclo detectado nas dependências!");
-    console.warn(`[CPM Debug] Total de folhas: ${n} | Processadas sem ciclo: ${sorted.length}`);
-    inDegree.forEach((deg, idx) => {
-      if (deg > 0) {
-        console.warn(`[CPM Debug] Tarefa cíclica ou travada: "${leaves[idx].name}" (ID: ${leaves[idx].id}) | Predecessores:`, leaves[idx].predecessors);
-      }
-    });
-    return new Set();
+  if (brokenCycles.length > 0) {
+    console.warn("⚠️ [CPM Debug] Ciclo(s) detectado(s) e quebrado(s) automaticamente para permitir o cálculo nas seguintes tarefas:", brokenCycles);
   }
 
   // 3. Forward Pass (ES, EF)
