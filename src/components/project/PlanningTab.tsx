@@ -1,8 +1,8 @@
 import React, { useState, useMemo, Fragment, useEffect } from 'react';
-import { Project, Task, TaskStatus, getProjectProgress, StatusComment, safeParseDate } from '@/types/project';
+import { Project, Task, TaskStatus, getProjectProgress, StatusComment, safeParseDate, getCriticalTaskIds } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History, ChevronsDownUp, ChevronsUpDown, Eye, TableProperties } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History, ChevronsDownUp, ChevronsUpDown, Eye, TableProperties, Flame } from 'lucide-react';
 import StatusCommentLog from './StatusCommentLog';
 import TeamTab from './TeamTab';
 import AssignmentsTab from './AssignmentsTab';
@@ -171,8 +171,12 @@ export default function PlanningTab({ project }: { project: Project }) {
   const [filterResponsible, setFilterResponsible] = useState<string>('_all');
   const [expandedFrentes, setExpandedFrentes] = useState<Set<string>>(new Set());
   const [showAllColumns, setShowAllColumns] = useState(false);
+  const [showOnlyCritical, setShowOnlyCritical] = useState(false);
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const clickTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Calcular o conjunto de IDs do Caminho Crítico (CPM)
+  const criticalSet = useMemo(() => getCriticalTaskIds(allTasks), [allTasks]);
 
   const uniqueResponsibles = useMemo(() => {
     const resps = new Set<string>();
@@ -198,21 +202,41 @@ export default function PlanningTab({ project }: { project: Project }) {
 
   const getSubtasks = useMemo(() => {
     return (stageId: string) => {
-      const subs = allTasks.filter(t => t.parentId === stageId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-      if (filterResponsible === '_all') return subs;
-      return subs.filter(matchesResponsibleFilter);
+      let subs = allTasks.filter(t => t.parentId === stageId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      if (filterResponsible !== '_all') {
+        subs = subs.filter(matchesResponsibleFilter);
+      }
+      if (showOnlyCritical) {
+        subs = subs.filter(t => criticalSet.has(t.id));
+      }
+      return subs;
     };
-  }, [allTasks, filterResponsible, matchesResponsibleFilter]);
+  }, [allTasks, filterResponsible, matchesResponsibleFilter, showOnlyCritical, criticalSet]);
 
   const stages = useMemo(() => {
-    const rawStages = allTasks.filter(t => !t.parentId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-    if (filterResponsible === '_all') return rawStages;
-    return rawStages.filter(stage => {
-      if (matchesResponsibleFilter(stage)) return true;
-      const subs = allTasks.filter(t => t.parentId === stage.id);
-      return subs.some(matchesResponsibleFilter);
-    });
-  }, [allTasks, filterResponsible, matchesResponsibleFilter]);
+    let rawStages = allTasks.filter(t => !t.parentId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+    
+    // Filtragem por responsável
+    if (filterResponsible !== '_all') {
+      rawStages = rawStages.filter(stage => {
+        if (matchesResponsibleFilter(stage)) return true;
+        const subs = allTasks.filter(t => t.parentId === stage.id);
+        return subs.some(matchesResponsibleFilter);
+      });
+    }
+
+    // Filtragem por caminho crítico
+    if (showOnlyCritical) {
+      rawStages = rawStages.filter(stage => {
+        // Mostra o estágio se ele mesmo for crítico, ou se tiver alguma subetapa crítica
+        if (criticalSet.has(stage.id)) return true;
+        const subs = allTasks.filter(t => t.parentId === stage.id);
+        return subs.some(t => criticalSet.has(t.id));
+      });
+    }
+
+    return rawStages;
+  }, [allTasks, filterResponsible, matchesResponsibleFilter, showOnlyCritical, criticalSet]);
 
   const storageKey = `planning_expanded_${project.id}`;
   const [expandedStages, setExpandedStages] = useState<Set<string>>(() => {
@@ -556,12 +580,15 @@ export default function PlanningTab({ project }: { project: Project }) {
 
     const isMilestone = !isStage && task.duration === 0;
 
-    const statusBorderColor = isMilestone ? 'border-l-amber-500' :
+    const isCritical = !isStage && criticalSet.has(task.id);
+
+    const statusBorderColor = isCritical ? 'border-l-destructive shadow-[inset_3px_0_0_0_#ef4444]' :
+                             (isMilestone ? 'border-l-amber-500' :
                              (effectiveStatus === 'completed' ? 'border-l-status-ok' :
                               effectiveStatus === 'in_progress' ? 'border-l-blue-600' :
                               effectiveStatus === 'delayed' ? 'border-l-status-danger' :
                               effectiveStatus === 'rescheduled' ? 'border-l-amber-500' :
-                              'border-l-muted');
+                              'border-l-muted'));
 
     return (
       <tr
@@ -601,6 +628,11 @@ export default function PlanningTab({ project }: { project: Project }) {
             {isMilestone && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest bg-amber-500/10 text-amber-700 border border-amber-500/20 shrink-0 uppercase select-none">
                 ◆ MARCO
+              </span>
+            )}
+            {isCritical && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest bg-destructive/10 text-destructive border border-destructive/20 shrink-0 uppercase select-none animate-pulse-subtle">
+                🔥 CRÍTICO
               </span>
             )}
             <Input
@@ -1001,6 +1033,19 @@ export default function PlanningTab({ project }: { project: Project }) {
                 ).length} etapa(s) com reprogramações
               </span>
             )}
+
+            <button
+              onClick={() => setShowOnlyCritical(v => !v)}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                showOnlyCritical
+                  ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                  : 'bg-muted/50 border-border/40 text-muted-foreground hover:text-foreground'
+              }`}
+              title="Exibir apenas tarefas que estão no caminho crítico (impactam a data final da obra)"
+            >
+              <Flame className={`w-3.5 h-3.5 ${showOnlyCritical ? 'animate-pulse text-destructive' : ''}`} />
+              {showOnlyCritical ? 'Mostrando apenas Caminho Crítico' : 'Filtrar Caminho Crítico'}
+            </button>
 
             <button
               onClick={() => setShowAllColumns(v => !v)}
