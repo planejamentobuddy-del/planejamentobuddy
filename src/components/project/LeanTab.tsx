@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Project, DELAY_REASONS, WeeklyPlan, Task, Constraint, CONSTRAINT_CATEGORIES, ConstraintCategory, StatusComment } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
