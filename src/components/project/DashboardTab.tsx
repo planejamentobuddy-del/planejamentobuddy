@@ -49,7 +49,9 @@ export default function DashboardTab({ project }: { project: Project }) {
   const currentWeek = getCurrentWeek();
   const weekPlans = plans.filter(p => p.week === currentWeek);
   const weekCompleted = weekPlans.filter(p => p.status === 'completed' || p.status === 'in_progress').length;
-  const ppc = weekPlans.length > 0 ? Math.round((weekCompleted / weekPlans.length) * 100) : null;
+  // O PPC da semana atual só deve ser computado se a semana de fato começou a ser trabalhada (se há tarefas em andamento/concluídas ou com progresso)
+  const hasStartedTasks = weekPlans.some(p => p.status !== 'planned' || (p.currentProgress !== undefined && p.currentProgress > 0));
+  const ppc = (weekPlans.length > 0 && hasStartedTasks) ? Math.round((weekCompleted / weekPlans.length) * 100) : null;
   const restrictions = constraints.filter(c => c.status === 'open');
 
   const plannedEnd = useMemo(() => {
