@@ -38,6 +38,8 @@ export default function RelatorioPlanejamentoGeral() {
   const { projects, getTasksForProject, tasks, loading } = useProjects();
   const navigate = useNavigate();
 
+  const [onlyMaster, setOnlyMaster] = useState(false);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -48,7 +50,6 @@ export default function RelatorioPlanejamentoGeral() {
     );
   }
 
-  const [onlyMaster, setOnlyMaster] = useState(false);
   const activeProjects = projects.filter(p => p.status !== 'archived');
 
   // Build per-project task data

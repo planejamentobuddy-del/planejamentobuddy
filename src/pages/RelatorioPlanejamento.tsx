@@ -68,6 +68,8 @@ export default function RelatorioPlanejamento() {
   const navigate = useNavigate();
   const { projects, getTasksForProject, loading } = useProjects();
 
+  const [onlyMaster, setOnlyMaster] = useState(false);
+
   // ── loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -95,8 +97,6 @@ export default function RelatorioPlanejamento() {
       </div>
     );
   }
-
-  const [onlyMaster, setOnlyMaster] = useState(false);
 
   // ── data ─────────────────────────────────────────────────────────────────
   const tasks = getTasksForProject(id!);
