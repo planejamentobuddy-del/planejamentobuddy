@@ -1,13 +1,14 @@
-﻿import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProjects } from "@/hooks/useProjects";
 import { Button } from "@/components/ui/button";
-import { Printer, ArrowLeft, Layers, TrendingUp } from "lucide-react";
+import { Printer, ArrowLeft, Layers, TrendingUp, Building2 } from "lucide-react";
 
 export default function RelatorioFisicoFinanceiro() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { projects, getTasksForProject, loading } = useProjects();
+  const [onlyMaster, setOnlyMaster] = useState(false);
 
   const project = projects.find((p) => p.id === id);
   const allTasks = id ? getTasksForProject(id) : [];
@@ -131,9 +132,21 @@ export default function RelatorioFisicoFinanceiro() {
     );
 
   const now = new Date().toLocaleString("pt-BR");
-
-  const thS: React.CSSProperties = { padding: "8px 8px", textAlign: "left", border: "1px solid #e2e8f0", fontWeight: 700, fontSize: 11, color: "#475569", background: "#f8fafc", whiteSpace: "nowrap" };
-  const tdS: React.CSSProperties = { padding: "6px 8px", border: "1px solid #e2e8f0", fontSize: 11, verticalAlign: "top" };
+  const thS: React.CSSProperties = {
+    padding: "7px 10px",
+    textAlign: "left",
+    border: "1px solid #A7F3D0",
+    fontWeight: 850,
+    fontSize: "10px",
+    color: "#065F46",
+    background: "#D1FAE5",
+    whiteSpace: "nowrap",
+    textTransform: 'uppercase',
+    letterSpacing: '0.6px',
+    WebkitPrintColorAdjust: 'exact',
+    printColorAdjust: 'exact'
+  };
+  const tdS: React.CSSProperties = { padding: "5px 8px", border: "1px solid #E2E8F0", fontSize: 11, verticalAlign: "top" };
 
   return (
     <div style={{ minHeight: "100vh", background: "white", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
@@ -141,6 +154,7 @@ export default function RelatorioFisicoFinanceiro() {
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; margin: 0 !important; }
+          .report-container { padding: 0 !important; max-width: 100% !important; }
           table { border-collapse: collapse; font-size: 8px; }
           th, td { border: 1px solid #e2e8f0 !important; padding: 2px 4px !important; }
           .stage-row td { background-color: #F0FDF4 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -155,49 +169,127 @@ export default function RelatorioFisicoFinanceiro() {
           <ArrowLeft size={16} /> Voltar
         </Button>
         <span style={{ fontWeight: 700, fontSize: 14, color: "#334155" }}>{project.name} — Cronograma Físico-Financeiro</span>
-        <Button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: 8, background: "#059669", color: "white" }}>
-          <Printer size={16} /> Imprimir / PDF
-        </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={onlyMaster}
+              onChange={(e) => setOnlyMaster(e.target.checked)}
+              style={{ width: 15, height: 15, cursor: 'pointer' }}
+            />
+            Apenas Tarefas Mestres
+          </label>
+
+          <Button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: 8, background: "#059669", color: "white" }}>
+            <Printer size={16} /> Imprimir / PDF
+          </Button>
+        </div>
       </div>
 
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 24px" }}>
+      <div className="report-container" style={{ maxWidth: 1400, margin: "0 auto", padding: "32px 24px" }}>
 
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "3px solid #059669", paddingBottom: 18, marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <img src="/logo.jpg" alt="Logo" style={{ width: 56, height: 56, objectFit: "contain", borderRadius: 8 }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+        <div style={{ borderBottom: '2px solid #CBD5E1', paddingBottom: '20px', marginBottom: '24px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <img src="/logo.jpg" alt="Logo Buddy Construtora" style={{ width: '56px', height: '56px', objectFit: 'contain' }} />
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 2, marginBottom: 2 }}>Buddy Construtora</div>
-              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "#0f172a" }}>{project.name}</h1>
-              <div style={{ fontSize: 12, color: "#475569", marginTop: 2, fontWeight: 600 }}>Cronograma Físico-Financeiro</div>
+              <h1 style={{ fontSize: '22px', fontWeight: 900, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>
+                Cronograma Físico-Financeiro
+              </h1>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '2px', margin: '4px 0 0' }}>
+                Buddy Construtora
+              </p>
             </div>
           </div>
-          <div style={{ textAlign: "right", fontSize: 12, color: "#64748b" }}>
-            <div style={{ fontWeight: 700 }}>Emissão: {new Date().toLocaleDateString("pt-BR")}</div>
-            {project.startDate && <div>Início: {fmtDate(project.startDate)}</div>}
-            {project.endDate && <div>Término contratual: {fmtDate(project.endDate)}</div>}
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600, margin: 0 }}>Data de Emissão</p>
+            <p style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', margin: '2px 0 0' }}>{new Date().toLocaleDateString('pt-BR')}</p>
           </div>
         </div>
 
-        {/* Summary cards */}
-        <div style={{ display: "flex", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
-          {[
-            { l: "Orçamento Total", v: fmtCurrency(totalBudget), c: "#2563EB", bg: "#EFF6FF" },
-            { l: "Valor Realizado", v: fmtCurrency(totalRealized), c: "#059669", bg: "#F0FDF4" },
-            { l: "Desvio Financeiro", v: (deviation >= 0 ? "+" : "") + fmtCurrency(deviation), c: deviation >= 0 ? "#059669" : "#DC2626", bg: deviation >= 0 ? "#F0FDF4" : "#FEF2F2" },
-            { l: "% Físico-Financeiro", v: `${overallProgress}%`, c: "#2563EB", bg: "#EFF6FF" },
-          ].map((card, i) => (
-            <div key={i} style={{ flex: 1, minWidth: 160, background: card.bg, borderRadius: 10, padding: "12px 16px", border: `1px solid ${card.c}20` }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>{card.l}</div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: card.c }}>{card.v}</div>
+        {/* Summary box */}
+        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '20px', marginBottom: '32px' }}>
+          <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#1E293B', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <TrendingUp style={{ width: '16px', height: '16px', color: '#059669' }} />
+            Resumo do Cronograma Físico-Financeiro
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, margin: '0 0 8px' }}>
+                Avanço Físico-Financeiro Consolidado (ponderado por custo)
+              </p>
+              <div style={{ background: '#E2E8F0', borderRadius: '99px', height: '14px', overflow: 'hidden', border: '1px solid #CBD5E1' }}>
+                <div style={{ width: `${overallProgress}%`, height: '100%', background: '#059669', borderRadius: '99px' }} />
+              </div>
             </div>
-          ))}
+            <div style={{ fontSize: '48px', fontWeight: 900, color: '#059669', lineHeight: 1 }}>
+              {overallProgress}%
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '40px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}>
+            <div>
+              <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Orçamento Total</p>
+              <p style={{ fontSize: '28px', fontWeight: 900, color: '#2563EB', margin: '2px 0 0' }}>{fmtCurrency(totalBudget)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Valor Realizado</p>
+              <p style={{ fontSize: '28px', fontWeight: 900, color: '#059669', margin: '2px 0 0' }}>{fmtCurrency(totalRealized)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Desvio Financeiro</p>
+              <p style={{ fontSize: '28px', fontWeight: 900, color: deviation >= 0 ? '#059669' : '#DC2626', margin: '2px 0 0' }}>{(deviation >= 0 ? "+" : "") + fmtCurrency(deviation)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Duração da Obra</p>
+              <p style={{ fontSize: '28px', fontWeight: 900, color: '#0F172A', margin: '2px 0 0' }}>{monthsList.length} meses</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Project Section Header (Gradient Box) */}
+        <div style={{
+          background: 'linear-gradient(135deg, #065F46 0%, #059669 100%)',
+          borderRadius: '8px 8px 0 0',
+          padding: '14px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          WebkitPrintColorAdjust: 'exact',
+          printColorAdjust: 'exact',
+          marginBottom: '0px'
+        } as React.CSSProperties}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Building2 style={{ width: '18px', height: '18px', color: '#A7F3D0', flexShrink: 0 }} />
+            <div>
+              <h2 style={{ fontSize: '15px', fontWeight: 900, color: '#FFFFFF', margin: 0 }}>
+                {project.name}
+              </h2>
+              <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
+                <span style={{ fontSize: '10px', color: '#A7F3D0', fontWeight: 600 }}>
+                  Início: {fmtDate(project.startDate)}
+                </span>
+                {project.endDate && (
+                  <span style={{ fontSize: '10px', color: '#A7F3D0', fontWeight: 600 }}>
+                    Término Contratual: {fmtDate(project.endDate)}
+                  </span>
+                )}
+                <span style={{ fontSize: '10px', color: '#A7F3D0', fontWeight: 600 }}>
+                  Meses: {monthsList.length}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <span style={{ fontSize: '32px', fontWeight: 900, color: '#FFFFFF', lineHeight: 1 }}>
+              {overallProgress}%
+            </span>
+            <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: '99px', height: '6px', width: '100px', marginTop: '4px', overflow: 'hidden' }}>
+              <div style={{ width: `${overallProgress}%`, height: '100%', background: '#6EE7B7', borderRadius: '99px' }} />
+            </div>
+          </div>
         </div>
 
         {/* Table */}
-        <h3 style={{ fontWeight: 800, fontSize: 12, textTransform: "uppercase", letterSpacing: 1, color: "#475569", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-          <TrendingUp size={13} color="#059669" /> Distribuição Mensal · {monthsList.length} meses
-        </h3>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
             <thead>
@@ -235,7 +327,7 @@ export default function RelatorioFisicoFinanceiro() {
                 return (
                   <React.Fragment key={parent.id}>
                     <tr className="stage-row" style={{ background: "#F0FDF4" }}>
-                      <td style={{ ...tdS, fontWeight: 700, textTransform: "uppercase", color: "#065f46", fontSize: 11 }}>📁 {parent.name}</td>
+                      <td style={{ ...tdS, fontWeight: 750, textTransform: "uppercase", color: "#065f46", fontSize: 11 }}>📁 {parent.name}</td>
                       <td style={{ ...tdS, textAlign: "right", fontWeight: 700, color: "#065f46" }}>{fmtCurrency(pBudget)}</td>
                       <td style={{ ...tdS, textAlign: "center", fontWeight: 700, color: "#065f46" }}>{pPhys}%</td>
                       {monthsList.map((mStr) => {
@@ -253,11 +345,14 @@ export default function RelatorioFisicoFinanceiro() {
                         );
                       })}
                     </tr>
-                    {subs.map((sub, si) => {
+                    {!onlyMaster && subs.map((sub, si) => {
                       const dt = taskDist.find((d) => d.taskId === sub.id);
                       return (
                         <tr key={sub.id} style={{ background: si % 2 === 0 ? "white" : "#fafafa" }}>
-                          <td style={{ ...tdS, paddingLeft: 24, color: "#334155" }}>↳ {sub.name}</td>
+                          <td style={{ ...tdS, paddingLeft: 24, color: "#334155" }}>
+                            <span style={{ color: '#94a3b8', marginRight: '4px' }}>↳</span>
+                            {sub.name}
+                          </td>
                           <td style={{ ...tdS, textAlign: "right", color: "#475569" }}>{fmtCurrency(sub.cost || 0)}</td>
                           <td style={{ ...tdS, textAlign: "center", color: "#475569", fontWeight: 600 }}>{sub.percentComplete || 0}%</td>
                           {monthsList.map((mStr) => {
@@ -280,20 +375,25 @@ export default function RelatorioFisicoFinanceiro() {
           </table>
         </div>
 
+        {/* Progress summary footer bar under table */}
+        <div style={{ border: '1px solid #E2E8F0', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 16px', background: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Avanço Físico-Financeiro Consolidado:</span>
+          <div style={{ flex: 1, background: '#E2E8F0', borderRadius: '99px', height: '8px', overflow: 'hidden' }}>
+            <div style={{ width: `${overallProgress}%`, height: '100%', background: '#059669', borderRadius: '99px' }} />
+          </div>
+          <span style={{ fontSize: '11px', fontWeight: 900, color: '#059669' }}>{overallProgress}%</span>
+        </div>
+
         {/* Legend */}
-        <div style={{ marginTop: 16, padding: "10px 14px", background: "#F8FAFC", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 10, color: "#64748b", display: "flex", gap: 20, flexWrap: "wrap" }}>
+        <div style={{ marginTop: 20, padding: "10px 14px", background: "#F8FAFC", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 10, color: "#64748b", display: "flex", gap: 20, flexWrap: "wrap" }}>
           <span><b style={{ color: "#1e40af" }}>P:</b> Desembolso Planejado do mês</span>
           <span><b style={{ color: "#059669" }}>R:</b> Desembolso Realizado do mês</span>
           <span>Distribuição proporcional à duração de cada subetapa no mês.</span>
         </div>
 
         {/* Footer */}
-        <div style={{ marginTop: 32, paddingTop: 14, borderTop: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <img src="/logo.jpg" alt="Logo" style={{ width: 24, height: 24, objectFit: "contain", borderRadius: 4 }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-            <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600 }}>Buddy Construtora — Sistema de Planejamento</span>
-          </div>
-          <span style={{ fontSize: 10, color: "#94a3b8" }}>Gerado em: {now}</span>
+        <div style={{ marginTop: 48, paddingTop: 16, borderTop: "1px solid #E2E8F0", textAlign: 'center', fontSize: '10px', color: '#94A3B8', fontWeight: 500 }}>
+          Relatório gerado pelo Sistema de Planejamento — Buddy Construtora &nbsp;·&nbsp; {now}
         </div>
       </div>
     </div>

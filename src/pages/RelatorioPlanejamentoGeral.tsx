@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProjects } from '@/hooks/useProjects';
 import { getProjectProgress } from '@/types/project';
@@ -47,6 +48,7 @@ export default function RelatorioPlanejamentoGeral() {
     );
   }
 
+  const [onlyMaster, setOnlyMaster] = useState(false);
   const activeProjects = projects.filter(p => p.status !== 'archived');
 
   // Build per-project task data
@@ -113,21 +115,23 @@ export default function RelatorioPlanejamentoGeral() {
           isStage:     true,
         });
 
-        let subNum = 0;
-        children.forEach(sub => {
-          subNum += 1;
-          rows.push({
-            num:         `${rowNum}.${subNum}`,
-            name:        sub.name,
-            startDate:   sub.startDate,
-            endDate:     sub.endDate,
-            duration:    sub.duration,
-            percent:     sub.percentComplete,
-            status:      sub.status,
-            responsible: sub.responsible || '—',
-            isStage:     false,
+        if (!onlyMaster) {
+          let subNum = 0;
+          children.forEach(sub => {
+            subNum += 1;
+            rows.push({
+              num:         `${rowNum}.${subNum}`,
+              name:        sub.name,
+              startDate:   sub.startDate,
+              endDate:     sub.endDate,
+              duration:    sub.duration,
+              percent:     sub.percentComplete,
+              status:      sub.status,
+              responsible: sub.responsible || '—',
+              isStage:     false,
+            });
           });
-        });
+        }
       } else {
         // Standalone stage (no children)
         rows.push({
@@ -185,9 +189,21 @@ export default function RelatorioPlanejamentoGeral() {
           <ArrowLeft className="w-4 h-4" /> Voltar
         </Button>
         <span className="font-semibold text-slate-700">Relatório de Planejamento — Todas as Obras Ativas</span>
-        <Button onClick={() => window.print()} className="gap-2">
-          <Printer className="w-4 h-4" /> Imprimir Relatório
-        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={onlyMaster}
+              onChange={(e) => setOnlyMaster(e.target.checked)}
+              style={{ width: 15, height: 15, cursor: 'pointer' }}
+            />
+            Apenas Tarefas Mestres
+          </label>
+
+          <Button onClick={() => window.print()} className="gap-2">
+            <Printer className="w-4 h-4" /> Imprimir Relatório
+          </Button>
+        </div>
       </div>
 
       {/* ── Printable content ── */}

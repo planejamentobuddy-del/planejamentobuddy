@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProjects } from '@/hooks/useProjects';
 import { getProjectProgress, getCriticalTaskIds } from '@/types/project';
@@ -95,6 +96,8 @@ export default function RelatorioPlanejamento() {
     );
   }
 
+  const [onlyMaster, setOnlyMaster] = useState(false);
+
   // ── data ─────────────────────────────────────────────────────────────────
   const tasks = getTasksForProject(id!);
   const criticalTaskIds = getCriticalTaskIds(tasks);
@@ -122,19 +125,21 @@ export default function RelatorioPlanejamento() {
       isCritical: criticalTaskIds.has(stage.id),
     });
 
-    const subs = tasks
-      .filter(t => t.parentId === stage.id)
-      .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+    if (!onlyMaster) {
+      const subs = tasks
+        .filter(t => t.parentId === stage.id)
+        .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
-    subs.forEach((sub, subIdx) => {
-      rows.push({
-        type: 'sub',
-        stageNum,
-        subNum: subIdx + 1,
-        task: sub,
-        isCritical: criticalTaskIds.has(sub.id),
+      subs.forEach((sub, subIdx) => {
+        rows.push({
+          type: 'sub',
+          stageNum,
+          subNum: subIdx + 1,
+          task: sub,
+          isCritical: criticalTaskIds.has(sub.id),
+        });
       });
-    });
+    }
   });
 
   const emissionDate = new Date().toLocaleString('pt-BR');
@@ -189,139 +194,100 @@ export default function RelatorioPlanejamento() {
           <span style={{ color: '#94a3b8', fontSize: 13 }}>— Relatório de Planejamento</span>
         </div>
 
-        <Button
-          onClick={() => window.print()}
-          style={{ background: '#2563EB', color: 'white' }}
-          className="gap-2"
-        >
-          <Printer className="w-4 h-4" />
-          Imprimir / PDF
-        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={onlyMaster}
+              onChange={(e) => setOnlyMaster(e.target.checked)}
+              style={{ width: 15, height: 15, cursor: 'pointer' }}
+            />
+            Apenas Tarefas Mestres
+          </label>
+
+          <Button
+            onClick={() => window.print()}
+            style={{ background: '#2563EB', color: 'white' }}
+            className="gap-2"
+          >
+            <Printer className="w-4 h-4" />
+            Imprimir / PDF
+          </Button>
+        </div>
       </div>
 
       {/* ── Print content ─────────────────────────────────────────────────── */}
       <div
         className="print-root"
         style={{
-          maxWidth: 1200,
+          maxWidth: 1400,
           margin: '0 auto',
-          padding: '32px 32px 48px',
+          padding: '32px 24px',
           background: 'white',
           minHeight: '100vh',
+          color: '#0f172a'
         }}
       >
         {/* ── Report header ──────────────────────────────────────────────── */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            borderBottom: '3px solid #2563EB',
-            paddingBottom: 20,
-            marginBottom: 24,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <img
-              src="/logo.jpg"
-              alt="Buddy Construtora"
-              style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 8 }}
-            />
+        <div style={{ borderBottom: '2px solid #CBD5E1', paddingBottom: '20px', marginBottom: '24px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <img src="/logo.jpg" alt="Logo Buddy Construtora" style={{ width: '56px', height: '56px', objectFit: 'contain' }} />
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>
-                Buddy Construtora
-              </div>
-              <h1 style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', margin: 0, lineHeight: 1.2 }}>
-                {project.name}
+              <h1 style={{ fontSize: '22px', fontWeight: 900, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>
+                Relatório de Planejamento da Obra
               </h1>
-              <div style={{ fontSize: 13, color: '#64748b', fontWeight: 600, marginTop: 4 }}>
-                Relatório de Planejamento
-              </div>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '2px', margin: '4px 0 0' }}>
+                Buddy Construtora
+              </p>
             </div>
           </div>
-
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-              Data de Emissão
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-              {new Date().toLocaleDateString('pt-BR')}
-            </div>
-            {project.description && (
-              <div style={{ fontSize: 11, color: '#64748b', marginTop: 8, maxWidth: 280, textAlign: 'right' }}>
-                {project.description}
-              </div>
-            )}
+            <p style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600, margin: 0 }}>Data de Emissão</p>
+            <p style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', margin: '2px 0 0' }}>{new Date().toLocaleDateString('pt-BR')}</p>
           </div>
         </div>
 
-        {/* ── Summary box ────────────────────────────────────────────────── */}
-        <div
-          style={{
-            background: '#F8FAFF',
-            border: '1px solid #DBEAFE',
-            borderRadius: 10,
-            padding: '16px 24px',
-            marginBottom: 24,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0,
-          }}
-        >
-          {/* Progress bar area */}
-          <div style={{ flex: 2, paddingRight: 32, borderRight: '1px solid #DBEAFE' }}>
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
-              Progresso Geral
+        {/* ── Summary Box ── */}
+        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '20px', marginBottom: '32px' }}>
+          <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#1E293B', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Building2 style={{ width: '16px', height: '16px', color: '#2563EB' }} />
+            Resumo Consolidado do Planejamento
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, margin: '0 0 8px' }}>
+                Progresso Geral da Obra (média ponderada por duração)
+              </p>
+              <div style={{ background: '#E2E8F0', borderRadius: '99px', height: '14px', overflow: 'hidden', border: '1px solid #CBD5E1' }}>
+                <div style={{ width: `${overallProgress}%`, height: '100%', background: '#2563EB', borderRadius: '99px' }} />
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div
-                className="progress-bar-track"
-                style={{ flex: 1, height: 14, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden', border: '1px solid #CBD5E1' }}
-              >
-                <div
-                  className="progress-bar-fill"
-                  style={{
-                    height: '100%',
-                    width: `${overallProgress}%`,
-                    background: overallProgress >= 80 ? '#16A34A' : overallProgress >= 40 ? '#2563EB' : '#F59E0B',
-                    borderRadius: 999,
-                  }}
-                />
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 900, color: '#2563EB', minWidth: 56, textAlign: 'right' }}>
-                {overallProgress}%
-              </div>
+            <div style={{ fontSize: '48px', fontWeight: 900, color: '#2563EB', lineHeight: 1 }}>
+              {overallProgress}%
             </div>
           </div>
-
-          {/* Stats */}
-          {([
-            { label: 'Total de Tarefas', value: String(tasks.length) },
-            { label: 'Início da Obra', value: fmtDate(project.startDate) },
-            { label: 'Término Planejado', value: fmtDate(plannedEnd) },
-            { label: 'Caminho Crítico', value: `${criticalTaskIds.size} tarefa${criticalTaskIds.size !== 1 ? 's' : ''}` },
-          ] as { label: string; value: string }[]).map((stat, i) => (
-            <div
-              key={i}
-              style={{
-                flex: 1,
-                paddingLeft: 24,
-                paddingRight: i < 3 ? 24 : 0,
-                borderRight: i < 3 ? '1px solid #DBEAFE' : 'none',
-              }}
-            >
-              <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
-                {stat.label}
-              </div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>
-                {stat.value}
-              </div>
+          <div style={{ display: 'flex', gap: '40px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}>
+            <div>
+              <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Total de Tarefas</p>
+              <p style={{ fontSize: '28px', fontWeight: 900, color: '#0F172A', margin: '2px 0 0' }}>{tasks.length}</p>
             </div>
-          ))}
+            <div>
+              <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Início da Obra</p>
+              <p style={{ fontSize: '28px', fontWeight: 900, color: '#0F172A', margin: '2px 0 0' }}>{fmtDate(project.startDate)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Previsão de Término</p>
+              <p style={{ fontSize: '28px', fontWeight: 900, color: '#0F172A', margin: '2px 0 0' }}>{fmtDate(plannedEnd)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Caminho Crítico</p>
+              <p style={{ fontSize: '28px', fontWeight: 900, color: '#DC2626', margin: '2px 0 0' }}>{criticalTaskIds.size}</p>
+            </div>
+          </div>
         </div>
 
-        {/* ── Legend ─────────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: 20, marginBottom: 12, flexWrap: 'wrap', fontSize: 11 }}>
+        {/* ── Legend ── */}
+        <div style={{ display: 'flex', gap: 20, marginBottom: 20, flexWrap: 'wrap', fontSize: 11, background: '#F8FAFC', padding: '10px 16px', borderRadius: 8, border: '1px solid #E2E8F0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ width: 16, height: 16, background: '#EFF6FF', border: '1px solid #BFDBFE', borderLeft: '4px solid #2563EB' }} />
             <span style={{ color: '#475569', fontWeight: 600 }}>Etapa</span>
@@ -338,6 +304,49 @@ export default function RelatorioPlanejamento() {
           ))}
         </div>
 
+        {/* ── Project Section Header (Gradient Box) ── */}
+        <div style={{
+          background: 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)',
+          borderRadius: '8px 8px 0 0',
+          padding: '14px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          WebkitPrintColorAdjust: 'exact',
+          printColorAdjust: 'exact',
+          marginBottom: '0px'
+        } as React.CSSProperties}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Building2 style={{ width: '18px', height: '18px', color: '#BFDBFE', flexShrink: 0 }} />
+            <div>
+              <h2 style={{ fontSize: '15px', fontWeight: 900, color: '#FFFFFF', margin: 0 }}>
+                {project.name}
+              </h2>
+              <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
+                <span style={{ fontSize: '10px', color: '#BFDBFE', fontWeight: 600 }}>
+                  Início: {fmtDate(project.startDate)}
+                </span>
+                {plannedEnd && (
+                  <span style={{ fontSize: '10px', color: '#BFDBFE', fontWeight: 600 }}>
+                    Previsão de Término: {fmtDate(plannedEnd)}
+                  </span>
+                )}
+                <span style={{ fontSize: '10px', color: '#BFDBFE', fontWeight: 600 }}>
+                  Tarefas: {tasks.length}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <span style={{ fontSize: '32px', fontWeight: 900, color: '#FFFFFF', lineHeight: 1 }}>
+              {overallProgress}%
+            </span>
+            <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: '99px', height: '6px', width: '100px', marginTop: '4px', overflow: 'hidden' }}>
+              <div style={{ width: `${overallProgress}%`, height: '100%', background: '#93C5FD', borderRadius: '99px' }} />
+            </div>
+          </div>
+        </div>
+
         {/* ── Hierarchical table ─────────────────────────────────────────── */}
         {tasks.length === 0 ? (
           <div
@@ -346,222 +355,223 @@ export default function RelatorioPlanejamento() {
               padding: '48px 24px',
               color: '#94a3b8',
               border: '1px dashed #CBD5E1',
-              borderRadius: 10,
+              borderRadius: '0 0 10px 10px',
               fontSize: 14,
             }}
           >
             Nenhuma tarefa encontrada para esta obra.
           </div>
         ) : (
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: 11,
-              boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
-              borderRadius: 8,
-              overflow: 'hidden',
-            }}
-          >
-            <thead>
-              <tr style={{ background: '#2563EB', color: 'white' }}>
-                {['Nº', 'Nome da Tarefa', 'Início', 'Fim', 'Dur.', '%', 'Status', 'Responsável', 'Predecessoras'].map((col, i) => (
-                  <th
-                    key={col}
-                    style={{
-                      padding: '8px 10px',
-                      textAlign: (i === 0 || i === 4 || i === 5) ? 'center' : 'left',
-                      fontWeight: 700,
-                      fontSize: 10,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                      border: '1px solid #1D4ED8',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, idx) => {
-                const task = row.task;
-                const isCritical = row.isCritical;
-                const isStage = row.type === 'stage';
+          <div style={{ overflowX: 'auto' }}>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: 11,
+              }}
+            >
+              <thead>
+                <tr>
+                  {['Nº', 'Nome da Tarefa', 'Início', 'Fim', 'Dur.', '%', 'Status', 'Responsável', 'Predecessoras'].map((col, i) => (
+                    <th
+                       key={col}
+                       style={{
+                         padding: '7px 10px',
+                         textAlign: (i === 0 || i === 4 || i === 5) ? 'center' : 'left',
+                         fontWeight: 850,
+                         fontSize: '10px',
+                         letterSpacing: '0.6px',
+                         textTransform: 'uppercase',
+                         border: '1px solid #CBD5E1',
+                         color: '#1E40AF',
+                         background: '#DBEAFE',
+                         whiteSpace: 'nowrap',
+                         WebkitPrintColorAdjust: 'exact',
+                         printColorAdjust: 'exact',
+                       } as React.CSSProperties}
+                     >
+                       {col}
+                     </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, idx) => {
+                  const task = row.task;
+                  const isCritical = row.isCritical;
+                  const isStage = row.type === 'stage';
 
-                const numStr = isStage
-                  ? String((row as StageRow).num)
-                  : `${(row as SubRow).stageNum}.${(row as SubRow).subNum}`;
+                  const numStr = isStage
+                    ? String((row as StageRow).num)
+                    : `${(row as SubRow).stageNum}.${(row as SubRow).subNum}`;
 
-                const predNames = (task.predecessors || [])
-                  .map(pid => taskMap.get(pid)?.name ?? pid)
-                  .join(', ');
+                  const predNames = (task.predecessors || [])
+                    .map(pid => taskMap.get(pid)?.name ?? pid)
+                    .join(', ');
 
-                const bg = isStage ? '#EFF6FF' : idx % 2 === 0 ? '#FAFAFA' : 'white';
-                const leftBorder = isCritical
-                  ? '4px solid #DC2626'
-                  : isStage
-                  ? '4px solid #2563EB'
-                  : '4px solid transparent';
+                  const bg = isStage ? '#EFF6FF' : idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+                  const leftBorder = isCritical
+                    ? '4px solid #DC2626'
+                    : isStage
+                    ? '4px solid #2563EB'
+                    : '4px solid transparent';
 
-                const pct = isStage ? (row as StageRow).progress : task.percentComplete;
-                const barColor = pct >= 80 ? '#16A34A' : pct >= 40 ? '#2563EB' : '#F59E0B';
+                  const pct = isStage ? (row as StageRow).progress : task.percentComplete;
+                  const barColor = pct === 100 ? '#16A34A' : '#2563EB';
 
-                return (
-                  <tr
-                    key={task.id}
-                    className={
-                      isStage
-                        ? isCritical
-                          ? 'stage-row stage-critical-row'
-                          : 'stage-row'
-                        : isCritical
-                        ? 'critical-row'
-                        : ''
-                    }
-                    style={{ background: bg }}
-                  >
-                    {/* Nº */}
-                    <td
+                  return (
+                    <tr
+                      key={task.id}
+                      className={
+                        isStage
+                          ? isCritical
+                            ? 'stage-row stage-critical-row'
+                            : 'stage-row'
+                          : isCritical
+                          ? 'critical-row'
+                          : ''
+                      }
                       style={{
-                        padding: '6px 8px',
-                        textAlign: 'center',
-                        fontWeight: isStage ? 700 : 400,
-                        color: isStage ? '#1D4ED8' : '#64748b',
-                        border: '1px solid #E2E8F0',
-                        borderLeft: leftBorder,
-                        fontSize: isStage ? 11 : 10,
-                        whiteSpace: 'nowrap',
-                      }}
+                        background: bg,
+                        WebkitPrintColorAdjust: 'exact',
+                        printColorAdjust: 'exact',
+                      } as React.CSSProperties}
                     >
-                      {numStr}
-                    </td>
-
-                    {/* Nome */}
-                    <td
-                      style={{
-                        padding: '6px 10px',
-                        fontWeight: isStage ? 700 : 400,
-                        color: '#0f172a',
-                        border: '1px solid #E2E8F0',
-                        fontSize: isStage ? 11 : 10.5,
-                        maxWidth: 260,
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        {!isStage && (
-                          <span style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 10, marginRight: 2 }}>└</span>
-                        )}
-                        <span style={{ textTransform: isStage ? 'uppercase' : 'none', letterSpacing: isStage ? '0.03em' : 0 }}>
-                          {task.name}
-                        </span>
-                        {isCritical && (
-                          <span
-                            style={{
-                              fontSize: 9,
-                              fontWeight: 700,
-                              color: '#DC2626',
-                              background: '#FEF2F2',
-                              border: '1px solid #FECACA',
-                              borderRadius: 4,
-                              padding: '1px 5px',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            🔥 CRÍTICO
-                          </span>
-                        )}
-                      </div>
-                      {/* Stage mini progress bar */}
-                      {isStage && (
-                        <div
-                          className="progress-bar-track"
-                          style={{ marginTop: 5, height: 5, background: '#DBEAFE', borderRadius: 999, overflow: 'hidden' }}
-                        >
-                          <div
-                            className="progress-bar-fill"
-                            style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 999 }}
-                          />
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Início */}
-                    <td style={{ padding: '6px 8px', border: '1px solid #E2E8F0', whiteSpace: 'nowrap', color: '#334155', fontSize: 10 }}>
-                      {fmtDate(task.startDate)}
-                    </td>
-
-                    {/* Fim */}
-                    <td style={{ padding: '6px 8px', border: '1px solid #E2E8F0', whiteSpace: 'nowrap', color: '#334155', fontSize: 10 }}>
-                      {fmtDate(task.endDate)}
-                    </td>
-
-                    {/* Duração */}
-                    <td style={{ padding: '6px 8px', border: '1px solid #E2E8F0', textAlign: 'center', color: '#334155', fontSize: 10, whiteSpace: 'nowrap' }}>
-                      {task.duration ?? '—'}d
-                    </td>
-
-                    {/* % */}
-                    <td style={{ padding: '6px 8px', border: '1px solid #E2E8F0', textAlign: 'center', fontWeight: 700, color: barColor, fontSize: 10.5, whiteSpace: 'nowrap' }}>
-                      {pct}%
-                    </td>
-
-                    {/* Status */}
-                    <td style={{ padding: '6px 8px', border: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>
-                      <span
+                      {/* Nº */}
+                      <td
                         style={{
-                          fontSize: 9.5,
-                          fontWeight: 700,
-                          padding: '2px 7px',
-                          borderRadius: 12,
-                          background: (STATUS_COLOR[task.status] ?? '#64748B') + '18',
-                          color: STATUS_COLOR[task.status] ?? '#64748b',
-                          border: `1px solid ${(STATUS_COLOR[task.status] ?? '#94a3b8')}40`,
+                          padding: '5px 8px',
+                          textAlign: 'center',
+                          fontWeight: isStage ? 750 : 400,
+                          color: isStage ? '#1E3A8A' : '#64748b',
+                          border: '1px solid #E2E8F0',
+                          borderLeft: leftBorder,
+                          fontSize: '10px',
+                          whiteSpace: 'nowrap',
                         }}
                       >
-                        {STATUS_LABEL[task.status] ?? task.status}
-                      </span>
-                    </td>
+                        {numStr}
+                      </td>
 
-                    {/* Responsável */}
-                    <td style={{ padding: '6px 8px', border: '1px solid #E2E8F0', fontSize: 10, color: '#334155', maxWidth: 120 }}>
-                      {task.responsible || '—'}
-                    </td>
+                      {/* Nome */}
+                      <td
+                        style={{
+                          padding: '5px 8px',
+                          fontWeight: isStage ? 800 : 400,
+                          color: isStage ? '#1E3A8A' : '#334155',
+                          border: '1px solid #E2E8F0',
+                          fontSize: isStage ? '11px' : '10.5px',
+                          paddingLeft: isStage ? '8px' : '22px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {!isStage && (
+                            <span style={{ color: '#94a3b8', marginRight: '4px' }}>└</span>
+                          )}
+                          <span style={{ textTransform: isStage ? 'uppercase' : 'none', letterSpacing: isStage ? '0.03em' : 0 }}>
+                            {task.name}
+                          </span>
+                          {isCritical && (
+                            <span
+                              style={{
+                                fontSize: 9,
+                                fontWeight: 700,
+                                color: '#DC2626',
+                                background: '#FEF2F2',
+                                border: '1px solid #FECACA',
+                                borderRadius: 4,
+                                padding: '1px 5px',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              🔥 CRÍTICO
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
-                    {/* Predecessoras */}
-                    <td style={{ padding: '6px 8px', border: '1px solid #E2E8F0', fontSize: 9.5, color: '#64748b', maxWidth: 160 }}>
-                      {predNames || '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      {/* Início */}
+                      <td style={{ padding: '5px 8px', border: '1px solid #E2E8F0', whiteSpace: 'nowrap', color: '#475569', fontSize: '10px', fontWeight: isStage ? 600 : 400 }}>
+                        {fmtDate(task.startDate)}
+                      </td>
+
+                      {/* Fim */}
+                      <td style={{ padding: '5px 8px', border: '1px solid #E2E8F0', whiteSpace: 'nowrap', color: '#475569', fontSize: '10px', fontWeight: isStage ? 600 : 400 }}>
+                        {fmtDate(task.endDate)}
+                      </td>
+
+                      {/* Duração */}
+                      <td style={{ padding: '5px 8px', border: '1px solid #E2E8F0', textAlign: 'center', color: '#475569', fontSize: '10px', fontWeight: isStage ? 600 : 400, whiteSpace: 'nowrap' }}>
+                        {task.duration ?? '—'}
+                      </td>
+
+                      {/* % with mini progress bar */}
+                      <td style={{ border: '1px solid #E2E8F0', padding: '5px 8px', textAlign: 'center', minWidth: '72px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ flex: 1, background: '#E2E8F0', borderRadius: '99px', height: '6px', overflow: 'hidden' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: '99px' }} />
+                          </div>
+                          <span style={{ fontSize: '9px', fontWeight: 700, color: '#334155', whiteSpace: 'nowrap' }}>{pct}%</span>
+                        </div>
+                      </td>
+
+                      {/* Status */}
+                      <td style={{ padding: '5px 8px', border: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>
+                        <span
+                          style={{
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            padding: '1px 6px',
+                            borderRadius: '99px',
+                            background: STATUS_COLOR[task.status] ?? '#64748B',
+                            color: '#FFFFFF',
+                            WebkitPrintColorAdjust: 'exact',
+                            printColorAdjust: 'exact'
+                          } as React.CSSProperties}
+                        >
+                          {STATUS_LABEL[task.status] ?? task.status}
+                        </span>
+                      </td>
+
+                      {/* Responsável */}
+                      <td style={{ padding: '5px 8px', border: '1px solid #E2E8F0', fontSize: '10px', color: '#475569', fontWeight: isStage ? 600 : 400, maxWidth: 120 }}>
+                        {task.responsible || '—'}
+                      </td>
+
+                      {/* Predecessoras */}
+                      <td style={{ padding: '5px 8px', border: '1px solid #E2E8F0', fontSize: '9.5px', color: '#64748b', maxWidth: 160 }}>
+                        {predNames || '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
+
+        {/* Progress summary footer bar under table */}
+        <div style={{ border: '1px solid #E2E8F0', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 16px', background: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Progresso da Obra:</span>
+          <div style={{ flex: 1, background: '#E2E8F0', borderRadius: '99px', height: '8px', overflow: 'hidden' }}>
+            <div style={{ width: `${overallProgress}%`, height: '100%', background: overallProgress === 100 ? '#16A34A' : '#2563EB', borderRadius: '99px' }} />
+          </div>
+          <span style={{ fontSize: '11px', fontWeight: 900, color: '#2563EB' }}>{overallProgress}%</span>
+        </div>
 
         {/* ── Footer ─────────────────────────────────────────────────────── */}
         <div
           style={{
-            marginTop: 40,
+            marginTop: 48,
             paddingTop: 16,
-            borderTop: '2px solid #E2E8F0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: 10,
-            color: '#94a3b8',
+            borderTop: '1px solid #E2E8F0',
+            textAlign: 'center',
+            fontSize: '10px',
+            color: '#94A3B8',
+            fontWeight: 500
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src="/logo.jpg" alt="" style={{ width: 20, height: 20, objectFit: 'contain', opacity: 0.5 }} />
-            <span style={{ fontWeight: 600 }}>Buddy Construtora</span>
-            <span>—</span>
-            <span>Sistema de Planejamento</span>
-          </div>
-          <div>
-            Gerado em: <span style={{ fontWeight: 700, color: '#64748b' }}>{emissionDate}</span>
-          </div>
+          Relatório gerado pelo Sistema de Planejamento — Buddy Construtora &nbsp;·&nbsp; {new Date().toLocaleString('pt-BR')}
         </div>
       </div>
     </div>
