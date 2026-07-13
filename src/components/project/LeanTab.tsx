@@ -17,6 +17,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { toast } from 'sonner';
 import { setISOWeekYear, setISOWeek, startOfISOWeek, endOfISOWeek, getISOWeekYear, getISOWeek, addWeeks } from 'date-fns';
 import StatusCommentLog from './StatusCommentLog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 function getWeekRange(weekStr: string): { start: Date; end: Date; label: string } {
   const match = weekStr.match(/(\d{4})-S(\d{2})/);
@@ -341,7 +342,45 @@ export default function LeanTab({ project }: { project: Project }) {
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
+            {/* Botão de ajuda discreto */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 rounded-full text-muted-foreground/60 hover:text-primary hover:bg-muted transition-colors"
+                  title="Ajuda / Como funciona este painel"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-4 rounded-2xl shadow-xl border border-border bg-popover text-popover-foreground animate-in fade-in-50 zoom-in-95 duration-100" align="end">
+                <div className="space-y-3 text-xs leading-relaxed">
+                  <h4 className="font-bold text-sm text-primary flex items-center gap-1.5 border-b pb-1.5">
+                    💡 Painel Lean Construction
+                  </h4>
+                  <p className="text-muted-foreground">
+                    Este painel implementa o controle de obra baseado na metodologia do <strong>Last Planner System (LPS)</strong>:
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1.5 text-muted-foreground">
+                    <li>
+                      <strong className="text-foreground">Semanal (Seg a Sex):</strong> Detalhe o que a equipe se compromete a realizar (Segunda a Sexta). Ao final da semana, justifique atrasos para gerar aprendizado.
+                    </li>
+                    <li>
+                      <strong className="text-foreground">Lookahead:</strong> Antecipe restrições e pendências com visão de médio prazo (próximas semanas).
+                    </li>
+                    <li>
+                      <strong className="text-foreground">Restrições:</strong> Cadastre e gerencie impedimentos de materiais, projetos ou compras.
+                    </li>
+                    <li>
+                      <strong className="text-foreground">Indicadores:</strong> Acompanhe os gráficos de PPC (Percentual de Planos Concluídos) e causas de perdas da obra.
+                    </li>
+                  </ul>
+                </div>
+              </PopoverContent>
+            </Popover>
+
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-muted" onClick={() => setCurrentWeekStr(w => offsetWeek(w, -1))}>
                 <ChevronLeft className="w-5 h-5" />
@@ -464,18 +503,17 @@ export default function LeanTab({ project }: { project: Project }) {
 
           <div className="grid grid-cols-1 gap-4">
             {weekPlans.length > 0 ? (() => {
-              // 7 dias da semana de Domingo a Sábado
+              // 5 dias úteis de Segunda a Sexta
               const baseDate = new Date(weekRange.start);
-              baseDate.setDate(baseDate.getDate() - 1); // Volta 1 dia de segunda para domingo
               
-              const weekdays = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-              const daysOfWeek = Array.from({ length: 7 }).map((_, idx) => {
+              const weekdays = ['seg', 'ter', 'qua', 'qui', 'sex'];
+              const daysOfWeek = Array.from({ length: 5 }).map((_, idx) => {
                 const d = new Date(baseDate);
                 d.setDate(baseDate.getDate() + idx);
                 const dayLabel = weekdays[idx];
                 const dateLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
                 return {
-                  index: idx,
+                  index: idx + 1, // 1 = Segunda, 2 = Terça, 3 = Quarta, 4 = Quinta, 5 = Sexta
                   dateStr: d.toISOString().split('T')[0],
                   label: `${dayLabel}, ${dateLabel}`
                 };
