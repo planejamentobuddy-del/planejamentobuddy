@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProjects } from '@/hooks/useProjects';
-import { getProjectProgress, getCriticalTaskIds } from '@/types/project';
+import { getProjectProgress, getCriticalTaskIds, safeParseDate } from '@/types/project';
 import { Button } from '@/components/ui/button';
 import { Printer, ArrowLeft, Building2 } from 'lucide-react';
 import { Task } from '@/types/project';
@@ -61,6 +61,23 @@ interface SubRow {
 
 type TableRow = StageRow | SubRow;
 
+function getBusinessDays(startDateStr: string, endDateStr: string): number {
+  if (!startDateStr || !endDateStr) return 0;
+  const start = safeParseDate(startDateStr);
+  const end = safeParseDate(endDateStr);
+  if (start > end) return 0;
+  let days = 1;
+  let current = new Date(start);
+  while (current.getTime() < end) {
+    current.setDate(current.getDate() + 1);
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) {
+      days++;
+    }
+  }
+  return days;
+}
+
 // ─── component ─────────────────────────────────────────────────────────────
 
 export default function RelatorioPlanejamento() {
@@ -116,11 +133,59 @@ export default function RelatorioPlanejamento() {
 
   stages.forEach((stage, sIdx) => {
     const stageNum = sIdx + 1;
-    const stageProgress = getStageProgress(stage, tasks);
+    const children = tasks.filter(t => t.parentId === stage.id);
+
+    let stageStartDate = stage.startDate;
+    let stageEndDate = stage.endDate;
+    let stageDuration = stage.duration;
+    let stageProgress = stage.percentComplete;
+    let stageStatus = stage.status;
+
+    if (children.length > 0) {
+      const childStarts = children.map(t => t.startDate).filter(Boolean).sort();
+      const childEnds = children.map(t => t.endDate).filter(Boolean).sort();
+
+      stageStartDate = childStarts[0] ?? stage.startDate;
+      stageEndDate = childEnds[childEnds.length - 1] ?? stage.endDate;
+
+      const businessDays = getBusinessDays(stageStartDate, stageEndDate);
+      stageDuration = businessDays > 0 ? businessDays : stage.duration;
+
+      const totalDur = children.reduce((s, t) => s + Math.max(1, t.duration), 0);
+      const weighted = children.reduce((s, t) => s + t.percentComplete * Math.max(1, t.duration), 0);
+      stageProgress = totalDur > 0 ? Math.round(weighted / totalDur) : 0;
+
+      let aggStatus = 'not_started';
+      if (children.every(t => t.status === 'completed')) {
+        aggStatus = 'completed';
+      } else if (children.some(t => t.status === 'delayed')) {
+        aggStatus = 'delayed';
+      } else if (children.some(t => t.status === 'in_progress')) {
+        aggStatus = 'in_progress';
+      }
+      stageStatus = aggStatus as any;
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      if (stageStatus !== 'completed' && stageStatus !== 'rescheduled' && stageEndDate && stageEndDate < today) {
+        stageStatus = 'delayed';
+      } else if (stageStatus === 'delayed' && stageEndDate && stageEndDate >= today) {
+        stageStatus = 'in_progress';
+      }
+    }
+
+    const modifiedStage: Task = {
+      ...stage,
+      startDate: stageStartDate,
+      endDate: stageEndDate,
+      duration: stageDuration,
+      percentComplete: stageProgress,
+      status: stageStatus,
+    };
+
     rows.push({
       type: 'stage',
       num: stageNum,
-      task: stage,
+      task: modifiedStage,
       progress: stageProgress,
       isCritical: criticalTaskIds.has(stage.id),
     });
