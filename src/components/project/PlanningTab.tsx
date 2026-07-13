@@ -439,6 +439,7 @@ export default function PlanningTab({ project }: { project: Project }) {
       }
     }
 
+    const isStage = !task.parentId;
     const isMilestone = !isStage && task.duration === 0;
 
     if (field === 'startDate' || field === 'endDate') {
