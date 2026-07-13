@@ -20,6 +20,7 @@ import RelatorioPlanejamento from "./pages/RelatorioPlanejamento.tsx";
 import RelatorioPlanejamentoGeral from "./pages/RelatorioPlanejamentoGeral.tsx";
 import SuprimentosGeral from "./pages/SuprimentosGeral.tsx";
 import RelatorioFisicoFinanceiro from "./pages/RelatorioFisicoFinanceiro.tsx";
+import RelatorioCronogramaGeral from "./pages/RelatorioCronogramaGeral.tsx";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -79,6 +80,7 @@ const AppRoutes = () => (
     <Route path="/relatorio-planejamento/:id" element={<ProtectedRoute><RelatorioPlanejamento /></ProtectedRoute>} />
     <Route path="/relatorio-planejamento-geral" element={<ProtectedRoute><RelatorioPlanejamentoGeral /></ProtectedRoute>} />
     <Route path="/relatorio-fisico-financeiro/:id" element={<ProtectedRoute><RelatorioFisicoFinanceiro /></ProtectedRoute>} />
+    <Route path="/relatorio-cronograma-geral" element={<ProtectedRoute><RelatorioCronogramaGeral /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

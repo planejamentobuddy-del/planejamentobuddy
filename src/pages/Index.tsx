@@ -365,6 +365,9 @@ export default function Index() {
               <Button variant="outline" className="gap-2 bg-background/50 border-primary/20 text-primary hover:bg-primary/10" onClick={() => navigate('/relatorio-planejamento-geral')}>
                 <Globe className="w-4 h-4" /> Plan. Geral (HTML)
               </Button>
+              <Button variant="outline" className="gap-2 bg-background/50 border-primary/20 text-primary hover:bg-primary/10" onClick={() => navigate('/relatorio-cronograma-geral')}>
+                <Calendar className="w-4 h-4" /> Crono. Geral (HTML)
+              </Button>
             </div>
           </div>
         )}

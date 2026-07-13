@@ -790,6 +790,15 @@ export default function ReportsTab({ project }: ReportsTabProps) {
       href: `/relatorio-planejamento-geral`
     },
     {
+      id: 'html-cronograma-geral',
+      title: 'Cronograma Geral — Todas as Obras (HTML)',
+      description: 'Gantt consolidado com linha do tempo de etapas principais de todas as obras ativas. Excelente para visualização cronológica macro.',
+      icon: CalendarDays,
+      color: 'text-amber-600',
+      bg: 'bg-amber-500/10',
+      href: `/relatorio-cronograma-geral`
+    },
+    {
       id: 'html-fisico-financeiro',
       title: 'Cronograma Físico-Financeiro (HTML)',
       description: 'Matriz mensal de desembolso planejado × realizado por etapa e subetapa, com resumo de orçamento, realizado e desvio financeiro. Pronto para impressão.',
