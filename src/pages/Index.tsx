@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy, GripVertical, ShoppingCart, X } from 'lucide-react';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy, GripVertical, ShoppingCart, X, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -358,9 +358,14 @@ export default function Index() {
               </div>
               <span className="font-black text-3xl text-blue-600">{generalProgress}%</span>
             </div>
-            <Button variant="outline" className="gap-2 bg-background/50 border-primary/20 text-primary hover:bg-primary/10" onClick={() => navigate('/relatorio-geral')}>
-              <Printer className="w-4 h-4" /> Relatório
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" className="gap-2 bg-background/50 border-primary/20 text-primary hover:bg-primary/10" onClick={() => navigate('/relatorio-geral')}>
+                <Printer className="w-4 h-4" /> Relatório Geral
+              </Button>
+              <Button variant="outline" className="gap-2 bg-background/50 border-primary/20 text-primary hover:bg-primary/10" onClick={() => navigate('/relatorio-planejamento-geral')}>
+                <Globe className="w-4 h-4" /> Plan. Geral (HTML)
+              </Button>
+            </div>
           </div>
         )}
 

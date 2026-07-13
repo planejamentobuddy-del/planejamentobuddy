@@ -9,9 +9,10 @@ import {
 import { 
   FileText, TableProperties, GanttChart, 
   Triangle, Wallet, Download, FileSpreadsheet,
-  CalendarDays, Briefcase, FileBarChart
+  CalendarDays, Briefcase, FileBarChart, Globe, LayoutList, BarChart3
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 interface ReportsTabProps {
   project: Project;
@@ -766,6 +767,39 @@ export default function ReportsTab({ project }: ReportsTabProps) {
     }
   ];
 
+  const navigate = useNavigate();
+
+  // Relatórios HTML dedicados (abrem em nova aba via rota React)
+  const htmlReports = [
+    {
+      id: 'html-planejamento',
+      title: 'Planejamento da Obra (HTML)',
+      description: 'Tabela hierárquica completa de etapas e subetapas com datas, responsáveis, predecessoras e caminho crítico. Pronto para imprimir ou salvar como PDF.',
+      icon: LayoutList,
+      color: 'text-blue-600',
+      bg: 'bg-blue-500/10',
+      href: `/relatorio-planejamento/${project.id}`
+    },
+    {
+      id: 'html-planejamento-geral',
+      title: 'Planejamento Geral — Todas as Obras (HTML)',
+      description: 'Relatório consolidado de planejamento de todas as obras ativas, organizado por projeto com tabelas hierárquicas individuais. Ideal para reuniões de diretoria.',
+      icon: Globe,
+      color: 'text-indigo-600',
+      bg: 'bg-indigo-500/10',
+      href: `/relatorio-planejamento-geral`
+    },
+    {
+      id: 'html-fisico-financeiro',
+      title: 'Cronograma Físico-Financeiro (HTML)',
+      description: 'Matriz mensal de desembolso planejado × realizado por etapa e subetapa, com resumo de orçamento, realizado e desvio financeiro. Pronto para impressão.',
+      icon: BarChart3,
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-500/10',
+      href: `/relatorio-fisico-financeiro/${project.id}`
+    }
+  ];
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -774,6 +808,38 @@ export default function ReportsTab({ project }: ReportsTabProps) {
         <p className="text-muted-foreground text-sm max-w-2xl">
           Exporte os dados do seu projeto em formato Excel para análise avançada ou em PDF estático para compartilhar com clientes e stakeholders. Os PDFs já vêm formatados com a identidade visual da construtora.
         </p>
+      </div>
+
+      {/* Relatórios HTML Imprimíveis */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Globe className="w-4 h-4 text-primary" />
+          <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Relatórios HTML Imprimíveis</h3>
+          <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full">NOVO</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {htmlReports.map((rep) => (
+            <div key={rep.id} className="card-elevated p-5 flex flex-col justify-between border-l-4 border-l-transparent hover:border-l-primary transition-all group">
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${rep.bg}`}>
+                    <rep.icon className={`w-5 h-5 ${rep.color}`} />
+                  </div>
+                  <h4 className="font-bold text-sm leading-tight">{rep.title}</h4>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">{rep.description}</p>
+              </div>
+              <Button
+                size="sm"
+                className={`w-full font-bold text-xs gap-1.5 h-9 rounded-lg shadow-sm transition-all`}
+                onClick={() => window.open(rep.href, '_blank')}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                Abrir Relatório HTML
+              </Button>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

@@ -16,7 +16,10 @@ import PendingApproval from "./pages/PendingApproval.tsx";
 import AdminUsers from "./pages/AdminUsers.tsx";
 import MyTasks from "./pages/MyTasks.tsx";
 import RelatorioGeral from "./pages/RelatorioGeral.tsx";
+import RelatorioPlanejamento from "./pages/RelatorioPlanejamento.tsx";
+import RelatorioPlanejamentoGeral from "./pages/RelatorioPlanejamentoGeral.tsx";
 import SuprimentosGeral from "./pages/SuprimentosGeral.tsx";
+import RelatorioFisicoFinanceiro from "./pages/RelatorioFisicoFinanceiro.tsx";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -73,6 +76,9 @@ const AppRoutes = () => (
     <Route path="/suprimentos" element={<ProtectedRoute><SuprimentosGeral /></ProtectedRoute>} />
     <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
     <Route path="/relatorio-geral" element={<ProtectedRoute><RelatorioGeral /></ProtectedRoute>} />
+    <Route path="/relatorio-planejamento/:id" element={<ProtectedRoute><RelatorioPlanejamento /></ProtectedRoute>} />
+    <Route path="/relatorio-planejamento-geral" element={<ProtectedRoute><RelatorioPlanejamentoGeral /></ProtectedRoute>} />
+    <Route path="/relatorio-fisico-financeiro/:id" element={<ProtectedRoute><RelatorioFisicoFinanceiro /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );
