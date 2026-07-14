@@ -14,6 +14,7 @@ import { Project, getProjectProgress, getProjectStatus, getEstimatedEndDate } fr
 import CurvaSWidget from '@/components/dashboard/CurvaSWidget';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const statusConfig = {
   ok: { emoji: '✓', label: 'No Prazo', class: 'status-badge-ok' },
@@ -332,6 +333,7 @@ export default function Index() {
                 </div>
               </DialogContent>
             </Dialog>
+            <ThemeToggle />
             <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => signOut()} title="Sair">
               <LogOut className="w-4 h-4" />
             </Button>

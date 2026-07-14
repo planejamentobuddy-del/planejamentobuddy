@@ -16,6 +16,7 @@ import TodayTab from '@/components/project/TodayTab';
 import SuppliesTab from '@/components/project/SuppliesTab';
 import WorkforceTab from '@/components/project/WorkforceTab';
 import PhysicalFinancialTab from '@/components/project/PhysicalFinancialTab';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -147,6 +148,7 @@ export default function ProjectDetail() {
                 );
               })()}
             </Button>
+            <ThemeToggle />
           </div>
         </div>
 
