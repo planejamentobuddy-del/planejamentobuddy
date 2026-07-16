@@ -533,7 +533,8 @@ export default function PlanningTab({ project }: { project: Project }) {
     // ── Cross-project cascade: when endDate of this task changes, update cross-project successors ──
     if ((field === 'endDate' || field === 'duration' || field === 'startDate') && batchUpdates.length > 0) {
       const taskFinalEnd = updated.endDate;
-      if (taskFinalEnd) {
+      const taskFinalStart = updated.startDate;
+      if (taskFinalEnd || taskFinalStart) {
         // Find tasks in OTHER projects that have this task.id as cross-project predecessor
         const crossSuccessors = allProjectsTasks.filter(t =>
           t.projectId !== project.id &&
@@ -542,8 +543,11 @@ export default function PlanningTab({ project }: { project: Project }) {
         for (const succ of crossSuccessors) {
           const cpLink = succ.crossProjectPredecessors!.find(cp => cp.taskId === task.id)!;
           const lag = cpLink.lagDays || 0;
-          // Compute effective predecessor end + lag
-          let effEnd = new Date(taskFinalEnd + 'T12:00:00');
+          // Compute effective predecessor date + lag (either end or start)
+          const baseDate = cpLink.type === 'start' ? taskFinalStart : taskFinalEnd;
+          if (!baseDate) continue;
+
+          let effEnd = new Date(baseDate + 'T12:00:00');
           let daysAdded = 0;
           while (daysAdded < lag) {
             effEnd.setDate(effEnd.getDate() + 1);
@@ -626,9 +630,10 @@ export default function PlanningTab({ project }: { project: Project }) {
     const crossLinks = task.crossProjectPredecessors || [];
     const hasCrossConflict = crossLinks.some(cp => {
       const predTask = allProjectsTasks.find(t => t.id === cp.taskId);
-      const predEnd = predTask?.endDate;
-      if (predEnd && task.startDate && predTask?.status !== 'completed') {
-        let effEnd = new Date(predEnd + 'T12:00:00');
+      if (!predTask) return false;
+      const baseDate = cp.type === 'start' ? predTask.startDate : predTask.endDate;
+      if (baseDate && task.startDate && predTask.status !== 'completed') {
+        let effEnd = new Date(baseDate + 'T12:00:00');
         let d = 0;
         const lag = cp.lagDays || 0;
         while (d < lag) {
@@ -1079,7 +1084,9 @@ export default function PlanningTab({ project }: { project: Project }) {
               const latestEnd = newLinks.reduce((latest, cp) => {
                 const predTask = allProjectsTasks.find(t => t.id === cp.taskId);
                 if (!predTask) return latest;
-                let effEnd = new Date(predTask.endDate + 'T12:00:00');
+                const baseDate = cp.type === 'start' ? predTask.startDate : predTask.endDate;
+                if (!baseDate) return latest;
+                let effEnd = new Date(baseDate + 'T12:00:00');
                 let d = 0;
                 const lag = cp.lagDays || 0;
                 while (d < lag) { effEnd.setDate(effEnd.getDate() + 1); if (effEnd.getDay() !== 0 && effEnd.getDay() !== 6) d++; }

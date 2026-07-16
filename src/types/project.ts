@@ -65,6 +65,7 @@ export interface CrossProjectPredecessor {
   taskId: string;      // UUID of the predecessor task (in another project)
   projectId: string;   // UUID of the predecessor's project
   lagDays?: number;    // Optional lag in business days (default 0)
+  type?: 'start' | 'end'; // Whether dependency is based on predecessor's start or end date
 }
 
 export interface Task {

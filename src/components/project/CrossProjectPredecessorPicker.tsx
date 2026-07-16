@@ -35,6 +35,7 @@ export default function CrossProjectPredecessorPicker({
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [lagDays, setLagDays] = useState<number>(0);
+  const [linkType, setLinkType] = useState<'start' | 'end'>('end');
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [taskSearch, setTaskSearch] = useState('');
 
@@ -97,14 +98,26 @@ export default function CrossProjectPredecessorPicker({
     [allProjects, selectedProjectId]
   );
 
+  const formatToBRDate = (dateStr: string) => {
+    if (!dateStr) return '—';
+    try {
+      const [year, month, day] = dateStr.split('-');
+      if (!year || !month || !day) return dateStr;
+      return `${day}/${month}/${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
   const handleAddLink = () => {
     if (!selectedTaskId || !selectedProjectId) return;
     // Avoid duplicate
     if (links.some(l => l.taskId === selectedTaskId)) return;
-    setLinks(prev => [...prev, { taskId: selectedTaskId, projectId: selectedProjectId, lagDays }]);
+    setLinks(prev => [...prev, { taskId: selectedTaskId, projectId: selectedProjectId, lagDays, type: linkType }]);
     // Reset
     setSelectedTaskId('');
     setLagDays(0);
+    setLinkType('end');
     setTaskSearch('');
   };
 
@@ -122,19 +135,19 @@ export default function CrossProjectPredecessorPicker({
   const checkConflict = (link: CrossProjectPredecessor): { hasConflict: boolean; message: string } => {
     const predTask = allTasks.find(t => t.id === link.taskId);
     if (!predTask) return { hasConflict: false, message: '' };
-    const predEnd = predTask.endDate;
+    const baseDate = link.type === 'start' ? predTask.startDate : predTask.endDate;
     const lag = link.lagDays || 0;
-    if (!predEnd || !currentTask.startDate) return { hasConflict: false, message: '' };
+    if (!baseDate || !currentTask.startDate) return { hasConflict: false, message: '' };
 
     // Add lag days to pred end
-    const predEndDate = new Date(predEnd + 'T12:00:00');
+    const dateObj = new Date(baseDate + 'T12:00:00');
     let daysAdded = 0;
     while (daysAdded < lag) {
-      predEndDate.setDate(predEndDate.getDate() + 1);
-      const day = predEndDate.getDay();
+      dateObj.setDate(dateObj.getDate() + 1);
+      const day = dateObj.getDay();
       if (day !== 0 && day !== 6) daysAdded++;
     }
-    const effectivePredEnd = predEndDate.toISOString().split('T')[0];
+    const effectivePredEnd = dateObj.toISOString().split('T')[0];
 
     if (predTask.status === 'completed') {
       return { hasConflict: false, message: '✔ Predecessora já concluída' };
@@ -142,7 +155,7 @@ export default function CrossProjectPredecessorPicker({
     if (currentTask.startDate <= effectivePredEnd) {
       return {
         hasConflict: true,
-        message: `Conflito: ${currentTask.name} inicia em ${currentTask.startDate} mas predecessora termina em ${effectivePredEnd}`,
+        message: `Conflito: ${currentTask.name} inicia em ${formatToBRDate(currentTask.startDate)} mas predecessora ${link.type === 'start' ? 'inicia' : 'termina'} em ${formatToBRDate(effectivePredEnd)}`,
       };
     }
     return { hasConflict: false, message: '' };
@@ -181,9 +194,9 @@ export default function CrossProjectPredecessorPicker({
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Adicionar Dependência</p>
 
           {/* Project picker */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <Label className="text-xs mb-1.5 block">1. Selecione a obra</Label>
+              <Label className="text-xs mb-1.5 block font-medium">1. Selecione a obra</Label>
               <Select value={selectedProjectId} onValueChange={v => { setSelectedProjectId(v); setSelectedTaskId(''); setTaskSearch(''); }}>
                 <SelectTrigger className="h-9 text-sm">
                   <SelectValue placeholder="Escolha a obra..." />
@@ -196,16 +209,29 @@ export default function CrossProjectPredecessorPicker({
               </Select>
             </div>
 
+            <div>
+              <Label className="text-xs mb-1.5 block font-medium">Vincular ao</Label>
+              <Select value={linkType} onValueChange={v => setLinkType(v as 'start' | 'end')}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="end">Término (Fim)</SelectItem>
+                  <SelectItem value="start">Início</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Lag */}
             <div>
-              <Label className="text-xs mb-1.5 block">Folga em dias úteis</Label>
+              <Label className="text-xs mb-1.5 block font-medium">Folga (dias úteis)</Label>
               <Input
                 type="number"
                 min={0}
                 max={365}
                 value={lagDays}
                 onChange={e => setLagDays(Number(e.target.value) || 0)}
-                className="h-9 text-sm"
+                className="h-9 text-sm w-full"
                 placeholder="0"
               />
             </div>
@@ -248,7 +274,7 @@ export default function CrossProjectPredecessorPicker({
                               </span>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 {statusBadge(t)}
-                                <span className="text-muted-foreground font-mono text-[9px]">{t.endDate}</span>
+                                <span className="text-muted-foreground font-mono text-[9px]">{formatToBRDate(t.endDate)}</span>
                               </div>
                             </div>
                           </CommandItem>
@@ -285,16 +311,18 @@ export default function CrossProjectPredecessorPicker({
                   >
                     <Link2 className={`w-4 h-4 mt-0.5 shrink-0 ${hasConflict ? 'text-red-500' : 'text-primary'}`} />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold truncate">{predTask?.name || link.taskId}</span>
-                        {statusBadge(predTask)}
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-semibold text-foreground break-words flex-1 leading-snug">{predTask?.name || link.taskId}</span>
+                        <div className="shrink-0">{statusBadge(predTask)}</div>
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                      <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <span>🏗️</span> {predProj?.name || link.projectId}
                         </span>
                         {predTask && (
-                          <span>· Término: <b>{predTask.endDate}</b></span>
+                          <span>
+                            · {link.type === 'start' ? 'Início' : 'Término'}: <b>{formatToBRDate(link.type === 'start' ? predTask.startDate : predTask.endDate)}</b>
+                          </span>
                         )}
                         {(link.lagDays ?? 0) > 0 && (
                           <span className="flex items-center gap-1 text-amber-600">
