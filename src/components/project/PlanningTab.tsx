@@ -640,7 +640,10 @@ export default function PlanningTab({ project }: { project: Project }) {
           effEnd.setDate(effEnd.getDate() + 1);
           if (effEnd.getDay() !== 0 && effEnd.getDay() !== 6) d++;
         }
-        return task.startDate <= effEnd.toISOString().split('T')[0];
+        const limitDate = effEnd.toISOString().split('T')[0];
+        return cp.type === 'start'
+          ? task.startDate < limitDate
+          : task.startDate <= limitDate;
       }
       return false;
     });

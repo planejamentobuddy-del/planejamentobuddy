@@ -152,7 +152,11 @@ export default function CrossProjectPredecessorPicker({
     if (predTask.status === 'completed') {
       return { hasConflict: false, message: '✔ Predecessora já concluída' };
     }
-    if (currentTask.startDate <= effectivePredEnd) {
+    const isConflict = link.type === 'start'
+      ? currentTask.startDate < effectivePredEnd
+      : currentTask.startDate <= effectivePredEnd;
+
+    if (isConflict) {
       return {
         hasConflict: true,
         message: `Conflito: ${currentTask.name} inicia em ${formatToBRDate(currentTask.startDate)} mas predecessora ${link.type === 'start' ? 'inicia' : 'termina'} em ${formatToBRDate(effectivePredEnd)}`,
