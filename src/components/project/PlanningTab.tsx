@@ -266,7 +266,6 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: '% Execução', align: 'left' as const, width: 140, always: true },
     { label: 'Status', align: 'left' as const, width: 150, always: true },
     { label: 'Predecessoras', align: 'left' as const, width: 160, always: true },
-    { label: 'Pred. Externas', align: 'left' as const, width: 170, always: true },
     { label: '', align: 'center' as const, width: 40, always: true },
     { label: 'Sucessoras', align: 'left' as const, width: 160, always: false },
     { label: 'Custo (R$)', align: 'right' as const, width: 140, always: false },
@@ -624,10 +623,27 @@ export default function PlanningTab({ project }: { project: Project }) {
                               effectiveStatus === 'rescheduled' ? 'border-l-amber-500' :
                               'border-l-muted'));
 
+    const crossLinks = task.crossProjectPredecessors || [];
+    const hasCrossConflict = crossLinks.some(cp => {
+      const predTask = allProjectsTasks.find(t => t.id === cp.taskId);
+      const predEnd = predTask?.endDate;
+      if (predEnd && task.startDate && predTask?.status !== 'completed') {
+        let effEnd = new Date(predEnd + 'T12:00:00');
+        let d = 0;
+        const lag = cp.lagDays || 0;
+        while (d < lag) {
+          effEnd.setDate(effEnd.getDate() + 1);
+          if (effEnd.getDay() !== 0 && effEnd.getDay() !== 6) d++;
+        }
+        return task.startDate <= effEnd.toISOString().split('T')[0];
+      }
+      return false;
+    });
+
     return (
       <tr
         key={task.id}
-        className={`border-b border-border/80 transition-colors border-l-4 ${statusBorderColor} ${
+        className={`group border-b border-border/80 transition-colors border-l-4 ${statusBorderColor} ${
           isMilestone
             ? 'bg-amber-500/[0.04] hover:bg-amber-500/[0.07] font-medium'
             : (effectiveOverdue
@@ -670,7 +686,7 @@ export default function PlanningTab({ project }: { project: Project }) {
               </span>
             )}
             <Input
-              className={`h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 truncate ${isStage ? 'font-bold text-foreground' : inlineEditId === task.id ? 'text-foreground/90 ring-1 ring-primary/40 rounded bg-primary/5' : 'text-foreground/80 cursor-pointer hover:underline decoration-primary/45 decoration-2'}`}
+              className={`h-8 text-sm border-0 bg-transparent px-1.5 focus-visible:ring-1 focus-visible:ring-primary/30 truncate flex-1 min-w-0 ${isStage ? 'font-bold text-foreground' : inlineEditId === task.id ? 'text-foreground/90 ring-1 ring-primary/40 rounded bg-primary/5' : 'text-foreground/80 cursor-pointer hover:underline decoration-primary/45 decoration-2'}`}
               defaultValue={task.name}
               key={task.id + '_name'}
               readOnly={!isStage && inlineEditId !== task.id}
@@ -706,6 +722,35 @@ export default function PlanningTab({ project }: { project: Project }) {
               title={isStage ? undefined : inlineEditId === task.id ? 'Enter para salvar · Esc para cancelar · Duplo clique para abrir detalhes' : '1× renomear · 2× abrir detalhes'}
               placeholder={isStage ? 'Nova Etapa...' : 'Nova Subetapa...'}
             />
+            {/* Cross-project predecessor badge or add link on hover */}
+            {crossLinks.length > 0 ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCrossProjPickerTask(task);
+                }}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border shrink-0 transition-colors ${
+                  hasCrossConflict
+                    ? 'bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500/20'
+                    : 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20'
+                }`}
+                title={`${crossLinks.length} vínculo(s) externo(s)${hasCrossConflict ? ' ⚠ Conflito de data!' : ''}`}
+              >
+                <Link2 className="w-3 h-3 text-primary" />
+                <span className="text-[9px] font-mono">{crossLinks.length}</span>
+              </button>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCrossProjPickerTask(task);
+                }}
+                className="opacity-0 group-hover:opacity-65 hover:!opacity-100 transition-opacity p-1 text-muted-foreground hover:text-primary shrink-0"
+                title="Vincular predecessora externa (outra obra)"
+              >
+                <Link2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </td>
 
@@ -837,59 +882,7 @@ export default function PlanningTab({ project }: { project: Project }) {
           />
         </td>
 
-        {/* 8b. Pred. Externas — cross-project */}
-        <td className="py-2.5 px-3 border-r border-border/70">
-          <div className="flex flex-col gap-1 min-w-0">
-            {/* Existing cross-project links */}
-            {(task.crossProjectPredecessors || []).map(cp => {
-              const predTask = allProjectsTasks.find(t => t.id === cp.taskId);
-              const predProj = projects.find(p => p.id === cp.projectId);
-              // Check conflict
-              const predEnd = predTask?.endDate;
-              let hasConflict = false;
-              if (predEnd && task.startDate && predTask?.status !== 'completed') {
-                let effEnd = new Date(predEnd + 'T12:00:00');
-                let d = 0;
-                const lag = cp.lagDays || 0;
-                while (d < lag) { effEnd.setDate(effEnd.getDate() + 1); if (effEnd.getDay() !== 0 && effEnd.getDay() !== 6) d++; }
-                hasConflict = task.startDate <= effEnd.toISOString().split('T')[0];
-              }
-              return (
-                <div
-                  key={cp.taskId}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium border ${
-                    hasConflict
-                      ? 'bg-red-500/10 text-red-600 border-red-400/30'
-                      : predTask?.status === 'completed'
-                      ? 'bg-emerald-500/10 text-emerald-700 border-emerald-400/30'
-                      : 'bg-primary/10 text-primary border-primary/20'
-                  }`}
-                  title={`${predTask?.name || '—'} · ${predProj?.name || '—'}${
-                    hasConflict ? ' ⚠ Conflito de data!' : ''
-                  }`}
-                >
-                  {hasConflict ? (
-                    <AlertTriangle className="w-3 h-3 shrink-0" />
-                  ) : (
-                    <Link2 className="w-3 h-3 shrink-0" />
-                  )}
-                  <span className="truncate max-w-[100px]">
-                    {predTask?.name || '…'}
-                  </span>
-                </div>
-              );
-            })}
-            {/* Button to open picker */}
-            <button
-              onClick={() => setCrossProjPickerTask(task)}
-              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors group mt-0.5"
-              title="Vincular predecessora de outra obra"
-            >
-              <Link2 className="w-3 h-3 group-hover:scale-110 transition-transform" />
-              {(task.crossProjectPredecessors || []).length === 0 ? 'Vincular obra' : 'Editar vínculos'}
-            </button>
-          </div>
-        </td>
+
 
         {/* ── Always-visible quick-delete ── */}
         <td className="py-2.5 px-2 border-r border-border/70 w-8">
@@ -1024,6 +1017,15 @@ export default function PlanningTab({ project }: { project: Project }) {
                     <History className="w-3.5 h-3.5" />
                   </Button>
                 )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                  onClick={() => setCrossProjPickerTask(task)}
+                  title="Vincular predecessora externa (outra obra)"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                </Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleDuplicate(task)} title="Duplicar">
                   <Copy className="w-3.5 h-3.5" />
                 </Button>
@@ -1441,9 +1443,6 @@ const SortableStageRow = React.memo(function SortableStageRow({
                 </td>
 
                 {/* 8. Predecessoras */}
-                <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
-
-                {/* 8b. Pred. Externas */}
                 <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
 
                 {hasExtra && (
