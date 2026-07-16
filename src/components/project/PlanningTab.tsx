@@ -1081,24 +1081,35 @@ export default function PlanningTab({ project }: { project: Project }) {
             await updateTask(updated);
             // If any predecessor changed, cascade dates
             if (newLinks.length > 0) {
-              const latestEnd = newLinks.reduce((latest, cp) => {
+              const targetDates = newLinks.map(cp => {
                 const predTask = allProjectsTasks.find(t => t.id === cp.taskId);
-                if (!predTask) return latest;
+                if (!predTask) return '';
                 const baseDate = cp.type === 'start' ? predTask.startDate : predTask.endDate;
-                if (!baseDate) return latest;
-                let effEnd = new Date(baseDate + 'T12:00:00');
+                if (!baseDate) return '';
+                
+                // Add lag days to baseDate
+                let dateObj = new Date(baseDate + 'T12:00:00');
                 let d = 0;
                 const lag = cp.lagDays || 0;
-                while (d < lag) { effEnd.setDate(effEnd.getDate() + 1); if (effEnd.getDay() !== 0 && effEnd.getDay() !== 6) d++; }
-                const s = effEnd.toISOString().split('T')[0];
-                return s > latest ? s : latest;
-              }, '');
-              if (latestEnd && latestEnd > updated.startDate) {
-                const newStart = addBusinessDays(latestEnd, 2);
-                const newEnd = addBusinessDays(newStart, updated.duration === 0 ? 0 : (updated.duration || 1));
-                await handleChange({ ...updated }, 'startDate', newStart);
-                // endDate cascade handled by handleChange
-                await updateTask({ ...updated, startDate: newStart, endDate: newEnd });
+                while (d < lag) {
+                  dateObj.setDate(dateObj.getDate() + 1);
+                  if (dateObj.getDay() !== 0 && dateObj.getDay() !== 6) d++;
+                }
+                const basePlusLag = dateObj.toISOString().split('T')[0];
+                
+                // If it's Finish-to-Start, successor starts the next business day
+                if (cp.type !== 'start') {
+                  return addBusinessDays(basePlusLag, 2);
+                }
+                // If it's Start-to-Start, successor starts on the same day (basePlusLag)
+                return basePlusLag;
+              }).filter(Boolean);
+              
+              const latestTargetStart = targetDates.sort().pop();
+              if (latestTargetStart && latestTargetStart !== updated.startDate) {
+                const newEnd = addBusinessDays(latestTargetStart, updated.duration === 0 ? 0 : (updated.duration || 1));
+                await handleChange({ ...updated }, 'startDate', latestTargetStart);
+                await updateTask({ ...updated, startDate: latestTargetStart, endDate: newEnd });
               }
             }
           }}
