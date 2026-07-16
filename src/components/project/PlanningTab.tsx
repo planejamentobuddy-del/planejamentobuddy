@@ -1282,36 +1282,46 @@ export default function PlanningTab({ project }: { project: Project }) {
                             </div>
                           </td>
                           {/* Predecessoras */}
-                          <td className="p-0 border-r border-border/40" />
+                          <td className="p-0 border-r border-border/40">
+                            <div style={{ width: colWidths[6] }} />
+                          </td>
+                          {/* Quick delete empty placeholder */}
+                          <td className="p-0 border-r border-border/40">
+                            <div style={{ width: colWidths[7] }} />
+                          </td>
 
                           {showAllColumns && (
                             <>
                               {/* Sucessoras */}
-                              <td className="p-0 border-r border-border/40" />
+                              <td className="p-0 border-r border-border/40">
+                                <div style={{ width: colWidths[8] }} />
+                              </td>
                               {/* Custo (R$) */}
                               <td className="p-0 border-r border-border/40 text-right">
-                                <div className="px-3 text-xs text-primary font-bold animate-fade-in" style={{ width: colWidths[8] }}>
+                                <div className="px-3 text-xs text-primary font-bold animate-fade-in" style={{ width: colWidths[9] }}>
                                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                                     allTasks.filter(t => t.parentId).reduce((sum, s) => sum + (s.cost || 0), 0)
                                   )}
                                 </div>
                               </td>
-                            </>
-                          )}
-                          {showAllColumns && (
-                            <>
                               {/* Observações */}
-                              <td className="p-0 border-r border-border/40" />
+                              <td className="p-0 border-r border-border/40">
+                                <div style={{ width: colWidths[10] }} />
+                              </td>
                               {/* Efetivo */}
                               <td className="p-0 border-r border-border/10 text-center">
-                                <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[10] }}>
+                                <div className="px-3 text-xs text-primary font-bold" style={{ width: colWidths[11] }}>
                                   {projectWorkforce.reduce((sum, e) => sum + e.ownWorkers + e.thirdPartyWorkers, 0)} colab.
                                 </div>
                               </td>
                               {/* Responsável */}
-                              <td className="p-0 border-r border-border/40" />
+                              <td className="p-0 border-r border-border/40">
+                                <div style={{ width: colWidths[12] }} />
+                              </td>
                               {/* Ações */}
-                              <td className="p-0" />
+                              <td className="p-0">
+                                <div style={{ width: colWidths[13] }} />
+                              </td>
                             </>
                           )}
                         </tr>

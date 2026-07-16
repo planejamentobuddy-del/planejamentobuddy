@@ -44,24 +44,53 @@ export default function CrossProjectPredecessorPicker({
     [allProjects, currentProject.id]
   );
 
-  // Tasks of the selected project
+  // Tasks of the selected project (Stages and Subtasks interleaved)
   const tasksOfSelectedProject = useMemo(() => {
     if (!selectedProjectId) return [];
-    return allTasks
-      .filter(t => t.projectId === selectedProjectId && !t.parentId) // only top-level stages
+    
+    // Get all tasks for this project
+    const projectTasks = allTasks.filter(t => t.projectId === selectedProjectId);
+    
+    // Find stages (no parentId)
+    const stages = projectTasks
+      .filter(t => !t.parentId)
       .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      
+    // Interleave subtasks under their parent stages
+    const ordered: (Task & { isSub?: boolean; parentName?: string })[] = [];
+    stages.forEach(stage => {
+      ordered.push({ ...stage, isSub: false });
+      
+      const subtasks = projectTasks
+        .filter(t => t.parentId === stage.id)
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+        
+      subtasks.forEach(sub => {
+        ordered.push({ ...sub, isSub: true, parentName: stage.name });
+      });
+    });
+    
+    return ordered;
   }, [allTasks, selectedProjectId]);
 
   const filteredTasks = useMemo(() => {
     if (!taskSearch) return tasksOfSelectedProject;
     const q = taskSearch.toLowerCase();
-    return tasksOfSelectedProject.filter(t => t.name.toLowerCase().includes(q));
+    return tasksOfSelectedProject.filter(
+      t => t.name.toLowerCase().includes(q) || (t.parentName && t.parentName.toLowerCase().includes(q))
+    );
   }, [tasksOfSelectedProject, taskSearch]);
 
   const selectedTask = useMemo(
     () => allTasks.find(t => t.id === selectedTaskId),
     [allTasks, selectedTaskId]
   );
+
+  const selectedTaskParentName = useMemo(() => {
+    if (!selectedTask || !selectedTask.parentId) return '';
+    const parent = allTasks.find(t => t.id === selectedTask.parentId);
+    return parent ? parent.name : '';
+  }, [allTasks, selectedTask]);
 
   const selectedProject = useMemo(
     () => allProjects.find(p => p.id === selectedProjectId),
@@ -188,29 +217,35 @@ export default function CrossProjectPredecessorPicker({
               <Label className="text-xs mb-1.5 block">2. Selecione a etapa/tarefa predecessora</Label>
               <Popover open={taskPickerOpen} onOpenChange={setTaskPickerOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between h-9 text-sm font-normal">
-                    {selectedTask ? selectedTask.name : 'Escolha uma etapa...'}
-                    <ChevronDown className="w-4 h-4 ml-2 text-muted-foreground" />
+                  <Button variant="outline" className="w-full justify-between h-9 text-sm font-normal text-left truncate">
+                    <span className="truncate flex-1">
+                      {selectedTask ? (selectedTaskParentName ? `${selectedTaskParentName} > ${selectedTask.name}` : selectedTask.name) : 'Escolha uma etapa ou tarefa...'}
+                    </span>
+                    <ChevronDown className="w-4 h-4 ml-2 text-muted-foreground shrink-0" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[420px] p-0" align="start">
                   <Command>
                     <CommandInput
-                      placeholder="Buscar etapa..."
+                      placeholder="Buscar etapa ou tarefa..."
                       value={taskSearch}
                       onValueChange={setTaskSearch}
                     />
                     <CommandList>
-                      <CommandEmpty>Nenhuma etapa encontrada.</CommandEmpty>
+                      <CommandEmpty>Nenhuma etapa ou tarefa encontrada.</CommandEmpty>
                       <CommandGroup>
                         {filteredTasks.map(t => (
                           <CommandItem
                             key={t.id}
                             onSelect={() => { setSelectedTaskId(t.id); setTaskPickerOpen(false); setTaskSearch(''); }}
-                            className={`text-xs ${selectedTaskId === t.id ? 'bg-primary/10 text-primary' : ''}`}
+                            className={`text-xs flex items-center justify-between w-full py-2 ${
+                              selectedTaskId === t.id ? 'bg-primary/10 text-primary' : ''
+                            } ${t.isSub ? 'pl-6 font-normal text-muted-foreground' : 'font-bold text-foreground bg-muted/10 border-b border-border/30'}`}
                           >
                             <div className="flex items-center justify-between w-full gap-2">
-                              <span className="truncate">{t.name}</span>
+                              <span className="truncate">
+                                {t.isSub ? `↳ ${t.name}` : t.name}
+                              </span>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 {statusBadge(t)}
                                 <span className="text-muted-foreground font-mono text-[9px]">{t.endDate}</span>
