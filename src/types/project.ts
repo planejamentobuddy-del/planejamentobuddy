@@ -61,6 +61,12 @@ export interface ServiceFront {
   predecessorId?: string; // ID of another frente inside the same task this frente depends on
 }
 
+export interface CrossProjectPredecessor {
+  taskId: string;      // UUID of the predecessor task (in another project)
+  projectId: string;   // UUID of the predecessor's project
+  lagDays?: number;    // Optional lag in business days (default 0)
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -71,7 +77,8 @@ export interface Task {
   duration: number; // days
   percentComplete: number;
   responsible: string;
-  predecessors: string[]; // task IDs
+  predecessors: string[]; // task IDs (same project only)
+  crossProjectPredecessors?: CrossProjectPredecessor[]; // cross-project dependencies
   hasRestriction: boolean;
   restrictionType: string;
   status: TaskStatus;

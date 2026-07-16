@@ -2,13 +2,14 @@ import React, { useState, useMemo, Fragment, useEffect } from 'react';
 import { Project, Task, TaskStatus, getProjectProgress, StatusComment, safeParseDate, getCriticalTaskIds } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History, ChevronsDownUp, ChevronsUpDown, Eye, TableProperties, Flame } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GripVertical, Copy, Lock, TrendingUp, CalendarClock, History, ChevronsDownUp, ChevronsUpDown, Eye, TableProperties, Flame, Link2 } from 'lucide-react';
 import StatusCommentLog from './StatusCommentLog';
 import TeamTab from './TeamTab';
 import AssignmentsTab from './AssignmentsTab';
 import { RescheduleModal } from './RescheduleModal';
 import { RescheduleHistoryModal } from './RescheduleHistoryModal';
 import { TaskDetailModal } from './TaskDetailModal';
+import CrossProjectPredecessorPicker from './CrossProjectPredecessorPicker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -154,7 +155,7 @@ function PredecessorPicker({
 
 
 export default function PlanningTab({ project }: { project: Project }) {
-  const { getTasksForProject, addTask, updateTask, updateTasksBatch, deleteTask, reorderTasks, users, getResourcesForProject, workforceEntries } = useProjects();
+  const { getTasksForProject, addTask, updateTask, updateTasksBatch, deleteTask, reorderTasks, users, getResourcesForProject, workforceEntries, projects, tasks: allProjectsTasks } = useProjects();
   const { isAdmin } = useAuth();
   const allTasks = getTasksForProject(project.id);
   const resources = getResourcesForProject(project.id);
@@ -174,6 +175,8 @@ export default function PlanningTab({ project }: { project: Project }) {
   const [showOnlyCritical, setShowOnlyCritical] = useState(false);
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const clickTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cross-project predecessor picker state
+  const [crossProjPickerTask, setCrossProjPickerTask] = useState<Task | null>(null);
 
   // Calcular o conjunto de IDs do Caminho Crítico (CPM)
   const criticalSet = useMemo(() => getCriticalTaskIds(allTasks), [allTasks]);
@@ -263,6 +266,7 @@ export default function PlanningTab({ project }: { project: Project }) {
     { label: '% Execução', align: 'left' as const, width: 140, always: true },
     { label: 'Status', align: 'left' as const, width: 150, always: true },
     { label: 'Predecessoras', align: 'left' as const, width: 160, always: true },
+    { label: 'Pred. Externas', align: 'left' as const, width: 170, always: true },
     { label: '', align: 'center' as const, width: 40, always: true },
     { label: 'Sucessoras', align: 'left' as const, width: 160, always: false },
     { label: 'Custo (R$)', align: 'right' as const, width: 140, always: false },
@@ -522,6 +526,35 @@ export default function PlanningTab({ project }: { project: Project }) {
               visited.add(succ.id);
               queue.push({ predId: succ.id, predNewEnd: succEnd });
             }
+          }
+        }
+      }
+    }
+
+    // ── Cross-project cascade: when endDate of this task changes, update cross-project successors ──
+    if ((field === 'endDate' || field === 'duration' || field === 'startDate') && batchUpdates.length > 0) {
+      const taskFinalEnd = updated.endDate;
+      if (taskFinalEnd) {
+        // Find tasks in OTHER projects that have this task.id as cross-project predecessor
+        const crossSuccessors = allProjectsTasks.filter(t =>
+          t.projectId !== project.id &&
+          (t.crossProjectPredecessors || []).some(cp => cp.taskId === task.id)
+        );
+        for (const succ of crossSuccessors) {
+          const cpLink = succ.crossProjectPredecessors!.find(cp => cp.taskId === task.id)!;
+          const lag = cpLink.lagDays || 0;
+          // Compute effective predecessor end + lag
+          let effEnd = new Date(taskFinalEnd + 'T12:00:00');
+          let daysAdded = 0;
+          while (daysAdded < lag) {
+            effEnd.setDate(effEnd.getDate() + 1);
+            if (effEnd.getDay() !== 0 && effEnd.getDay() !== 6) daysAdded++;
+          }
+          const effEndStr = effEnd.toISOString().split('T')[0];
+          const newSuccStart = addBusinessDays(effEndStr, 2);
+          const newSuccEnd = addBusinessDays(newSuccStart, succ.duration === 0 ? 0 : (succ.duration || 1));
+          if (newSuccStart !== succ.startDate || newSuccEnd !== succ.endDate) {
+            batchUpdates.push({ ...succ, startDate: newSuccStart, endDate: newSuccEnd });
           }
         }
       }
@@ -804,6 +837,60 @@ export default function PlanningTab({ project }: { project: Project }) {
           />
         </td>
 
+        {/* 8b. Pred. Externas — cross-project */}
+        <td className="py-2.5 px-3 border-r border-border/70">
+          <div className="flex flex-col gap-1 min-w-0">
+            {/* Existing cross-project links */}
+            {(task.crossProjectPredecessors || []).map(cp => {
+              const predTask = allProjectsTasks.find(t => t.id === cp.taskId);
+              const predProj = projects.find(p => p.id === cp.projectId);
+              // Check conflict
+              const predEnd = predTask?.endDate;
+              let hasConflict = false;
+              if (predEnd && task.startDate && predTask?.status !== 'completed') {
+                let effEnd = new Date(predEnd + 'T12:00:00');
+                let d = 0;
+                const lag = cp.lagDays || 0;
+                while (d < lag) { effEnd.setDate(effEnd.getDate() + 1); if (effEnd.getDay() !== 0 && effEnd.getDay() !== 6) d++; }
+                hasConflict = task.startDate <= effEnd.toISOString().split('T')[0];
+              }
+              return (
+                <div
+                  key={cp.taskId}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium border ${
+                    hasConflict
+                      ? 'bg-red-500/10 text-red-600 border-red-400/30'
+                      : predTask?.status === 'completed'
+                      ? 'bg-emerald-500/10 text-emerald-700 border-emerald-400/30'
+                      : 'bg-primary/10 text-primary border-primary/20'
+                  }`}
+                  title={`${predTask?.name || '—'} · ${predProj?.name || '—'}${
+                    hasConflict ? ' ⚠ Conflito de data!' : ''
+                  }`}
+                >
+                  {hasConflict ? (
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                  ) : (
+                    <Link2 className="w-3 h-3 shrink-0" />
+                  )}
+                  <span className="truncate max-w-[100px]">
+                    {predTask?.name || '…'}
+                  </span>
+                </div>
+              );
+            })}
+            {/* Button to open picker */}
+            <button
+              onClick={() => setCrossProjPickerTask(task)}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors group mt-0.5"
+              title="Vincular predecessora de outra obra"
+            >
+              <Link2 className="w-3 h-3 group-hover:scale-110 transition-transform" />
+              {(task.crossProjectPredecessors || []).length === 0 ? 'Vincular obra' : 'Editar vínculos'}
+            </button>
+          </div>
+        </td>
+
         {/* ── Always-visible quick-delete ── */}
         <td className="py-2.5 px-2 border-r border-border/70 w-8">
           <Button
@@ -971,6 +1058,43 @@ export default function PlanningTab({ project }: { project: Project }) {
         onClose={() => setSelectedDetailTask(null)}
         onUpdate={updateTask}
       />
+
+      {/* Cross-project predecessor picker modal */}
+      {crossProjPickerTask && (
+        <CrossProjectPredecessorPicker
+          open={!!crossProjPickerTask}
+          onClose={() => setCrossProjPickerTask(null)}
+          currentTask={crossProjPickerTask}
+          currentProject={project}
+          allProjects={projects}
+          allTasks={allProjectsTasks}
+          existingLinks={crossProjPickerTask.crossProjectPredecessors || []}
+          onSave={async (newLinks) => {
+            const updated = { ...crossProjPickerTask, crossProjectPredecessors: newLinks };
+            await updateTask(updated);
+            // If any predecessor changed, cascade dates
+            if (newLinks.length > 0) {
+              const latestEnd = newLinks.reduce((latest, cp) => {
+                const predTask = allProjectsTasks.find(t => t.id === cp.taskId);
+                if (!predTask) return latest;
+                let effEnd = new Date(predTask.endDate + 'T12:00:00');
+                let d = 0;
+                const lag = cp.lagDays || 0;
+                while (d < lag) { effEnd.setDate(effEnd.getDate() + 1); if (effEnd.getDay() !== 0 && effEnd.getDay() !== 6) d++; }
+                const s = effEnd.toISOString().split('T')[0];
+                return s > latest ? s : latest;
+              }, '');
+              if (latestEnd && latestEnd > updated.startDate) {
+                const newStart = addBusinessDays(latestEnd, 2);
+                const newEnd = addBusinessDays(newStart, updated.duration === 0 ? 0 : (updated.duration || 1));
+                await handleChange({ ...updated }, 'startDate', newStart);
+                // endDate cascade handled by handleChange
+                await updateTask({ ...updated, startDate: newStart, endDate: newEnd });
+              }
+            }
+          }}
+        />
+      )}
 
       <Tabs defaultValue="schedule" className="w-full">
         <div className="flex justify-between items-center mb-6">
@@ -1317,6 +1441,9 @@ const SortableStageRow = React.memo(function SortableStageRow({
                 </td>
 
                 {/* 8. Predecessoras */}
+                <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
+
+                {/* 8b. Pred. Externas */}
                 <td className="py-2 px-3 text-xs text-muted-foreground/35 text-center">—</td>
 
                 {hasExtra && (

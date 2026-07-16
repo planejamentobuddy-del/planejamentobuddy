@@ -124,6 +124,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
             currentEnd: (t as any).current_end || t.end_date || '',
             rescheduleCount: (t as any).reschedule_count || 0,
             cost: Number(t.cost) || 0,
+            crossProjectPredecessors: (Array.isArray((t as any).cross_project_predecessors) ? (t as any).cross_project_predecessors : []) as any,
           };
         }).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0) || a.startDate.localeCompare(b.startDate)));
       }
@@ -614,6 +615,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         frentes: (task.frentes as any) || [],
         frentes_mode: task.frentesMode || 'manual',
         cost: task.cost || 0,
+        cross_project_predecessors: (task.crossProjectPredecessors as any) || [],
       })
       .eq('id', task.id);
 
@@ -735,6 +737,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         frentes: (task.frentes as any) || [],
         frentes_mode: task.frentesMode || 'manual',
         cost: task.cost || 0,
+        cross_project_predecessors: (task.crossProjectPredecessors as any) || [],
       });
     });
 

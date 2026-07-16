@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy, GripVertical, ShoppingCart, X, Globe } from 'lucide-react';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy, GripVertical, ShoppingCart, X, Globe, Link2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -514,6 +514,15 @@ export default function Index() {
               const status = getProjectStatus(tasks);
               const estimated = getEstimatedEndDate(project, tasks);
               const cfg = statusConfig[status];
+              // Cross-project predecessor indicators
+              const allProjectsTasks = tasks; // tasks here = project tasks from getTasksForProject
+              // Check if any task in this project has pending cross-project predecessors
+              const crossLinks = tasks.flatMap(t => (t.crossProjectPredecessors || []));
+              const hasPendingCrossLinks = crossLinks.some(cp => {
+                // Find predecessor task from global context — approximate using getTasksForProject on their project
+                return true; // We just show that links exist; conflict check is in PlanningTab
+              });
+              const crossLinkCount = crossLinks.length;
               return (
                 <motion.div
                   key={project.id}
@@ -603,6 +612,15 @@ export default function Index() {
                       <TrendingUp className="w-4 h-4 text-primary" />
                       {tasks.length} TAREFAS
                     </span>
+                    {crossLinkCount > 0 && (
+                      <span
+                        className="flex items-center gap-1 ml-auto px-2 py-0.5 rounded-lg bg-primary/10 text-primary border border-primary/20"
+                        title={`${crossLinkCount} vínculo(s) com outra(s) obra(s)`}
+                      >
+                        <Link2 className="w-3 h-3" />
+                        {crossLinkCount} vínculo{crossLinkCount > 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
                 </motion.div>
               );
