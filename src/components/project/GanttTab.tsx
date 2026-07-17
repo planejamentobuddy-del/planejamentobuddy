@@ -833,9 +833,9 @@ export default function GanttTab({ project }: { project: Project }) {
                 {/* Vertical Today Line — Enhanced with S-Curve tooltip */}
                 {todayPos >= 0 && todayPos <= timelineWidth && (() => {
                   const diff = actualToday - plannedToday;
-                  const isAhead = diff > 1;
-                  const isBehind = diff < -1;
-                  const statusLabel = isAhead ? `Adiantado ${diff.toFixed(0)}%` : isBehind ? `Atrasado ${Math.abs(diff).toFixed(0)}%` : 'No Prazo';
+                  const isAhead = diff > 0.1;
+                  const isBehind = diff < -0.1;
+                  const statusLabel = isAhead ? `Adiantado ${diff.toFixed(1)}%` : isBehind ? `Atrasado ${Math.abs(diff).toFixed(1)}%` : 'No Prazo';
                   const statusColor = isAhead ? 'bg-emerald-500' : isBehind ? 'bg-red-500' : 'bg-blue-500';
                   const statusTextColor = isAhead ? 'text-emerald-400' : isBehind ? 'text-red-400' : 'text-blue-400';
                   const statusEmoji = isAhead ? '🟢' : isBehind ? '🔴' : '✅';
@@ -876,12 +876,12 @@ export default function GanttTab({ project }: { project: Project }) {
                             {/* Planned marker */}
                             <div className="flex items-center gap-1.5 whitespace-nowrap">
                               <div className="w-2.5 h-0.5 bg-slate-400" />
-                              <span className="text-[8px] text-slate-400 font-bold">P {plannedToday}%</span>
+                              <span className="text-[8px] text-slate-400 font-bold">P {plannedToday.toFixed(1)}%</span>
                             </div>
                             {/* Actual marker */}
                             <div className="flex items-center gap-1.5 whitespace-nowrap">
                               <div className={`w-2.5 h-0.5 ${statusColor}`} />
-                              <span className={`text-[8px] font-bold ${statusTextColor}`}>R {actualToday}%</span>
+                              <span className={`text-[8px] font-bold ${statusTextColor}`}>R {actualToday.toFixed(1)}%</span>
                             </div>
                           </div>
 
@@ -896,19 +896,19 @@ export default function GanttTab({ project }: { project: Project }) {
                                   <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
                                   Planejado
                                 </span>
-                                <span className="font-bold text-foreground tabular-nums">{plannedToday}%</span>
+                                <span className="font-bold text-foreground tabular-nums">{plannedToday.toFixed(1)}%</span>
                               </div>
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-muted-foreground flex items-center gap-1.5">
                                   <span className={`w-2 h-2 rounded-full inline-block ${statusColor}`} />
                                   Realizado
                                 </span>
-                                <span className={`font-bold tabular-nums ${statusTextColor}`}>{actualToday}%</span>
+                                <span className={`font-bold tabular-nums ${statusTextColor}`}>{actualToday.toFixed(1)}%</span>
                               </div>
                               <div className="h-px bg-border/40" />
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-muted-foreground">Diferença</span>
-                                <span className={`font-black tabular-nums ${statusTextColor}`}>{diff > 0 ? '+' : ''}{diff.toFixed(0)}%</span>
+                                <span className={`font-black tabular-nums ${statusTextColor}`}>{diff > 0 ? '+' : ''}{diff.toFixed(1)}%</span>
                               </div>
                             </div>
                             <div className={`text-[11px] font-bold text-center py-1.5 rounded-lg ${statusColor} text-white`}>

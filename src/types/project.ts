@@ -560,8 +560,8 @@ export function calculateSCurve(tasks: Task[], project: Project): CurvePoint[] {
 
     points.push({
       label: new Date(currentSafe).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-      planejado: Math.round((totalPlannedWeight / totalWeight) * 100),
-      realizado: Math.round((totalActualWeight / totalWeight) * 100),
+      planejado: Math.round((totalPlannedWeight / totalWeight) * 1000) / 10,
+      realizado: Math.round((totalActualWeight / totalWeight) * 1000) / 10,
       timestamp: currentSafe,
     });
   });
