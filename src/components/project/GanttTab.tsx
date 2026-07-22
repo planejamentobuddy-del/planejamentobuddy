@@ -1047,14 +1047,40 @@ export default function GanttTab({ project }: { project: Project }) {
 
                       ) : (
                         <>
-                          {/* Baseline ghost bar (shown behind main bar for rescheduled tasks) */}
-                          {hasBaseline && (
-                            <div
-                              className="absolute top-3 h-4 rounded-md z-[5] border border-dashed border-muted-foreground/30 bg-muted/25 pointer-events-none"
-                              style={{ left: baselineStartPos, width: baselineWidth }}
-                              title={`Planejado original: ${new Date(task.plannedStart! + 'T12:00:00').toLocaleDateString('pt-BR')} → ${new Date(task.plannedEnd! + 'T12:00:00').toLocaleDateString('pt-BR')}`}
-                            />
-                          )}
+                          {/* Baseline ghost bar and displacement connector */}
+                          {hasBaseline && (() => {
+                            const origStartStr = new Date(task.plannedStart! + 'T12:00:00').toLocaleDateString('pt-BR');
+                            const origEndStr = new Date(task.plannedEnd! + 'T12:00:00').toLocaleDateString('pt-BR');
+                            const currStartStr = new Date(task.startDate + 'T12:00:00').toLocaleDateString('pt-BR');
+                            const currEndStr = new Date(task.endDate + 'T12:00:00').toLocaleDateString('pt-BR');
+                            const connectorWidth = Math.abs(startPos - baselineStartPos);
+
+                            return (
+                              <>
+                                {/* Visual connecting line / shift bridge between Original and Reprogrammed */}
+                                {connectorWidth > 2 && (
+                                  <div 
+                                    className="absolute top-4 h-0.5 border-t-2 border-dashed border-amber-500/80 z-[6] pointer-events-none"
+                                    style={{ 
+                                      left: Math.min(baselineStartPos, startPos), 
+                                      width: connectorWidth 
+                                    }}
+                                  />
+                                )}
+
+                                {/* Baseline Original Bar - High Visibility Dashed Pattern Bar */}
+                                <div
+                                  className="absolute top-0.5 h-3.5 rounded border-2 border-dashed border-slate-500/80 bg-slate-400/25 dark:border-amber-400/80 dark:bg-amber-950/30 z-[7] pointer-events-none flex items-center px-1 overflow-hidden shadow-sm"
+                                  style={{ left: baselineStartPos, width: baselineWidth }}
+                                  title={`Original: ${origStartStr} → ${origEndStr} | Reprogramado: ${currStartStr} → ${currEndStr}`}
+                                >
+                                  <span className="text-[7px] font-black uppercase tracking-tighter text-slate-700 dark:text-amber-300 opacity-90 truncate select-none">
+                                    Original
+                                  </span>
+                                </div>
+                              </>
+                            );
+                          })()}
                           {/* Regular Task Bar or Milestone Diamond */}
                           {task.duration === 0 && !hasNoDates ? (
                             <div
