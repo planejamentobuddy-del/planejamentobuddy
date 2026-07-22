@@ -896,7 +896,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       toast.error('Não há planos para fechar nesta semana.');
       return;
     }
-    const completed = projectPlans.filter(p => p.status === 'completed' || p.status === 'in_progress').length;
+    const completed = projectPlans.filter(p => (p.currentProgress !== undefined ? p.currentProgress : 0) >= (p.expectedProgress !== undefined ? p.expectedProgress : 100) || p.status === 'completed').length;
     const ppc = Math.round((completed / projectPlans.length) * 100);
     
     const { data, error } = await supabase

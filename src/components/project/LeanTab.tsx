@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Project, DELAY_REASONS, WeeklyPlan, Task, Constraint, CONSTRAINT_CATEGORIES, ConstraintCategory, StatusComment } from '@/types/project';
+import { Project, DELAY_REASONS, WeeklyPlan, Task, Constraint, CONSTRAINT_CATEGORIES, ConstraintCategory, StatusComment, SUPPLY_STATUS_LABELS, SUPPLY_STATUS_COLORS } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,13 +11,14 @@ import {
   AlertTriangle, CheckCircle2, Plus, Trash2, Filter,
   Lock, Unlock, Clock, AlertCircle, MessageSquare,
   ChevronDown, ChevronUp, Pencil, ListTodo, Printer,
-  EyeOff, HelpCircle
+  EyeOff, HelpCircle, CalendarClock
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { toast } from 'sonner';
 import { setISOWeekYear, setISOWeek, startOfISOWeek, endOfISOWeek, getISOWeekYear, getISOWeek, addWeeks } from 'date-fns';
 import StatusCommentLog from './StatusCommentLog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { RescheduleModal } from './RescheduleModal';
 
 function getWeekRange(weekStr: string): { start: Date; end: Date; label: string } {
   const match = weekStr.match(/(\d{4})-S(\d{2})/);
@@ -121,6 +122,7 @@ export default function LeanTab({ project }: { project: Project }) {
   const [showAddSubtaskTaskId, setShowAddSubtaskTaskId] = useState<string | null>(null);
   const [newSubtaskName, setNewSubtaskName] = useState('');
   const [ignoredDiscrepancyTaskIds, setIgnoredDiscrepancyTaskIds] = useState<string[]>([]);
+  const [rescheduleTask, setRescheduleTask] = useState<Task | null>(null);
 
   const weekRange = getWeekRange(currentWeekStr);
   const weekPlans = plans.filter(p => p.week === currentWeekStr);
@@ -534,6 +536,7 @@ export default function LeanTab({ project }: { project: Project }) {
                           <th className="py-3 px-3 w-16 text-center">Esperado</th>
                           <th className="py-3 px-3 w-20 text-center">Progresso</th>
                           <th className="py-3 px-3 w-28">Responsável</th>
+                          <th className="py-3 px-3 w-40">Motivo Não Cumprimento</th>
                           
                           {/* Dias de Domingo a Sábado */}
                           {daysOfWeek.map(day => (
@@ -625,14 +628,75 @@ export default function LeanTab({ project }: { project: Project }) {
                                       {/* Restrições / Suprimentos badges */}
                                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                         {taskConstraints.length > 0 && (
-                                          <span className="inline-flex items-center gap-0.5 text-[9px] text-red-600 bg-red-500/5 px-1.5 rounded">
-                                            <AlertTriangle className="w-2.5 h-2.5" /> {taskConstraints.length} restrições
-                                          </span>
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <button type="button" className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-red-600 bg-red-500/10 hover:bg-red-500/20 px-1.5 py-0.5 rounded cursor-pointer transition-colors" title="Clique para ver restrições">
+                                                <AlertTriangle className="w-2.5 h-2.5" /> {taskConstraints.length} restrições
+                                              </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-80 p-3 text-xs shadow-xl" align="start">
+                                              <div className="font-bold text-sm text-foreground mb-2 flex items-center justify-between border-b pb-1.5">
+                                                <span className="flex items-center gap-1.5 text-red-600">
+                                                  <AlertTriangle className="w-4 h-4" /> Restrições Abertas ({taskConstraints.length})
+                                                </span>
+                                              </div>
+                                              <div className="space-y-2 max-h-60 overflow-y-auto">
+                                                {taskConstraints.map(c => (
+                                                  <div key={c.id} className="p-2 rounded-lg bg-muted/40 border border-border/60 space-y-1">
+                                                    <div className="font-semibold text-foreground text-xs">{c.description}</div>
+                                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                                                      <span>Cat: <strong className="text-foreground uppercase">{c.category}</strong></span>
+                                                      <span>Resp: <strong className="text-foreground">{c.responsible || 'Sem resp.'}</strong></span>
+                                                    </div>
+                                                    {c.dueDate && (
+                                                      <div className="text-[10px] text-muted-foreground">
+                                                        Prazo: <strong className={new Date(c.dueDate) < new Date() ? 'text-red-500 font-bold' : 'text-foreground'}>{new Date(c.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</strong>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </PopoverContent>
+                                          </Popover>
                                         )}
                                         {pendingSupplies.length > 0 && (
-                                          <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-600 bg-amber-500/5 px-1.5 rounded">
-                                            📦 {pendingSupplies.length} compras pendentes
-                                          </span>
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <button type="button" className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 px-1.5 py-0.5 rounded cursor-pointer transition-colors" title="Clique para ver os detalhes da compra">
+                                                📦 {pendingSupplies.length} compra{pendingSupplies.length > 1 ? 's' : ''} pendente{pendingSupplies.length > 1 ? 's' : ''}
+                                              </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-80 p-3 text-xs shadow-xl" align="start">
+                                              <div className="font-bold text-sm text-foreground mb-2 flex items-center justify-between border-b pb-1.5">
+                                                <span className="flex items-center gap-1.5 text-amber-600">
+                                                  📦 Suprimentos Pendentes ({pendingSupplies.length})
+                                                </span>
+                                              </div>
+                                              <div className="space-y-2.5 max-h-64 overflow-y-auto">
+                                                {pendingSupplies.map(sp => (
+                                                  <div key={sp.id} className="p-2.5 rounded-lg bg-muted/40 border border-border/60 space-y-1.5">
+                                                    <div className="flex items-start justify-between gap-1">
+                                                      <span className="font-bold text-foreground text-xs leading-tight">{sp.name}</span>
+                                                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${SUPPLY_STATUS_COLORS[sp.status] || 'bg-amber-100 text-amber-800'}`}>
+                                                        {SUPPLY_STATUS_LABELS[sp.status] || sp.status}
+                                                      </span>
+                                                    </div>
+                                                    {sp.quantitative && (
+                                                      <div className="text-[10px] text-muted-foreground">
+                                                        Qtd: <strong className="text-foreground">{sp.quantitative}</strong>
+                                                      </div>
+                                                    )}
+                                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5 border-t border-border/40 mt-1">
+                                                      <span>Resp: <strong className="text-foreground">{sp.responsible || 'Sem resp.'}</strong></span>
+                                                      {sp.arriveBy && (
+                                                        <span>Chegada: <strong className="text-foreground">{new Date(sp.arriveBy + 'T12:00:00').toLocaleDateString('pt-BR')}</strong></span>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </PopoverContent>
+                                          </Popover>
                                         )}
                                         {subtasks.length > 0 && (
                                           <span className="text-[9px] text-muted-foreground bg-muted/40 px-1 rounded font-medium">
@@ -645,6 +709,20 @@ export default function LeanTab({ project }: { project: Project }) {
                                           className="text-[9px] text-primary hover:underline ml-1 font-semibold"
                                         >
                                           + Add Subtarefa
+                                        </button>
+                                        <button 
+                                          type="button"
+                                          onClick={() => {
+                                            if (linkedTask) {
+                                              setRescheduleTask(linkedTask);
+                                            } else {
+                                              toast.info('Para reprogramar o cronograma, a tarefa precisa estar vinculada ao planejamento geral.');
+                                            }
+                                          }}
+                                          className="text-[9px] text-amber-600 dark:text-amber-400 hover:underline font-bold ml-1.5 inline-flex items-center gap-0.5"
+                                          title="Reprogramar datas e registrar motivo do não cumprimento"
+                                        >
+                                          <CalendarClock className="w-2.5 h-2.5" /> Reprogramar
                                         </button>
                                       </div>
                                     </div>
@@ -718,6 +796,29 @@ export default function LeanTab({ project }: { project: Project }) {
                                 <td className="py-3 px-3 text-muted-foreground font-medium truncate max-w-[120px]">
                                   {plan.responsible || 'Sem resp.'}
                                 </td>
+                                <td className="py-3 px-3">
+                                  {curProg < expProg ? (
+                                    <Select
+                                      value={plan.reason || ''}
+                                      onValueChange={val => updateWeeklyPlan({ ...plan, reason: val, status: 'not_completed' })}
+                                    >
+                                      <SelectTrigger className="h-7 text-[11px] rounded-lg border-amber-300/80 bg-amber-50/50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 font-medium">
+                                        <SelectValue placeholder="Selecione motivo..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {DELAY_REASONS.map(r => (
+                                          <SelectItem key={r} value={r} className="text-xs">
+                                            {r}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                                      ✓ Meta Cumprida
+                                    </span>
+                                  )}
+                                </td>
 
                                 {/* Células de Domingo a Sábado */}
                                 {daysOfWeek.map(day => {
@@ -734,26 +835,46 @@ export default function LeanTab({ project }: { project: Project }) {
                                         }
                                         updateWeeklyPlan({ ...plan, scheduledDays: JSON.stringify(updatedDays) });
                                       }}
-                                      className={`py-3 px-1 border-l border-border/45 text-center cursor-pointer hover:bg-muted/10 transition-all ${
-                                        isScheduled ? 'bg-amber-300/80 dark:bg-amber-500/60' : 'bg-transparent'
+                                      className={`py-3 px-1 border-l border-border/45 text-center cursor-pointer transition-all ${
+                                        isScheduled ? 'bg-emerald-500/80 dark:bg-emerald-600/80 text-white' : 'hover:bg-muted/20 bg-transparent'
                                       }`}
                                     >
-                                      <div className="h-6 w-full" />
+                                      <div className="h-6 w-full flex items-center justify-center font-bold text-xs">
+                                        {isScheduled ? '✓' : ''}
+                                      </div>
                                     </td>
                                   );
                                 })}
 
                                 <td className="py-3 px-3 text-right">
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteWeeklyPlan(plan.id)}>
-                                    <Trash2 className="w-3.5 h-3.5 text-destructive/60 hover:text-destructive" />
-                                  </Button>
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-7 text-xs font-semibold text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40 gap-1 rounded-lg px-2" 
+                                      title="Reprogramar tarefa e registrar motivo"
+                                      onClick={() => {
+                                        if (linkedTask) {
+                                          setRescheduleTask(linkedTask);
+                                        } else {
+                                          toast.info('Para reprogramar o cronograma, a tarefa precisa estar vinculada ao planejamento geral.');
+                                        }
+                                      }}
+                                    >
+                                      <CalendarClock className="w-3.5 h-3.5" />
+                                      <span className="hidden lg:inline">Reprogramar</span>
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteWeeklyPlan(plan.id)}>
+                                      <Trash2 className="w-3.5 h-3.5 text-destructive/60 hover:text-destructive" />
+                                    </Button>
+                                  </div>
                                 </td>
                               </tr>
 
                               {/* Diálogo rápido para criar Subtarefa */}
                               {showAddSubtaskTaskId === plan.id && (
                                 <tr className="bg-muted/5 dark:bg-muted/2">
-                                  <td colSpan={17} className="p-3">
+                                  <td colSpan={18} className="p-3">
                                     <div className="flex items-center gap-2 max-w-md ml-8">
                                       <Input 
                                         placeholder="Nome da subtarefa... (Ex: Fôrma, Armação)" 
@@ -1238,6 +1359,12 @@ export default function LeanTab({ project }: { project: Project }) {
           </div>
         </TabsContent>
       </Tabs>
+      <RescheduleModal
+        task={rescheduleTask}
+        isOpen={!!rescheduleTask}
+        onClose={() => setRescheduleTask(null)}
+        projectId={project.id}
+      />
       <datalist id="users-list-lean">
         {users.map(u => <option key={u.id} value={u.full_name} />)}
       </datalist>
