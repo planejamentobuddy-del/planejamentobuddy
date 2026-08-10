@@ -443,65 +443,100 @@ export default function ReportsTab({ project }: ReportsTabProps) {
   const buildCronogramaShareHTML = (): string => {
     const now = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
     const fmtD = (d?: string) => { if (!d) return '—'; try { return new Date(d + 'T12:00:00').toLocaleDateString('pt-BR'); } catch { return d; } };
-    const statusLabel: Record<string, string> = { not_started: 'Não Iniciado', in_progress: 'Em Andamento', completed: 'Concluído', delayed: 'Atrasado', rescheduled: 'Reprogramada' };
-    const statusColor: Record<string, string> = { not_started: '#94a3b8', in_progress: '#3b82f6', completed: '#22c55e', delayed: '#ef4444', rescheduled: '#f59e0b' };
+    const statusColor: Record<string, string> = { not_started: '#94A3B8', in_progress: '#3B82F6', completed: '#10B981', delayed: '#EF4444', rescheduled: '#F59E0B' };
+
     const stages = tasks.filter(t => !t.parentId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
     const stageData = stages.map(stage => {
       const subs = tasks.filter(t => t.parentId === stage.id);
+      if (subs.length === 0) return { name: stage.name, startDate: stage.startDate, endDate: stage.endDate, percent: stage.percentComplete, status: stage.status, duration: stage.duration || 0 };
       const dates = subs.map(s => safeParseDate(s.startDate)).filter(d => !isNaN(d));
       const endDates = subs.map(s => safeParseDate(s.endDate)).filter(d => !isNaN(d));
       const startTs = dates.length > 0 ? Math.min(...dates) : safeParseDate(stage.startDate);
       const endTs = endDates.length > 0 ? Math.max(...endDates) : safeParseDate(stage.endDate);
       const totalWeight = subs.reduce((acc, curr) => acc + (curr.duration || 1), 0);
       const doneWeight = subs.reduce((acc, curr) => acc + ((curr.percentComplete || 0) * (curr.duration || 1)), 0);
-      const percent = subs.length > 0 && totalWeight > 0 ? Math.round(doneWeight / totalWeight) : stage.percentComplete;
+      const percent = totalWeight > 0 ? Math.round(doneWeight / totalWeight) : stage.percentComplete;
       return { name: stage.name, startDate: new Date(startTs).toISOString().split('T')[0], endDate: new Date(endTs).toISOString().split('T')[0], percent, status: percent >= 100 ? 'completed' : (percent > 0 ? 'in_progress' : 'not_started'), duration: Math.round((endTs - startTs) / 86400000) };
     });
+
     const projStartDates = stageData.map(s => safeParseDate(s.startDate)).filter(d => !isNaN(d));
     const projEndDates = stageData.map(s => safeParseDate(s.endDate)).filter(d => !isNaN(d));
     const rawMin = projStartDates.length > 0 ? new Date(Math.min(...projStartDates)) : new Date(project.startDate || new Date());
     const rawMax = projEndDates.length > 0 ? new Date(Math.max(...projEndDates)) : new Date(project.endDate || new Date());
     const tlStart = new Date(rawMin.getFullYear(), rawMin.getMonth(), 1);
     const tlEnd = new Date(rawMax.getFullYear(), rawMax.getMonth() + 1, 0);
-    const tlStartTs = tlStart.getTime(); const tlDur = tlEnd.getTime() - tlStartTs;
-    const months: string[] = [];
+    const projStartTs = tlStart.getTime();
+    const projDuration = tlEnd.getTime() - projStartTs;
+
+    const monthsList: { label: string; year: string }[] = [];
     const cur = new Date(tlStart.getFullYear(), tlStart.getMonth(), 1); let lim = 0;
-    while (cur <= tlEnd && lim < 48) { const lbl = cur.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''); const yr = cur.getFullYear().toString().slice(-2); months.push(`${lbl.charAt(0).toUpperCase()}${lbl.slice(1)} '${yr}`); cur.setMonth(cur.getMonth() + 1); lim++; }
-    const ganttRows = stageData.map(s => {
-      const sTs = safeParseDate(s.startDate); const eTs = safeParseDate(s.endDate);
-      const left = tlDur > 0 ? Math.max(0, Math.min(100, ((sTs - tlStartTs) / tlDur) * 100)) : 0;
-      const width = tlDur > 0 ? Math.max(2, Math.min(100 - left, ((eTs - sTs) / tlDur) * 100)) : 0;
-      const barBg = statusColor[s.status] || '#94a3b8';
-      return `<tr style="border-bottom:1px solid #f1f5f9">
-        <td style="padding:8px 14px;border-right:1px solid #e2e8f0;white-space:nowrap;width:200px">
-          <div style="font-size:11px;font-weight:700;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${s.name}</div>
-          <div style="font-size:9px;color:#64748b;margin-top:2px">${fmtD(s.startDate)} a ${fmtD(s.endDate)}</div>
-        </td>
-        <td style="padding:8px 14px;position:relative;min-width:0">
-          <div style="position:relative;height:22px;background:#f1f5f9;border-radius:4px;overflow:hidden">
-            <div style="position:absolute;left:${left.toFixed(1)}%;width:${width.toFixed(1)}%;height:100%;background:${barBg};border-radius:3px;display:flex;align-items:center;justify-content:center;overflow:hidden">
-              <div style="position:absolute;left:0;top:0;height:100%;width:${s.percent}%;background:rgba(0,0,0,0.15)"></div>
-              <span style="position:relative;z-index:1;font-size:9px;font-weight:700;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,0.4);padding:0 6px;white-space:nowrap">${s.percent}% (${s.duration}d)</span>
-            </div>
-          </div>
-        </td>
-        <td style="padding:8px 10px;white-space:nowrap"><span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;background:${barBg};color:#fff">${statusLabel[s.status] || s.status}</span></td>
-      </tr>`;
-    }).join('');
-    const headerTicks = months.map(m => `<th style="min-width:60px;padding:6px 4px;font-size:8px;font-weight:600;color:#ead9b6;border-left:1px solid rgba(231,226,213,0.4);text-align:center">${m}</th>`).join('');
-    return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cronograma Geral — ${project.name}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-<style>*{box-sizing:border-box}body{margin:0;background:#F4EEE2;font-family:Inter,sans-serif;color:#211E18}@media print{body{background:#fff}@page{size:A3 landscape;margin:8mm}}</style></head><body>
-<div style="position:sticky;top:0;z-index:50;background:#13322F;padding:10px 20px;display:flex;justify-content:space-between;align-items:center">
-  <span style="color:#EAD9B6;font-weight:700;font-size:14px">${project.name} — Cronograma Geral</span>
-  <button onclick="window.print()" style="background:#2C6E68;color:#fff;border:0;border-radius:8px;padding:7px 16px;font-weight:700;font-size:12px;cursor:pointer">🖨 Imprimir / PDF</button>
-</div>
-<div style="max-width:1400px;margin:0 auto;padding:24px 20px">
-  <div style="background:#fff;border-radius:12px;border:1px solid #CFC9BB;overflow:hidden;margin-bottom:20px">
-    <div style="background:#13322F;padding:10px 14px;display:flex"><div style="width:200px;flex-shrink:0;font-size:10px;font-weight:600;color:#EAD9B6;text-transform:uppercase;letter-spacing:0.05em">Etapa</div><div style="flex:1;overflow:hidden"><table style="width:100%;border-collapse:collapse"><tr>${headerTicks}</tr></table></div><div style="width:120px;flex-shrink:0"></div></div>
-    <table style="width:100%;border-collapse:collapse">${ganttRows}</table>
+    while (cur <= tlEnd && lim < 48) {
+      const lbl = cur.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+      const yr = cur.toLocaleDateString('pt-BR', { year: '2-digit' });
+      monthsList.push({ label: lbl.charAt(0).toUpperCase() + lbl.slice(1), year: yr });
+      cur.setMonth(cur.getMonth() + 1); lim++;
+    }
+
+    const totalWeight2 = stageData.reduce((acc, s) => acc + (s.duration || 1), 0);
+    const doneWeight2 = stageData.reduce((acc, s) => acc + (s.percent * (s.duration || 1)), 0);
+    const overallProgress = totalWeight2 > 0 ? Math.round(doneWeight2 / totalWeight2) : 0;
+
+    const monthHeaderDivs = monthsList.map((m, mi) =>
+      `<div style="flex:1;border-left:${mi > 0 ? '1px solid rgba(255,255,255,0.15)' : 'none'};font-size:8px;line-height:1.25;color:#E0F2FE;text-align:center"><b>${m.label}</b><br>${m.year}</div>`
+    ).join('');
+
+    const ganttRowDivs = stageData.map((s, si) => {
+      const startTs = safeParseDate(s.startDate);
+      const endTs = safeParseDate(s.endDate);
+      let left = 0; let width = 100;
+      if (projDuration > 0 && !isNaN(startTs) && !isNaN(endTs)) {
+        left = Math.max(0, Math.min(100, ((startTs - projStartTs) / projDuration) * 100));
+        width = Math.max(3, Math.min(100 - left, ((endTs - startTs) / projDuration) * 100));
+      }
+      const barColor = statusColor[s.status] || '#94A3B8';
+      const gridLines = monthsList.map((_, mi) =>
+        `<div style="flex:1;border-left:${mi > 0 ? '1px solid rgba(226,232,240,0.5)' : 'none'}"></div>`
+      ).join('');
+      return `<div style="display:flex;align-items:center;padding:10px 14px;border-bottom:${si < stageData.length - 1 ? '1px solid #E2E8F0' : 'none'};background:${si % 2 === 0 ? '#fff' : '#F8FAFC'}">
+  <div style="width:220px;flex-shrink:0;padding-right:12px">
+    <div style="font-size:12px;font-weight:700;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>
+    <div style="font-size:9px;color:#475569;font-family:monospace;margin-top:2px">${fmtD(s.startDate)} a ${fmtD(s.endDate)}</div>
   </div>
-  <div style="margin-top:28px;padding-top:12px;border-top:1px solid #CFC9BB;text-align:center;font-size:10px;color:#6A6358">Gerado automaticamente — Buddy Construtora · ${now} · Documento para uso do cliente.</div>
+  <div style="flex:1;height:24px;background:#F1F5F9;border-radius:6px;position:relative;display:flex;align-items:center;border:1px solid #E2E8F0">
+    <div style="position:absolute;inset:0;display:flex;pointer-events:none">${gridLines}</div>
+    <div style="position:absolute;left:${left.toFixed(1)}%;width:${width.toFixed(1)}%;height:100%;background:${barColor};border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:9px;font-weight:bold;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,0.15),0 2px 4px rgba(0,0,0,0.1)">
+      <div style="height:100%;width:${s.percent}%;background:rgba(0,0,0,0.12);position:absolute;left:0;top:0"></div>
+      <span style="position:relative;z-index:10;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.percent}% (${s.duration}d)</span>
+    </div>
+  </div>
+</div>`;
+    }).join('');
+
+    return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cronograma Geral — ${project.name}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Archivo:wght@700;800;900&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box}body{margin:0;background:#F8FAFC;font-family:Inter,sans-serif;color:#0F172A;padding-bottom:40px}
+@media print{body{background:#fff}.no-print{display:none!important}.project-card{break-inside:avoid}@page{size:A4 landscape;margin:8mm}}</style></head><body>
+<div class="no-print" style="padding:12px 24px;background:#1E3A8A;border-bottom:1px solid #1e40af;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50">
+  <span style="font-weight:800;font-size:14px;color:#fff;display:flex;align-items:center;gap:8px">📅 ${project.name} — Cronograma Geral</span>
+  <button onclick="window.print()" style="background:#fff;color:#1E3A8A;border:0;border-radius:8px;padding:8px 18px;font-weight:700;font-size:13px;cursor:pointer">🖨 Imprimir / PDF</button>
+</div>
+<div style="max-width:1300px;margin:0 auto;padding:24px 20px">
+  <div style="background:linear-gradient(135deg,#1E3A8A 0%,#3B82F6 100%);color:#fff;border-radius:14px;padding:24px 28px;margin-bottom:24px">
+    <div style="font-size:10px;font-family:monospace;letter-spacing:.15em;border:1px solid rgba(255,255,255,0.3);padding:3px 10px;border-radius:999px;color:#DBEAFE;display:inline-block;margin-bottom:12px">Buddy Construtora</div>
+    <h1 style="font-family:Archivo,sans-serif;font-size:26px;font-weight:900;margin:0;color:#fff">${project.name}</h1>
+    <div style="font-size:12px;color:#E0F2FE;margin-top:6px">Cronograma Macro · ${now} · Progresso geral: <b>${overallProgress}%</b></div>
+  </div>
+  <div class="project-card" style="background:#fff;border:1px solid #E2E8F0;border-radius:14px;overflow:hidden">
+    <div style="display:flex;align-items:center;background:#1E3A8A;border-bottom:2px solid #E2E8F0;padding:8px 14px;font-size:10px;font-weight:600;color:#fff;text-transform:uppercase;letter-spacing:0.05em">
+      <div style="width:220px;flex-shrink:0">Etapa da Obra</div>
+      <div style="flex:1;display:flex;position:relative">${monthHeaderDivs}</div>
+    </div>
+    ${ganttRowDivs}
+  </div>
+  <div style="margin-top:24px;padding-top:12px;border-top:1px solid #E2E8F0;text-align:center;font-size:10px;color:#94A3B8">
+    Gerado automaticamente — Buddy Construtora · ${now} · Documento para uso do cliente.
+  </div>
 </div></body></html>`;
   };
 
