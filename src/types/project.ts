@@ -266,14 +266,19 @@ export function safeParseDate(dateStr: string | null | undefined): number {
 }
 
 export function getEstimatedEndDate(project: Project, tasks: Task[], providedSpi?: number): string {
-  if (tasks.length === 0) return project.endDate;
+  const actualPlannedEnd = getProjectPlannedEnd(tasks) || project.endDate;
+  if (tasks.length === 0) return actualPlannedEnd;
   const progress = getProjectProgress(tasks);
   if (progress >= 100) return new Date().toISOString().split('T')[0];
-  if (progress === 0) return project.endDate;
+  // Quando o progresso é muito inicial (<= 5%), a projeção por ritmo (SPI) gera distorções irreais de décadas.
+  // Nesses casos iniciais, a previsão real é a própria data do cronograma planejado.
+  if (progress <= 5) return actualPlannedEnd;
 
   const start = safeParseDate(project.startDate);
-  const plannedEnd = safeParseDate(project.endDate);
+  const plannedEnd = safeParseDate(actualPlannedEnd);
   const plannedDuration = plannedEnd - start;
+
+  if (plannedDuration <= 0) return actualPlannedEnd;
 
   // Use provided SPI or calculate a simple one if not available
   let spi = providedSpi;
@@ -286,8 +291,8 @@ export function getEstimatedEndDate(project: Project, tasks: Task[], providedSpi
   }
 
   // SPI-based estimation: Estimated Duration = Planned Duration / SPI
-  // Cap SPI to avoid infinite or zero dates
-  const safeSpi = Math.max(0.1, Math.min(10, spi || 1));
+  // Limita o fator de ajuste entre 0.4 e 2.5 para evitar extrapolações bizarras de décadas
+  const safeSpi = Math.max(0.4, Math.min(2.5, spi || 1));
   const estimatedDuration = plannedDuration / safeSpi;
   
   const estimatedEnd = new Date(start + estimatedDuration);
