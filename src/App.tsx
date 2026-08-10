@@ -14,6 +14,7 @@ import Signup from "./pages/Signup.tsx";
 import ForgotPassword from "./pages/ForgotPassword.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import PendingApproval from "./pages/PendingApproval.tsx";
+import SharedReport from "./pages/SharedReport.tsx";
 import AdminUsers from "./pages/AdminUsers.tsx";
 import MyTasks from "./pages/MyTasks.tsx";
 import RelatorioGeral from "./pages/RelatorioGeral.tsx";
@@ -82,6 +83,7 @@ const AppRoutes = () => (
     <Route path="/relatorio-planejamento-geral" element={<ProtectedRoute><RelatorioPlanejamentoGeral /></ProtectedRoute>} />
     <Route path="/relatorio-fisico-financeiro/:id" element={<ProtectedRoute><RelatorioFisicoFinanceiro /></ProtectedRoute>} />
     <Route path="/relatorio-cronograma-geral" element={<ProtectedRoute><RelatorioCronogramaGeral /></ProtectedRoute>} />
+    <Route path="/share/:token" element={<SharedReport />} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );
