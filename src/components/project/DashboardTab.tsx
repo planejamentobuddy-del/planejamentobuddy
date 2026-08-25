@@ -480,9 +480,9 @@ export default function DashboardTab({ project }: { project: Project }) {
             </div>
             {lastCurvePoint && (
               <p className="text-[10px] font-bold mt-2 flex items-center gap-1.5">
-                <span className="text-muted-foreground underline decoration-dotted">Previsto: {lastCurvePoint.planejado}%</span>
+                <span className="text-muted-foreground underline decoration-dotted">Previsto: {Number(lastCurvePoint.planejado.toFixed(1))}%</span>
                 <span className={`px-1 rounded ${curveDeviation > 2 ? 'bg-status-danger/10 text-status-danger' : curveDeviation < -2 ? 'bg-status-ok/10 text-status-ok' : 'text-muted-foreground'}`}>
-                  {curveDeviation > 0 ? `-${curveDeviation}%` : curveDeviation < 0 ? `+${Math.abs(curveDeviation)}%` : '✓'}
+                  {curveDeviation > 0.05 ? `-${curveDeviation.toFixed(1)}%` : curveDeviation < -0.05 ? `+${Math.abs(curveDeviation).toFixed(1)}%` : '✓'}
                 </span>
               </p>
             )}
