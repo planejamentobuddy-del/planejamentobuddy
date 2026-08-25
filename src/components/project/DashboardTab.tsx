@@ -475,7 +475,9 @@ export default function DashboardTab({ project }: { project: Project }) {
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Executado Real</span>
             </div>
             <div className="flex items-baseline gap-2">
-              <p className="text-4xl font-display font-black text-foreground">{progress}%</p>
+              <p className="text-4xl font-display font-black text-foreground">
+                {lastCurvePoint ? lastCurvePoint.realizado : progress}%
+              </p>
               {isAdvanced && <span className="text-[10px] font-bold text-muted-foreground/40 uppercase">Global</span>}
             </div>
             {lastCurvePoint && (
@@ -487,7 +489,7 @@ export default function DashboardTab({ project }: { project: Project }) {
               </p>
             )}
             <div className="mt-4 h-1.5 rounded-full bg-muted overflow-hidden">
-              <div className="h-full rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${progress}%` }} />
+              <div className="h-full rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${lastCurvePoint ? lastCurvePoint.realizado : progress}%` }} />
             </div>
           </motion.div>
 
