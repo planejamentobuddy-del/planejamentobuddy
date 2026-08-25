@@ -702,11 +702,11 @@ export default function DashboardTab({ project }: { project: Project }) {
                 <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
                   curveDeviation > 5
                     ? 'bg-destructive/10 text-destructive'
-                    : curveDeviation > 0
+                    : curveDeviation > 0.05
                     ? 'bg-[hsl(38_92%_50%/0.1)] text-status-warning'
                     : 'bg-[hsl(152_60%_42%/0.1)] text-status-ok'
                 }`}>
-                  {curveDeviation > 0 ? `-${curveDeviation}% atraso` : curveDeviation === 0 ? 'No prazo' : `+${Math.abs(curveDeviation)}% adiant.`}
+                  {curveDeviation > 0.05 ? `-${curveDeviation.toFixed(1)}% atraso` : curveDeviation < -0.05 ? `+${Math.abs(curveDeviation).toFixed(1)}% adiant.` : 'No prazo'}
                 </span>
               )}
             </div>

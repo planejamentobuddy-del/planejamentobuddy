@@ -46,6 +46,7 @@ export default function Index() {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', startDate: '', endDate: '', description: '' });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteInputText, setDeleteInputText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editForm, setEditForm] = useState({ name: '', startDate: '', endDate: '', description: '' });
@@ -231,10 +232,17 @@ export default function Index() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
+    const targetProj = projects.find(p => p.id === deleteConfirm);
+    if (!targetProj) return;
+    if (deleteInputText.trim().toLowerCase() !== targetProj.name.trim().toLowerCase()) {
+      toast.error('O nome digitado não corresponde ao nome da obra.');
+      return;
+    }
     setDeleting(true);
     await deleteProject(deleteConfirm);
     setDeleting(false);
     setDeleteConfirm(null);
+    setDeleteInputText('');
   };
 
   const handleCreate = async () => {
@@ -631,30 +639,57 @@ export default function Index() {
         )}
       </main>
 
-      {/* Confirmação de exclusão */}
-      <AlertDialog open={!!deleteConfirm} onOpenChange={(v) => !v && setDeleteConfirm(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-display text-lg flex items-center gap-2">
-              <Trash2 className="w-5 h-5 text-red-500" />
-              Excluir Obra?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm leading-relaxed">
-              Esta ação é <strong>irreversível</strong>. Todos os dados da obra serão excluídos permanentemente, incluindo tarefas, cronograma, planejamento Lean, diário de obras e histórico.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-red-600 hover:bg-red-700 text-white focus:ring-red-600"
-            >
-              {deleting ? 'Excluindo...' : 'Sim, excluir obra'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Confirmação de exclusão reforçada */}
+      {(() => {
+        const targetProj = projects.find(p => p.id === deleteConfirm);
+        const nameMatches = targetProj ? deleteInputText.trim().toLowerCase() === targetProj.name.trim().toLowerCase() : false;
+        return (
+          <AlertDialog open={!!deleteConfirm} onOpenChange={(v) => { if (!v) { setDeleteConfirm(null); setDeleteInputText(''); } }}>
+            <AlertDialogContent className="sm:max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="font-display text-lg flex items-center gap-2 text-red-600">
+                  <Trash2 className="w-5 h-5 text-red-600 shrink-0" />
+                  Excluir Obra Permanentemente?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-sm leading-relaxed space-y-3 pt-2">
+                  <span className="block p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-900 dark:text-red-200 text-xs font-semibold">
+                    ⚠️ <strong>ATENÇÃO: ESTA AÇÃO É IRREVERSÍVEL!</strong><br />
+                    Todos os dados de <strong>"{targetProj?.name}"</strong> serão apurados e excluídos permanentemente (tarefas, histórico, restrições e diários).
+                  </span>
+                  
+                  <span className="block text-xs font-bold text-foreground">
+                    Para confirmar a exclusão, digite exatamente <u className="text-red-600 dark:text-red-400">{targetProj?.name}</u> no campo abaixo:
+                  </span>
+
+                  <Input
+                    value={deleteInputText}
+                    onChange={e => setDeleteInputText(e.target.value)}
+                    placeholder={`Digite: ${targetProj?.name}`}
+                    className="font-mono text-xs border-red-300 focus-visible:ring-red-500 bg-background text-foreground"
+                    autoFocus
+                  />
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="mt-2">
+                <AlertDialogCancel disabled={deleting} onClick={() => { setDeleteConfirm(null); setDeleteInputText(''); }}>
+                  Cancelar
+                </AlertDialogCancel>
+                <Button
+                  onClick={handleDelete}
+                  disabled={deleting || !nameMatches}
+                  className={`font-bold text-xs ${
+                    nameMatches
+                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-md'
+                      : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                  }`}
+                >
+                  {deleting ? 'Excluindo...' : 'Excluir Obra Permanentemente'}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      })()}
 
       {/* Edição de obra */}
       <Dialog open={!!editProject} onOpenChange={(v) => !v && closeEditDialog()}>

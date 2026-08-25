@@ -213,7 +213,7 @@ export function getProjectProgress(tasks: Task[]): number {
   const totalDuration = leaves.reduce((sum, t) => sum + Math.max(1, t.duration), 0);
   const weightedSum = leaves.reduce((sum, t) => sum + (t.percentComplete * Math.max(1, t.duration)), 0);
   
-  return totalDuration > 0 ? Math.round(weightedSum / totalDuration) : 0;
+  return totalDuration > 0 ? Number((weightedSum / totalDuration).toFixed(1)) : 0;
 }
 
 export function getProjectStatus(tasks: Task[]): 'ok' | 'warning' | 'danger' {
