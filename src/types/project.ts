@@ -551,10 +551,10 @@ export function calculateSCurve(tasks: Task[], project: Project): CurvePoint[] {
       let aTask = 0;
       const progressFactor = t.percentComplete / 100;
       
-      if (currentSafe <= tStart) {
-        aTask = 0;
-      } else if (currentSafe >= nowTs) {
+      if (currentSafe >= nowTs) {
         aTask = progressFactor;
+      } else if (currentSafe <= tStart) {
+        aTask = 0;
       } else {
         const timeSinceStart = currentSafe - tStart;
         const timeUntilToday = Math.max(86400000, nowTs - tStart); 
