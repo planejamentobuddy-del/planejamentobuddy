@@ -2,7 +2,7 @@ import React, { useState, useMemo, createContext, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Project, Task, getProjectProgress, getProjectStatus, getEstimatedEndDate, isCriticalPath, getCurrentWeek, calculateSCurve, safeParseDate, getProjectPlannedEnd } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
-import { AlertTriangle, CheckCircle, Clock, TrendingUp, Shield, CalendarClock, Info, HeartPulse, Zap, Milestone, Gauge, Activity, Edit2, Check, X, HelpCircle, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, TrendingUp, Shield, CalendarClock, Info, HeartPulse, Zap, Milestone, Gauge, Activity, Edit2, Check, X, HelpCircle, History, ChevronDown, ChevronUp, Printer } from 'lucide-react';
 import { RescheduleHistoryModal } from './RescheduleHistoryModal';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
@@ -216,9 +216,32 @@ export default function DashboardTab({ project }: { project: Project }) {
 
   return (
     <TooltipProvider>
+      <style>{`
+        @media print {
+          body { background: white !important; color: black !important; }
+          .no-print { display: none !important; }
+          .print-header { display: flex !important; }
+          header, nav, footer, sidebar, [data-state="open"] { display: none !important; }
+          .card-elevated { break-inside: avoid; border: 1px solid #e2e8f0 !important; box-shadow: none !important; background: white !important; }
+          @page { size: A4 landscape; margin: 8mm; }
+        }
+      `}</style>
       <div className="space-y-6">
-        {/* Header with Mode Toggle */}
-        <div className="flex justify-between items-center bg-muted/20 p-2 rounded-2xl border border-border/30">
+        {/* Header exclusivo para impressão / PDF */}
+        <div className="hidden print-header items-center justify-between pb-4 border-b border-slate-200 mb-6">
+          <div>
+            <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Buddy Construtora • Relatório de Visão Geral</div>
+            <h1 className="text-2xl font-black font-display text-slate-900">{project.name}</h1>
+            <p className="text-xs text-slate-500 mt-1">Gerado em: {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+          </div>
+          <div className="text-right text-xs space-y-1">
+            <p className="font-black text-slate-900 text-sm">Progresso: {progress}%</p>
+            <p className="text-slate-500">Término Previsto: {new Date(plannedEnd + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+          </div>
+        </div>
+
+        {/* Header with Mode Toggle & Export PDF Button */}
+        <div className="flex justify-between items-center bg-muted/20 p-2 rounded-2xl border border-border/30 no-print">
           <div className="px-4">
             <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
               <Activity className="w-4 h-4" />
@@ -226,7 +249,16 @@ export default function DashboardTab({ project }: { project: Project }) {
             </h2>
           </div>
           <div className="flex items-center gap-3">
-          <Sheet open={isHelpOpen} onOpenChange={setIsHelpOpen}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs font-bold bg-background border-border/50 text-foreground hover:bg-muted shadow-sm transition-all"
+              onClick={() => window.print()}
+            >
+              <Printer className="w-3.5 h-3.5 text-primary" />
+              Imprimir / PDF
+            </Button>
+            <Sheet open={isHelpOpen} onOpenChange={setIsHelpOpen}>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 w-8 p-0 rounded-full bg-background border-border/40 text-muted-foreground hover:text-primary transition-all">
                 <HelpCircle className="w-4 h-4" />
