@@ -142,6 +142,7 @@ interface FormState {
   taskId: string;
   pdfUrl: string;
   quantitativeItems: QuantitativeItem[];
+  autoSendToPurchasing: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -162,6 +163,7 @@ const EMPTY_FORM: FormState = {
   taskId: '',
   pdfUrl: '',
   quantitativeItems: [{ desc: '', qty: '', unit: '' }],
+  autoSendToPurchasing: false,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,7 +173,7 @@ const EMPTY_FORM: FormState = {
 type ViewMode = 'kanban' | 'timeline' | 'list';
 
 export default function SuppliesTab({ project }: { project: Project }) {
-  const { supplyPackages, addSupplyPackage, updateSupplyPackage, deleteSupplyPackage, getTasksForProject, users } = useProjects();
+  const { supplyPackages, addSupplyPackage, updateSupplyPackage, deleteSupplyPackage, sendSupplyPackageToPurchasing, getTasksForProject, users } = useProjects();
   const tasks = getTasksForProject(project.id);
   const packages = useMemo(() => supplyPackages.filter(p => p.projectId === project.id), [supplyPackages, project.id]);
 
@@ -228,6 +230,7 @@ export default function SuppliesTab({ project }: { project: Project }) {
       taskId: pkg.taskId || '',
       pdfUrl: pkg.pdfUrl || '',
       quantitativeItems: qItems.length > 0 ? qItems : [{ desc: '', qty: '', unit: '' }],
+      autoSendToPurchasing: false,
     });
     setEditingId(pkg.id);
     setShowForm(true);
@@ -263,7 +266,7 @@ export default function SuppliesTab({ project }: { project: Project }) {
       const ex = packages.find(p => p.id === editingId)!;
       await updateSupplyPackage({ ...ex, ...payload });
     } else {
-      await addSupplyPackage(payload);
+      await addSupplyPackage(payload, { autoSendToPurchasing: form.autoSendToPurchasing });
     }
     setShowForm(false); setEditingId(null); setForm(EMPTY_FORM);
   }
@@ -601,6 +604,24 @@ export default function SuppliesTab({ project }: { project: Project }) {
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>
               <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Informações adicionais..." className="rounded-lg" />
             </div>
+
+            {/* Enviar p/ Compras Automático */}
+            {!editingId && (
+              <div className="md:col-span-2 lg:col-span-3 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer bg-emerald-500/10 border border-emerald-500/30 p-2.5 rounded-xl hover:bg-emerald-500/15 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={form.autoSendToPurchasing}
+                    onChange={e => setForm(f => ({ ...f, autoSendToPurchasing: e.target.checked }))}
+                    className="w-4 h-4 rounded accent-emerald-600"
+                  />
+                  <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <ShoppingCart className="w-4 h-4 text-emerald-600" />
+                    Enviar este pacote imediatamente para o Sistema de Compras / Estoque ao salvar
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 mt-5 justify-end">
@@ -704,6 +725,23 @@ export default function SuppliesTab({ project }: { project: Project }) {
                                   <span className="truncate">{pkg.responsible}</span>
                                 </div>
                               )}
+                              {/* Status de Envio p/ Compras */}
+                              <div className="pt-1">
+                                {pkg.sentToPurchasing ? (
+                                  <div className="flex items-center justify-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-md px-2 py-1 font-semibold">
+                                    <PackageCheck className="w-3.5 h-3.5" /> Enviado p/ Compras
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full text-[10px] h-7 gap-1 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold rounded-md"
+                                    onClick={() => sendSupplyPackageToPurchasing(pkg.id)}
+                                  >
+                                    <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" /> Enviar p/ Compras
+                                  </Button>
+                                )}
+                              </div>
                               {/* Actions */}
                               <div className="flex items-center gap-1 pt-1 border-t border-border/60">
                                 {col.id !== 'delivered' && col.id !== 'in_production' && (
@@ -737,15 +775,17 @@ export default function SuppliesTab({ project }: { project: Project }) {
           TIMELINE VIEW
       ═══════════════════════════════════════════════════════════════════════ */}
       {viewMode === 'timeline' && (
-        <>
-          {packages.length === 0 ? <EmptyState onAdd={openNew} /> : (
-            <div className="bg-card rounded-xl border border-border overflow-hidden">
-              <div className="border-b border-border px-4 py-2.5 flex items-center gap-4 text-[10px] text-muted-foreground flex-wrap">
-                <span className="font-semibold text-foreground text-xs">Linha do Tempo — {formatDate(project.startDate)} → {formatDate(project.endDate)}</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> QTO pronto</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Limite pedido</span>
+        <div className="space-y-4">
+          {packages.length === 0 ? (
+            <div className="text-center py-12 bg-card rounded-xl border border-dashed text-muted-foreground">Nenhum suprimento cadastrado</div>
+          ) : (
+            <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+              <div className="border-b border-border px-4 py-3 flex items-center gap-4 text-[10px] text-muted-foreground flex-wrap bg-muted/10">
+                <span className="font-semibold text-foreground text-xs">Linha do Tempo de Compras</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> QTO pronto</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> Limite pedido</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-1.5 rounded bg-purple-400/50 inline-block" /> Lead time</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Entrega</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Entrega</span>
               </div>
               <div className="divide-y divide-border">
                 {filtered.map(pkg => {
@@ -755,7 +795,7 @@ export default function SuppliesTab({ project }: { project: Project }) {
                   const deadline = getEffectiveDeadline(pkg);
                   const qItems = parseQuantitative(pkg.quantitative);
                   return (
-                    <div key={pkg.id} className={`px-4 py-3 ${late ? 'bg-red-500/5' : urg ? 'bg-orange-500/5' : ''}`}>
+                    <div key={pkg.id} className={`px-4 py-3.5 ${late ? 'bg-red-500/5' : urg ? 'bg-orange-500/5' : ''}`}>
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <div className={`w-2 h-2 rounded-full shrink-0 ${DOT_COLORS[pkg.status]}`} />
                         {pkg.isCritical && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />}
@@ -777,6 +817,20 @@ export default function SuppliesTab({ project }: { project: Project }) {
                           </a>
                         )}
                         {pkg.responsible && <span className="text-xs text-muted-foreground flex items-center gap-1 ml-auto"><User className="w-3 h-3" />{pkg.responsible}</span>}
+                        {pkg.sentToPurchasing ? (
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] gap-1 px-2 py-0.5 font-semibold">
+                            <PackageCheck className="w-3 h-3" /> Enviado p/ Compras
+                          </Badge>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-[10px] h-6 px-2 gap-1 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold rounded-md"
+                            onClick={() => sendSupplyPackageToPurchasing(pkg.id)}
+                          >
+                            <ShoppingCart className="w-3 h-3 text-emerald-600" /> Enviar p/ Compras
+                          </Button>
+                        )}
                         <DeadlineBadge pkg={pkg} />
                         <button onClick={() => openEdit(pkg)} className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
                       </div>
@@ -808,7 +862,7 @@ export default function SuppliesTab({ project }: { project: Project }) {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
@@ -877,6 +931,20 @@ export default function SuppliesTab({ project }: { project: Project }) {
                         <DeadlineBadge pkg={pkg} />
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        {pkg.sentToPurchasing ? (
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] gap-1 px-2 py-1 font-semibold">
+                            <PackageCheck className="w-3.5 h-3.5" /> Enviado p/ Compras
+                          </Badge>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7 px-2 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 font-semibold rounded-lg gap-1"
+                            onClick={() => sendSupplyPackageToPurchasing(pkg.id)}
+                          >
+                            <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" /> Enviar p/ Compras
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg" onClick={() => setExpandedId(isExp ? null : pkg.id)}>
                           {isExp ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </Button>

@@ -84,7 +84,8 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
     supplyPackages,
     addSupplyPackage,
     updateSupplyPackage,
-    deleteSupplyPackage
+    deleteSupplyPackage,
+    sendSupplyPackageToPurchasing
   } = useProjects();
   const [localTask, setLocalTask] = useState<Task | null>(null);
 
@@ -917,9 +918,25 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate }: TaskDetailM
                           </span>
                         </td>
                         <td className="px-4 py-2.5 text-center">
-                          <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive rounded-lg" onClick={() => deleteSupplyPackage(pack.id)}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            {pack.sentToPurchasing ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/30">
+                                ✓ Enviado
+                              </span>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-[10px] px-2 gap-1 text-emerald-600 border-emerald-500/40 hover:bg-emerald-50 font-semibold rounded-md"
+                                onClick={() => sendSupplyPackageToPurchasing(pack.id)}
+                              >
+                                🚀 Enviar p/ Compras
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive rounded-lg" onClick={() => deleteSupplyPackage(pack.id)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}

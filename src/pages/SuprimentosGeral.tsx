@@ -169,6 +169,7 @@ interface FormState {
   taskId: string;
   pdfUrl: string;
   quantitativeItems: QuantitativeItem[];
+  autoSendToPurchasing: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -190,6 +191,7 @@ const EMPTY_FORM: FormState = {
   taskId: '',
   pdfUrl: '',
   quantitativeItems: [{ desc: '', qty: '', unit: '' }],
+  autoSendToPurchasing: false,
 };
 
 interface EmailModalState {
@@ -214,7 +216,7 @@ type ViewMode = 'kanban' | 'timeline' | 'list';
 
 export default function SuprimentosGeral() {
   const navigate = useNavigate();
-  const { projects, supplyPackages, addSupplyPackage, updateSupplyPackage, deleteSupplyPackage, tasks, users } = useProjects();
+  const { projects, supplyPackages, addSupplyPackage, updateSupplyPackage, deleteSupplyPackage, sendSupplyPackageToPurchasing, tasks, users } = useProjects();
 
   const activeProjects = useMemo(() => projects.filter(p => p.status !== 'archived'), [projects]);
 
@@ -329,6 +331,7 @@ export default function SuprimentosGeral() {
       taskId: pkg.taskId || '',
       pdfUrl: pkg.pdfUrl || '',
       quantitativeItems: qItems.length > 0 ? qItems : [{ desc: '', qty: '', unit: '' }],
+      autoSendToPurchasing: false,
     });
     setEditingId(pkg.id);
     setShowForm(true);
@@ -365,7 +368,7 @@ export default function SuprimentosGeral() {
       const ex = packages.find(p => p.id === editingId)!;
       await updateSupplyPackage({ ...ex, ...payload });
     } else {
-      await addSupplyPackage(payload);
+      await addSupplyPackage(payload, { autoSendToPurchasing: form.autoSendToPurchasing });
     }
     setShowForm(false); setEditingId(null); setForm(EMPTY_FORM);
   }
@@ -800,6 +803,24 @@ export default function SuprimentosGeral() {
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>
                 <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Informações adicionais..." className="rounded-lg" />
               </div>
+
+              {/* Enviar p/ Compras Automático */}
+              {!editingId && (
+                <div className="md:col-span-2 lg:col-span-3 pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer bg-emerald-500/10 border border-emerald-500/30 p-2.5 rounded-xl hover:bg-emerald-500/15 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={form.autoSendToPurchasing}
+                      onChange={e => setForm(f => ({ ...f, autoSendToPurchasing: e.target.checked }))}
+                      className="w-4 h-4 rounded accent-emerald-600"
+                    />
+                    <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                      <ShoppingCart className="w-4 h-4 text-emerald-600" />
+                      Enviar este pacote imediatamente para o Sistema de Compras / Estoque ao salvar
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-5 justify-end">
@@ -917,6 +938,24 @@ export default function SuprimentosGeral() {
                               )}
                             </div>
 
+                            {/* Status de Envio p/ Compras */}
+                            <div className="pt-1">
+                              {pkg.sentToPurchasing ? (
+                                <div className="flex items-center justify-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-md px-2 py-1 font-semibold">
+                                  <PackageCheck className="w-3.5 h-3.5" /> Enviado p/ Compras
+                                </div>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full text-[10px] h-7 gap-1 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold rounded-md"
+                                  onClick={() => sendSupplyPackageToPurchasing(pkg.id)}
+                                >
+                                  <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" /> Enviar p/ Compras
+                                </Button>
+                              )}
+                            </div>
+
                             {/* Actions */}
                             <div className="flex items-center gap-1.5 pt-2 border-t border-border/40">
                               {col.id !== 'delivered' && col.id !== 'in_production' && (
@@ -993,6 +1032,20 @@ export default function SuprimentosGeral() {
                             </a>
                           )}
                           {pkg.responsible && <span className="text-xs text-muted-foreground flex items-center gap-1 ml-auto"><User className="w-3 h-3" />{pkg.responsible}</span>}
+                          {pkg.sentToPurchasing ? (
+                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] gap-1 px-2 py-0.5 font-semibold">
+                              <PackageCheck className="w-3 h-3" /> Enviado p/ Compras
+                            </Badge>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-[10px] h-6 px-2 gap-1 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold rounded-md"
+                              onClick={() => sendSupplyPackageToPurchasing(pkg.id)}
+                            >
+                              <ShoppingCart className="w-3 h-3 text-emerald-600" /> Enviar p/ Compras
+                            </Button>
+                          )}
                           <DeadlineBadge pkg={pkg} />
                           <button onClick={() => openEdit(pkg)} className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
                         </div>
@@ -1075,6 +1128,20 @@ export default function SuprimentosGeral() {
                       <DeadlineBadge pkg={pkg} />
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {pkg.sentToPurchasing ? (
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] gap-1 px-2 py-1 font-semibold">
+                          <PackageCheck className="w-3.5 h-3.5" /> Enviado p/ Compras
+                        </Badge>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-8 px-2.5 gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 font-semibold rounded-lg"
+                          onClick={() => sendSupplyPackageToPurchasing(pkg.id)}
+                        >
+                          <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" /> Enviar p/ Compras
+                        </Button>
+                      )}
                       {pkg.responsible && (
                         <Button variant="ghost" size="icon" className="w-8 h-8 rounded-lg text-primary" onClick={() => openNotificationModal(pkg)} title="Cobrar por e-mail">
                           <Mail className="w-4 h-4" />

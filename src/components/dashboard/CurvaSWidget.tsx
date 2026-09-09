@@ -327,36 +327,35 @@ export default function CurvaSWidget({ projects, allTasks, printMode = false }: 
     return `Sem ${String(week).padStart(2, '0')}/${String(today.getFullYear()).slice(2)}`;
   }, [gran]);
 
-  // Current variance
+  // Current variance at exact today (exact real-time variance for today across all tasks)
   const currentVariance = useMemo(() => {
-    if (!data.length) return null;
+    if (!activeProjects.length || activeTasks.length === 0) return null;
     const today = new Date();
     today.setHours(12, 0, 0, 0);
-    const todayTs = today.getTime();
 
-    const startTs = new Date(data[0].date + 'T12:00:00').getTime();
-    const endTs = new Date(data[data.length - 1].date + 'T12:00:00').getTime();
+    let totalPlannedWeight = 0;
+    let totalExecutedWeight = 0;
+    let totalWeight = 0;
 
-    // 1. If today is before any project task start date, there's no progress planned yet
-    if (todayTs < startTs) {
-      return 0; 
-    }
+    activeTasks.forEach(t => {
+      const weight = Math.max(t.duration || 1, 1);
+      const start = parseDate(t.startDate);
+      const end   = parseDate(t.endDate);
+      const totalDays = Math.max((end.getTime() - start.getTime()) / 86400000, 1);
+      const elapsed   = (today.getTime() - start.getTime()) / 86400000;
+      const plannedFrac = Math.max(0, Math.min(1, elapsed / totalDays));
+      const executedFrac = (t.percentComplete || 0) / 100;
 
-    // 2. If today is after the end of all projects
-    if (todayTs > endTs) {
-      const lastPt = data[data.length - 1];
-      return lastPt.executed - lastPt.planned;
-    }
+      totalWeight += weight;
+      totalPlannedWeight += weight * plannedFrac;
+      totalExecutedWeight += weight * executedFrac;
+    });
 
-    // 3. Find the closest point in the past or present
-    const pastPoints = data.filter(d => new Date(d.date + 'T12:00:00').getTime() <= todayTs);
-    if (pastPoints.length > 0) {
-      const currentPt = pastPoints[pastPoints.length - 1];
-      return currentPt.executed - currentPt.planned;
-    }
-
-    return 0;
-  }, [data]);
+    if (totalWeight === 0) return 0;
+    const pPct = Math.round((totalPlannedWeight / totalWeight) * 1000) / 10;
+    const ePct = Math.round((totalExecutedWeight / totalWeight) * 1000) / 10;
+    return Number((ePct - pPct).toFixed(1));
+  }, [activeProjects, activeTasks]);
 
   if (!activeProjects.length || activeTasks.length === 0) return null;
   if (data.length === 0) return null;

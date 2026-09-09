@@ -626,6 +626,7 @@ export interface SupplyPackage {
   notes?: string;
   createdAt: string;
   pdfUrl?: string;             // Link to PDF or calculation memory
+  sentToPurchasing?: boolean;  // Whether automation was manually triggered to send to purchasing/inventory
 }
 
 // ============================================================

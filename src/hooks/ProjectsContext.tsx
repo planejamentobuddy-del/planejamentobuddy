@@ -54,9 +54,10 @@ export interface ProjectsContextType {
   // Supply Packages
   supplyPackages: SupplyPackage[];
   getSupplyPackagesForProject: (projectId: string) => SupplyPackage[];
-  addSupplyPackage: (pkg: Omit<SupplyPackage, 'id' | 'createdAt'>) => Promise<SupplyPackage | null>;
+  addSupplyPackage: (pkg: Omit<SupplyPackage, 'id' | 'createdAt'>, options?: { autoSendToPurchasing?: boolean }) => Promise<SupplyPackage | null>;
   updateSupplyPackage: (pkg: SupplyPackage) => Promise<void>;
   deleteSupplyPackage: (id: string) => Promise<void>;
+  sendSupplyPackageToPurchasing: (pkgId: string) => Promise<boolean>;
   // Workforce
   workforceEntries: WorkforceEntry[];
   getWorkforceForProject: (projectId: string) => WorkforceEntry[];
