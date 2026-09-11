@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy, GripVertical, ShoppingCart, X, Globe, Link2 } from 'lucide-react';
+import { Plus, Building2, TrendingUp, Calendar, Shield, LogOut, ClipboardCheck, Trash2, Pencil, Archive, ArchiveRestore, Printer, Copy, GripVertical, ShoppingCart, X, Globe, Link2, Calculator } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -273,6 +273,9 @@ export default function Index() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" className="gap-2 rounded-xl text-primary font-bold hover:bg-primary/5 relative px-4" onClick={() => navigate('/orcamento')}>
+              <Calculator className="w-4 h-4" /> Orçamentos
+            </Button>
             <Button variant="ghost" className="gap-2 rounded-xl text-primary font-bold hover:bg-primary/5 relative px-4" onClick={() => navigate('/suprimentos')}>
               <ShoppingCart className="w-4 h-4" /> Suprimentos
             </Button>

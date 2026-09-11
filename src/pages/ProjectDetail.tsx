@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet, FileSpreadsheet, Sun, ShoppingCart, Users } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet, FileSpreadsheet, Sun, ShoppingCart, Users, Calculator } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { useProjects } from '@/hooks/useProjects';
@@ -16,6 +16,7 @@ import TodayTab from '@/components/project/TodayTab';
 import SuppliesTab from '@/components/project/SuppliesTab';
 import WorkforceTab from '@/components/project/WorkforceTab';
 import PhysicalFinancialTab from '@/components/project/PhysicalFinancialTab';
+import BudgetTab from '@/components/project/BudgetTab';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
   DropdownMenu,
@@ -30,6 +31,7 @@ const tabs = [
   { value: 'planning', label: 'Planejamento', icon: TableProperties },
   { value: 'gantt', label: 'Gantt', icon: GanttChart },
   { value: 'kanban', label: 'Kanban', icon: Columns3 },
+  { value: 'orcamento', label: 'Orçamento', icon: Calculator },
   { value: 'physical_financial', label: 'Físico-Financeiro', icon: FileSpreadsheet },
   { value: 'curves', label: 'Curva S', icon: TrendingUp },
   { value: 'lean', label: 'Lean', icon: Triangle },
@@ -63,7 +65,7 @@ const tabGroups = [
     id: 'controladoria',
     label: 'Controladoria',
     icon: Wallet,
-    items: ['physical_financial', 'curves', 'admin', 'reports']
+    items: ['orcamento', 'physical_financial', 'curves', 'admin', 'reports']
   }
 ];
 
@@ -212,6 +214,7 @@ export default function ProjectDetail() {
         {activeTab === 'planning' && <PlanningTab project={project} />}
         {activeTab === 'gantt' && <GanttTab project={project} />}
         {activeTab === 'kanban' && <KanbanTab project={project} />}
+        {activeTab === 'orcamento' && <BudgetTab project={project} />}
         {activeTab === 'physical_financial' && <PhysicalFinancialTab project={project} />}
         {activeTab === 'curves' && <CurveSTab project={project} />}
         {activeTab === 'lean' && <LeanTab project={project} />}
