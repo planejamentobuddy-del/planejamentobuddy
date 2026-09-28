@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Project, DELAY_REASONS, WeeklyPlan, Task, Constraint, CONSTRAINT_CATEGORIES, ConstraintCategory, StatusComment, SUPPLY_STATUS_LABELS, SUPPLY_STATUS_COLORS } from '@/types/project';
+import { Project, DELAY_REASONS, WeeklyPlan, Task, TaskStatus, Constraint, CONSTRAINT_CATEGORIES, ConstraintCategory, StatusComment, SUPPLY_STATUS_LABELS, SUPPLY_STATUS_COLORS } from '@/types/project';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,12 +74,81 @@ const statusOptions = [
   { value: 'not_completed', label: 'Não concluído', color: 'bg-destructive/10 text-destructive' },
 ];
 
+interface TaskProgressInputProps {
+  initialValue: number;
+  onSave: (val: number) => void;
+  disabled?: boolean;
+  showBar?: boolean;
+  className?: string;
+}
+
+function TaskProgressInput({
+  initialValue,
+  onSave,
+  disabled,
+  showBar = true,
+  className = '',
+}: TaskProgressInputProps) {
+  const [val, setVal] = useState<number | string>(initialValue ?? 0);
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setVal(initialValue ?? 0);
+    }
+  }, [initialValue, isEditing]);
+
+  const commit = () => {
+    setIsEditing(false);
+    const num = Math.min(100, Math.max(0, parseInt(String(val)) || 0));
+    setVal(num);
+    if (num !== (initialValue ?? 0)) {
+      onSave(num);
+    }
+  };
+
+  const currentNum = Math.min(100, Math.max(0, parseInt(String(val)) || 0));
+
+  return (
+    <div className={`flex flex-col items-center gap-1 ${className}`}>
+      <div className="flex items-center justify-center gap-0.5">
+        <input
+          type="number"
+          min="0"
+          max="100"
+          disabled={disabled}
+          value={val}
+          onFocus={() => setIsEditing(true)}
+          onChange={e => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          className="w-12 h-6 text-center border bg-blue-500/10 hover:bg-blue-500/15 border-blue-500/30 rounded text-xs font-bold text-blue-700 dark:text-blue-400 focus:ring-1 focus:ring-blue-500 focus:bg-background transition-colors"
+          title="Porcentagem total no Planejamento (digite o valor e pressione Enter ou saia do campo)"
+        />
+        <span className="text-[10px] font-bold text-blue-600/70 dark:text-blue-400/70">%</span>
+      </div>
+      {showBar && (
+        <div className="w-14 h-1 rounded-full bg-muted overflow-hidden">
+          <div 
+            className={`h-full transition-all duration-300 ${currentNum >= 100 ? 'bg-status-ok' : 'bg-blue-500'}`} 
+            style={{ width: `${currentNum}%` }} 
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LeanTab({ project }: { project: Project }) {
   const {
     getTasksForProject, getPlansForProject, addWeeklyPlan, updateWeeklyPlan,
     deleteWeeklyPlan, getHistoryForProject, closeWeek,
     getConstraintsForProject, addConstraint, updateConstraint, deleteConstraint,
-    supplyPackages, users, loading
+    supplyPackages, users, loading, updateTask
   } = useProjects();
 
   const tasks = getTasksForProject(project.id);
@@ -294,6 +363,39 @@ export default function LeanTab({ project }: { project: Project }) {
       reason: '',
       observations: '',
     });
+  };
+
+  const handleUpdateTaskPercent = async (task: Task, percent: number) => {
+    const val = Math.min(100, Math.max(0, percent));
+    const today = new Date().toISOString().split('T')[0];
+    let newStatus: TaskStatus = task.status;
+    if (val >= 100) {
+      newStatus = 'completed';
+    } else if (val > 0) {
+      newStatus = task.endDate && task.endDate < today ? 'delayed' : 'in_progress';
+    } else {
+      newStatus = 'not_started';
+    }
+    const updated: Task = {
+      ...task,
+      percentComplete: val,
+      status: newStatus,
+    };
+    await updateTask(updated);
+
+    // Se a tarefa atingiu 100%, sincroniza também o plano semanal correspondente caso esteja com progresso menor
+    if (val >= 100) {
+      const linkedWeekPlan = weekPlans.find(p => p.taskId === task.id);
+      if (linkedWeekPlan && (linkedWeekPlan.currentProgress ?? 0) < (linkedWeekPlan.expectedProgress ?? 100)) {
+        await updateWeeklyPlan({
+          ...linkedWeekPlan,
+          currentProgress: linkedWeekPlan.expectedProgress ?? 100,
+          status: 'completed',
+        });
+      }
+    }
+
+    toast.success(`% de "${task.name}" atualizada para ${val}% no Planejamento`);
   };
 
   const handleCreateConstraint = async () => {
@@ -533,8 +635,27 @@ export default function LeanTab({ project }: { project: Project }) {
                           <th className="py-3 px-4 min-w-[220px]">Nome</th>
                           <th className="py-3 px-3 w-20">Início</th>
                           <th className="py-3 px-3 w-20">Término</th>
-                          <th className="py-3 px-3 w-16 text-center">Esperado</th>
-                          <th className="py-3 px-3 w-20 text-center">Progresso</th>
+                          <th className="py-3 px-2 w-16 text-center" title="Meta esperada para a semana">
+                            <div className="flex flex-col items-center">
+                              <span>Esperado</span>
+                              <span className="text-[9px] text-muted-foreground/60 font-normal">Semana</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-2 w-20 text-center" title="Progresso executado na semana">
+                            <div className="flex flex-col items-center">
+                              <span>Progresso</span>
+                              <span className="text-[9px] text-muted-foreground/60 font-normal">Semana</span>
+                            </div>
+                          </th>
+                          <th className="py-3 px-2 w-24 text-center" title="Porcentagem total acumulada da tarefa no Planejamento Geral (Cronograma)">
+                            <div className="flex flex-col items-center">
+                              <span className="font-semibold text-foreground text-[11px] flex items-center gap-1">
+                                % Total
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" title="Sincronizado com o Planejamento" />
+                              </span>
+                              <span className="text-[9px] text-blue-600/70 dark:text-blue-400/70 font-semibold">Planejamento</span>
+                            </div>
+                          </th>
                           <th className="py-3 px-3 w-28">Responsável</th>
                           <th className="py-3 px-3 w-40">Motivo Não Cumprimento</th>
                           
@@ -793,6 +914,17 @@ export default function LeanTab({ project }: { project: Project }) {
                                     </div>
                                   )}
                                 </td>
+                                {/* % Total Planejamento Geral */}
+                                <td className="py-3 px-2 text-center">
+                                  {linkedTask ? (
+                                    <TaskProgressInput 
+                                      initialValue={linkedTask.percentComplete ?? 0}
+                                      onSave={val => handleUpdateTaskPercent(linkedTask, val)}
+                                    />
+                                  ) : (
+                                    <span className="text-muted-foreground/40 text-xs font-mono" title="Atividade avulsa não vinculada ao planejamento">—</span>
+                                  )}
+                                </td>
                                 <td className="py-3 px-3 text-muted-foreground font-medium truncate max-w-[120px]">
                                   {plan.responsible || 'Sem resp.'}
                                 </td>
@@ -874,7 +1006,7 @@ export default function LeanTab({ project }: { project: Project }) {
                               {/* Diálogo rápido para criar Subtarefa */}
                               {showAddSubtaskTaskId === plan.id && (
                                 <tr className="bg-muted/5 dark:bg-muted/2">
-                                  <td colSpan={18} className="p-3">
+                                  <td colSpan={19} className="p-3">
                                     <div className="flex items-center gap-2 max-w-md ml-8">
                                       <Input 
                                         placeholder="Nome da subtarefa... (Ex: Fôrma, Armação)" 
@@ -927,6 +1059,8 @@ export default function LeanTab({ project }: { project: Project }) {
                                       {sub.completed ? 'Concluído' : 'Não Iniciada'}
                                     </span>
                                   </td>
+                                  <td></td>
+                                  <td></td>
                                   <td></td>
                                   {/* Colunas vazias para os dias da semana */}
                                   {daysOfWeek.map(d => <td key={d.index} className="border-l border-border/30"></td>)}
@@ -1005,11 +1139,15 @@ export default function LeanTab({ project }: { project: Project }) {
                                     Início: {new Date(t.startDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                                   </span>
                                 )}
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-20 h-1 rounded-full bg-muted overflow-hidden">
+                                <div className="flex items-center gap-1.5" title="Porcentagem total da tarefa no Planejamento Geral (Cronograma)">
+                                  <div className="w-16 h-1 rounded-full bg-muted overflow-hidden">
                                     <div className={`h-full ${progressColor}`} style={{ width: `${t.percentComplete}%` }} />
                                   </div>
-                                  <span className="text-[10px] font-bold text-muted-foreground">{t.percentComplete}%</span>
+                                  <TaskProgressInput 
+                                    initialValue={t.percentComplete ?? 0}
+                                    onSave={val => handleUpdateTaskPercent(t, val)}
+                                    showBar={false}
+                                  />
                                 </div>
                               </div>
                             </div>
