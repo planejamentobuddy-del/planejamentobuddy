@@ -344,10 +344,7 @@ export default function RelatorioPlanejamento() {
               <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Previsão de Término</p>
               <p style={{ fontSize: '28px', fontWeight: 900, color: '#0F172A', margin: '2px 0 0' }}>{fmtDate(plannedEnd)}</p>
             </div>
-            <div>
-              <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Caminho Crítico</p>
-              <p style={{ fontSize: '28px', fontWeight: 900, color: '#DC2626', margin: '2px 0 0' }}>{criticalTaskIds.size}</p>
-            </div>
+
           </div>
         </div>
 
@@ -357,10 +354,7 @@ export default function RelatorioPlanejamento() {
             <div style={{ width: 16, height: 16, background: '#EFF6FF', border: '1px solid #BFDBFE', borderLeft: '4px solid #2563EB' }} />
             <span style={{ color: '#475569', fontWeight: 600 }}>Etapa</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 16, height: 16, background: 'white', border: '1px solid #E2E8F0', borderLeft: '4px solid #DC2626' }} />
-            <span style={{ color: '#475569', fontWeight: 600 }}>🔥 Caminho Crítico</span>
-          </div>
+
           {Object.entries(STATUS_LABEL).map(([key, label]) => (
             <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ width: 8, height: 8, background: STATUS_COLOR[key], borderRadius: '50%' }} />
@@ -536,22 +530,7 @@ export default function RelatorioPlanejamento() {
                           <span style={{ textTransform: isStage ? 'uppercase' : 'none', letterSpacing: isStage ? '0.03em' : 0 }}>
                             {task.name}
                           </span>
-                          {isCritical && (
-                            <span
-                              style={{
-                                fontSize: 9,
-                                fontWeight: 700,
-                                color: '#DC2626',
-                                background: '#FEF2F2',
-                                border: '1px solid #FECACA',
-                                borderRadius: 4,
-                                padding: '1px 5px',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              🔥 CRÍTICO
-                            </span>
-                          )}
+
                         </div>
                       </td>
 
