@@ -312,28 +312,6 @@ function buildReportHTML(data: ReportData): string {
     </div>
   </div>` : ''}
 
-  <!-- Caminho Crítico -->
-  ${criticalTasks.length > 0 ? `
-  <div class="sec">
-    <h2 class="sec-h">📍 Caminho Crítico (principais elos)</h2>
-    <table>
-      <thead><tr><th>Tarefa</th><th>Responsável</th><th>Início</th><th>Fim</th><th>Progresso</th><th>Status</th></tr></thead>
-      <tbody>
-        ${criticalTasks.map(t => `
-        <tr>
-          <td><b>${t.name}</b></td>
-          <td>${t.responsible || '—'}</td>
-          <td class="mono">${formatDate(t.startDate)}</td>
-          <td class="mono">${formatDate(t.endDate)}</td>
-          <td>
-            ${t.percentComplete}%
-            <div class="bar-wrap"><div class="bar-fill ${t.status === 'delayed' ? 'crit' : t.status === 'completed' ? 'ok' : ''}" style="width:${t.percentComplete}%"></div></div>
-          </td>
-          <td><span class="tag ${t.status === 'completed' ? 'tg-ok' : t.status === 'delayed' ? 'tg-crit' : t.status === 'in_progress' ? 'tg-progress' : 'tg-neutral'}">${t.status === 'completed' ? 'Concluído' : t.status === 'delayed' ? 'Atrasado' : t.status === 'in_progress' ? 'Em andamento' : 'Não iniciado'}</span></td>
-        </tr>`).join('')}
-      </tbody>
-    </table>
-  </div>` : ''}
 
   <!-- Suprimentos Críticos -->
   ${supplyPackages.filter(p => p.isCritical).length > 0 ? `
