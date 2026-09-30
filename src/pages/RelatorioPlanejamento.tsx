@@ -160,7 +160,7 @@ export default function RelatorioPlanejamento() {
         aggStatus = 'completed';
       } else if (children.some(t => t.status === 'delayed')) {
         aggStatus = 'delayed';
-      } else if (children.some(t => t.status === 'in_progress')) {
+      } else if (children.some(t => t.status === 'in_progress' || t.status === 'completed' || t.status === 'delayed')) {
         aggStatus = 'in_progress';
       }
       stageStatus = aggStatus as any;
