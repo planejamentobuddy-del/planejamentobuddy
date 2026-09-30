@@ -344,7 +344,9 @@ export default function PlanningTab({ project }: { project: Project }) {
     const endDate = ends[ends.length - 1] || '';
     const duration = getBusinessDays(startDate, endDate);
     const hasOverdue = subs.some(t => isOverdue(t));
-    return { percent, startDate, endDate, duration, hasOverdue };
+    const hasDelayed = subs.some(t => t.status === 'delayed');
+    const hasActive = subs.some(t => t.status === 'in_progress' || t.status === 'delayed' || t.status === 'completed');
+    return { percent, startDate, endDate, duration, hasOverdue, hasDelayed, hasActive };
   };
 
   const projectAggregate = useMemo(() => {
@@ -613,7 +615,13 @@ export default function PlanningTab({ project }: { project: Project }) {
     const agg = isStage ? getStageAggregates(task.id) : null;
     const percent = agg ? agg.percent : task.percentComplete;
     const effectiveOverdue = agg ? agg.hasOverdue : overdue;
-    const effectiveStatus = effectiveOverdue ? 'delayed' as TaskStatus : (agg ? (percent >= 100 ? 'completed' : percent > 0 ? 'in_progress' : 'not_started') : task.status);
+    const effectiveStatus = effectiveOverdue ? 'delayed' as TaskStatus : (agg ? (
+      agg.percent >= 100 ? 'completed' :
+      agg.hasDelayed ? 'delayed' as TaskStatus :
+      agg.hasActive ? 'in_progress' as TaskStatus :
+      agg.percent > 0 ? 'in_progress' as TaskStatus :
+      'not_started' as TaskStatus
+    ) : task.status);
 
     const isMilestone = !isStage && task.duration === 0;
 
