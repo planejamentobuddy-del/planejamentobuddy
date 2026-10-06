@@ -72,7 +72,7 @@ export default function CurveSTab({ project }: { project: Project }) {
         <div className="card-elevated p-5">
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
+              <LineChart data={chartData} margin={{ top: 25, right: 15, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="%" />
@@ -82,15 +82,19 @@ export default function CurveSTab({ project }: { project: Project }) {
                 <Line type="monotone" name="Realizado" dataKey="realizado" stroke="hsl(var(--chart-actual))" strokeWidth={2.5} dot={{ r: 3 }} />
                 
                 {summaryPoint && (
-                  <ReferenceLine x={summaryPoint.label} stroke="hsl(var(--accent))" strokeDasharray="3 3">
-                    <Label 
-                      value={`HOJE: ${diff > 0 ? 'Atraso' : 'Adiant.'} de ${Math.abs(diff).toFixed(1)}%`} 
-                      position="top" 
-                      fill="hsl(var(--accent))" 
-                      fontSize={10} 
-                      fontWeight="bold"
-                    />
-                  </ReferenceLine>
+                  <ReferenceLine
+                    x={summaryPoint.label}
+                    stroke="#ef4444"
+                    strokeDasharray="4 4"
+                    strokeWidth={2}
+                    label={{
+                      value: `HOJE: ${diff > 0 ? 'Atraso' : 'Adiant.'} de ${Math.abs(diff).toFixed(1)}%`,
+                      position: 'top',
+                      fill: '#ef4444',
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  />
                 )}
               </LineChart>
             </ResponsiveContainer>

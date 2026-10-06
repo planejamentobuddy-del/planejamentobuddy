@@ -70,6 +70,8 @@ export default function DashboardTab({ project }: { project: Project }) {
 
   const lastCurvePoint = useMemo(() => {
     if (curveSData.length === 0) return null;
+    const exactPoint = curveSData.find(p => p.timestamp === nowTs);
+    if (exactPoint) return exactPoint;
     const pastPoints = curveSData.filter(p => p.timestamp <= nowTs);
     return pastPoints.length > 0 ? pastPoints[pastPoints.length - 1] : curveSData[0];
   }, [curveSData, nowTs]);
@@ -747,7 +749,7 @@ export default function DashboardTab({ project }: { project: Project }) {
             {curveSData.length > 0 ? (
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={curveSData}>
+                  <ComposedChart data={curveSData} margin={{ top: 20, right: 15, left: -10, bottom: 0 }}>
                     <defs>
                       <linearGradient id="plannedGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="hsl(var(--chart-planned))" stopOpacity={0.1} />
@@ -794,7 +796,13 @@ export default function DashboardTab({ project }: { project: Project }) {
                       activeDot={{ r: 4, strokeWidth: 0 }}
                     />
                     {lastCurvePoint && (
-                      <ReferenceLine x={lastCurvePoint.label} stroke="hsl(var(--accent))" strokeDasharray="3 3" />
+                      <ReferenceLine
+                        x={lastCurvePoint.label}
+                        stroke="#ef4444"
+                        strokeDasharray="4 4"
+                        strokeWidth={2}
+                        label={{ value: 'HOJE', position: 'top', fontSize: 10, fill: '#ef4444', fontWeight: 700 }}
+                      />
                     )}
                   </ComposedChart>
                 </ResponsiveContainer>

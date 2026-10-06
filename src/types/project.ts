@@ -524,7 +524,7 @@ export function calculateSCurve(tasks: Task[], project: Project): CurvePoint[] {
     timePoints.push(c);
   }
   timePoints.push(end);
-  if (nowTs > start && nowTs < end) {
+  if (nowTs >= start && nowTs <= end) {
     timePoints.push(nowTs);
   }
 

@@ -327,6 +327,34 @@ export default function CurvaSWidget({ projects, allTasks, printMode = false }: 
     return `Sem ${String(week).padStart(2, '0')}/${String(today.getFullYear()).slice(2)}`;
   }, [gran]);
 
+  // Guaranteed matching point in chart data for Today's reference line
+  const todayPoint = useMemo(() => {
+    if (!data.length) return null;
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const todayTs = today.getTime();
+
+    // 1. Direct label match (case-insensitive / normalized)
+    const exact = data.find(d => d.label.toLowerCase() === todayLabel.toLowerCase());
+    if (exact) return exact;
+
+    // 2. Period date match (check if today falls inside period)
+    for (let i = 0; i < data.length; i++) {
+      const pDate = new Date(data[i].date + 'T12:00:00').getTime();
+      const nextDate = i < data.length - 1 ? new Date(data[i + 1].date + 'T12:00:00').getTime() : Infinity;
+      if (todayTs >= pDate && todayTs < nextDate) {
+        return data[i];
+      }
+    }
+
+    // 3. Closest past period
+    const past = data.filter(d => new Date(d.date + 'T12:00:00').getTime() <= todayTs);
+    if (past.length > 0) return past[past.length - 1];
+
+    // 4. Default to first point
+    return data[0];
+  }, [data, todayLabel]);
+
   // Current variance at exact today (exact real-time variance for today across all tasks)
   const currentVariance = useMemo(() => {
     if (!activeProjects.length || activeTasks.length === 0) return null;
@@ -464,13 +492,15 @@ export default function CurvaSWidget({ projects, allTasks, printMode = false }: 
           <Tooltip content={<CustomTooltip projects={activeProjects} />} />
 
           {/* Today reference line */}
-          <ReferenceLine
-            x={todayLabel}
-            stroke="#ef4444"
-            strokeDasharray="4 4"
-            strokeWidth={1.5}
-            label={{ value: 'HOJE', position: 'top', fontSize: 9, fill: '#ef4444', fontWeight: 700 }}
-          />
+          {(todayPoint?.label || todayLabel) && (
+            <ReferenceLine
+              x={todayPoint?.label || todayLabel}
+              stroke="#ef4444"
+              strokeDasharray="4 4"
+              strokeWidth={2}
+              label={{ value: 'HOJE', position: 'top', fontSize: 10, fill: '#ef4444', fontWeight: 700 }}
+            />
+          )}
 
           {/* Per-project lines (dimmed, optional) */}
           {showPerProject && activeProjects.map((proj, i) => {
