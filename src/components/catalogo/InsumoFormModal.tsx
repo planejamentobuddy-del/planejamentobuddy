@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -72,12 +72,37 @@ export function InsumoFormModal({
   const [notes, setNotes] = useState<string>('');
   const [files, setFiles] = useState<InsumoFile[]>([]);
 
+  // Campos específicos de Mão de Obra
+  const [salario, setSalario] = useState<string>('0,00');
+  const [encargos, setEncargos] = useState<string>('0,00');
+  const [beneficios, setBeneficios] = useState<string>('0,00');
+
   // Suprimentos picker modal
   const [isSupplyPickerOpen, setIsSupplyPickerOpen] = useState(false);
   const [supplySearch, setSupplySearch] = useState('');
 
   // Drag and drop state
   const [isDragging, setIsDragging] = useState(false);
+
+  // Converter string de moeda/número para float
+  const parseCost = (valStr: string): number => {
+    if (!valStr) return 0;
+    const cleaned = valStr
+      .replace(/\./g, '')
+      .replace(',', '.')
+      .replace(/[^\d.]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : num;
+  };
+
+  // Cálculo dinâmico em tempo real do custo da Mão de Obra
+  const totalMaoDeObra = useMemo(() => {
+    const s = parseCost(salario);
+    const enc = parseCost(encargos);
+    const b = parseCost(beneficios);
+    const encVal = s * (enc / 100);
+    return s + encVal + b;
+  }, [salario, encargos, beneficios]);
 
   // Reset or populate form when opening
   useEffect(() => {
@@ -104,6 +129,39 @@ export function InsumoFormModal({
         setStatus(insumoToEdit.status);
         setNotes(insumoToEdit.notes || '');
         setFiles(insumoToEdit.files || []);
+
+        // Mão de Obra
+        if (insumoToEdit.salario !== undefined) {
+          setSalario(
+            insumoToEdit.salario.toLocaleString('pt-BR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+          );
+        } else if (insumoToEdit.group === 'labor') {
+          setSalario(
+            insumoToEdit.unitCost.toLocaleString('pt-BR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+          );
+        } else {
+          setSalario('0,00');
+        }
+
+        setEncargos(
+          (insumoToEdit.encargosPercent || 0).toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+        );
+
+        setBeneficios(
+          (insumoToEdit.beneficios || 0).toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+        );
       } else {
         // Novo insumo
         setGroup('material');
@@ -117,21 +175,20 @@ export function InsumoFormModal({
         setStatus('active');
         setNotes('');
         setFiles([]);
+        setSalario('0,00');
+        setEncargos('0,00');
+        setBeneficios('0,00');
       }
     }
   }, [open, insumoToEdit]);
 
-  // Converter string de custo para number
-  const parseCost = (valStr: string): number => {
-    const cleaned = valStr.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '');
-    const num = parseFloat(cleaned);
-    return isNaN(num) ? 0 : num;
-  };
-
-  const handleCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    // Permite digitação com vírgula e pontos
-    setUnitCost(raw);
+  const handleGroupChange = (newGroup: InsumoGrupo) => {
+    setGroup(newGroup);
+    if (newGroup === 'labor') {
+      if (unit === 'und' || unit === 'sc' || unit === 'm³') {
+        setUnit('h'); // Hora como unidade padrão comum de mão de obra
+      }
+    }
   };
 
   // Upload de arquivos / fotos
@@ -158,7 +215,6 @@ export function InsumoFormModal({
         reader.readAsDataURL(file);
       } else {
         reader.readAsArrayBuffer(file);
-        // Fallback placeholder para docs
         const newFile: InsumoFile = {
           id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           name: file.name,
@@ -187,7 +243,6 @@ export function InsumoFormModal({
 
   const handleSelectSupply = (pkg: any) => {
     setDescription(pkg.name);
-    // Tenta identificar unidade a partir do quantitative
     if (pkg.quantitative) {
       const qLower = pkg.quantitative.toLowerCase();
       if (qLower.includes('m2') || qLower.includes('m²')) setUnit('m²');
@@ -224,7 +279,18 @@ export function InsumoFormModal({
     }
 
     const finalType = type === 'Outro' ? customType.trim() || 'Geral' : type;
-    const cost = parseCost(unitCost);
+
+    let cost = parseCost(unitCost);
+    let sal: number | undefined = undefined;
+    let enc: number | undefined = undefined;
+    let ben: number | undefined = undefined;
+
+    if (group === 'labor') {
+      sal = parseCost(salario);
+      enc = parseCost(encargos);
+      ben = parseCost(beneficios);
+      cost = totalMaoDeObra;
+    }
 
     const payload = {
       code: code.trim() || getNextInsumoCode(),
@@ -234,6 +300,9 @@ export function InsumoFormModal({
       type: finalType,
       base,
       unitCost: cost,
+      salario: sal,
+      encargosPercent: enc,
+      beneficios: ben,
       status,
       notes: notes.trim(),
       files,
@@ -253,10 +322,12 @@ export function InsumoFormModal({
     }
 
     if (insertNew) {
-      // Limpa para novo registro e incrementa o código
       setCode(getNextInsumoCode());
       setDescription('');
       setUnitCost('0,00');
+      setSalario('0,00');
+      setEncargos('0,00');
+      setBeneficios('0,00');
       setNotes('');
       setFiles([]);
     } else {
@@ -264,11 +335,13 @@ export function InsumoFormModal({
     }
   };
 
+  const isLabor = group === 'labor';
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-3xl w-full p-0 overflow-hidden bg-card border rounded-2xl shadow-2xl">
-          {/* Header estilizado exatamente como o mockup com botão voltar laranja */}
+          {/* Header exatamente como o mockup com botão voltar laranja */}
           <div className="flex items-center justify-between px-6 py-4 border-b bg-card">
             <h2 className="text-xl font-display font-semibold text-foreground/90">
               {insumoToEdit ? 'Editar Insumo' : 'Cadastro de Insumos'}
@@ -283,7 +356,7 @@ export function InsumoFormModal({
             </button>
           </div>
 
-          <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+          <div className="p-6 space-y-5 max-h-[82vh] overflow-y-auto">
             {/* Campo: Grupo (Select com opções Material, Mão de Obra, Equipamento, Outros) */}
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-muted-foreground">
@@ -291,7 +364,7 @@ export function InsumoFormModal({
               </Label>
               <Select
                 value={group}
-                onValueChange={(v) => setGroup(v as InsumoGrupo)}
+                onValueChange={(v) => handleGroupChange(v as InsumoGrupo)}
               >
                 <SelectTrigger className="h-10 rounded-xl bg-background border-border">
                   <SelectValue placeholder="Selecione o grupo" />
@@ -305,166 +378,387 @@ export function InsumoFormModal({
               </Select>
             </div>
 
-            {/* Linha 1: Código, Descrição, Unidade */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
-              {/* Código */}
-              <div className="md:col-span-3 space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                  Código: <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="2433"
-                  className="h-10 rounded-xl bg-background border-blue-400/60 focus:border-blue-600 font-mono text-sm"
-                />
-              </div>
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* LAYOUT MÃO DE OBRA (CONFORME MOCKUP MEDIA_1791395967417.PNG) */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {isLabor ? (
+              <>
+                {/* Linha 1 (Mão de Obra): Código + Descrição */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                      Código: <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      placeholder="2433"
+                      className="h-10 rounded-xl bg-background border-blue-400/60 focus:border-blue-600 font-mono text-sm"
+                    />
+                  </div>
 
-              {/* Descrição */}
-              <div className="md:col-span-6 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                    Descrição: <span className="text-destructive">*</span>
-                  </Label>
-                  <button
-                    type="button"
-                    onClick={() => setIsSupplyPickerOpen(true)}
-                    className="text-[11px] font-bold text-primary hover:text-primary/80 flex items-center gap-1 hover:underline transition-all"
-                  >
-                    <Package className="w-3 h-3" />
-                    Puxar de Suprimentos
-                  </button>
+                  <div className="md:col-span-9 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                        Descrição: <span className="text-destructive">*</span>
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => setIsSupplyPickerOpen(true)}
+                        className="text-[11px] font-bold text-primary hover:text-primary/80 flex items-center gap-1 hover:underline transition-all"
+                      >
+                        <Package className="w-3 h-3" />
+                        Puxar de Suprimentos
+                      </button>
+                    </div>
+                    <Input
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Ex: Pedreiro com Encargos Trabalhistas"
+                      className="h-10 rounded-xl bg-background border-border"
+                    />
+                  </div>
                 </div>
-                <Input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Ex: Saco de Cimento Poty - 50 Kg"
-                  className="h-10 rounded-xl bg-background border-border"
-                />
-              </div>
 
-              {/* Unidade */}
-              <div className="md:col-span-3 space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                  Unidade: <span className="text-destructive">*</span>
-                </Label>
-                <Select value={unit} onValueChange={setUnit}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background border-border">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
-                    {INSUMO_UNIDADES_PADRAO.map((u) => (
-                      <SelectItem key={u} value={u}>
-                        {u}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                {/* Linha 2 (Mão de Obra): Unidade + Tipo + Base + Status */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                  {/* Unidade */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                      Unidade: <span className="text-destructive">*</span>
+                    </Label>
+                    <Select value={unit} onValueChange={setUnit}>
+                      <SelectTrigger className="h-10 rounded-xl bg-background border-border">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
+                        {INSUMO_UNIDADES_PADRAO.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {u}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-            {/* Linha 2: Tipo, Base, Custo, Status */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-              {/* Tipo */}
-              <div className="md:col-span-4 space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground">
-                  Tipo:
-                </Label>
-                <Select value={type} onValueChange={setType}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background border-border">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
-                    {INSUMO_TIPOS_PADRAO.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="Outro">+ Outro (digitar)</SelectItem>
-                  </SelectContent>
-                </Select>
-                {type === 'Outro' && (
-                  <Input
-                    value={customType}
-                    onChange={(e) => setCustomType(e.target.value)}
-                    placeholder="Digite a disciplina/tipo"
-                    className="h-9 mt-1 rounded-lg text-xs"
-                  />
-                )}
-              </div>
+                  {/* Tipo */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Tipo:
+                    </Label>
+                    <Select value={type} onValueChange={setType}>
+                      <SelectTrigger className="h-10 rounded-xl bg-background border-border">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
+                        {INSUMO_TIPOS_PADRAO.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="Outro">+ Outro (digitar)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {type === 'Outro' && (
+                      <Input
+                        value={customType}
+                        onChange={(e) => setCustomType(e.target.value)}
+                        placeholder="Digite a disciplina/tipo"
+                        className="h-9 mt-1 rounded-lg text-xs"
+                      />
+                    )}
+                  </div>
 
-              {/* Base */}
-              <div className="md:col-span-3 space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                  Base:
-                  <Info className="w-3 h-3 text-muted-foreground cursor-help" />
-                  <span className="text-destructive">*</span>
-                </Label>
-                <Select value={base} onValueChange={setBase}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background border-border">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border shadow-lg z-50">
-                    {INSUMO_BASES_PADRAO.map((b) => (
-                      <SelectItem key={b} value={b}>
-                        {b}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  {/* Base */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                      Base:
+                      <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <Select value={base} onValueChange={setBase}>
+                      <SelectTrigger className="h-10 rounded-xl bg-background border-border">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover border shadow-lg z-50">
+                        {INSUMO_BASES_PADRAO.map((b) => (
+                          <SelectItem key={b} value={b}>
+                            {b}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              {/* Custo */}
-              <div className="md:col-span-2 space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground">
-                  Custo:
-                </Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-xs text-muted-foreground font-semibold">
-                    R$
-                  </span>
-                  <Input
-                    value={unitCost}
-                    onChange={handleCostChange}
-                    placeholder="0,00"
-                    className="h-10 pl-8 rounded-xl bg-background border-border text-right font-medium"
-                  />
+                  {/* Status */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground block">
+                      Status:
+                    </Label>
+                    <div className="h-10 flex border rounded-xl overflow-hidden p-0.5 bg-muted/40">
+                      <button
+                        type="button"
+                        onClick={() => setStatus('active')}
+                        className={`flex-1 text-xs font-bold rounded-lg transition-all ${
+                          status === 'active'
+                            ? 'bg-sky-600 text-white shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Ativo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStatus('inactive')}
+                        className={`flex-1 text-xs font-bold rounded-lg transition-all ${
+                          status === 'inactive'
+                            ? 'bg-slate-500 text-white shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Inativo
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Status */}
-              <div className="md:col-span-3 space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground block">
-                  Status:
-                </Label>
-                <div className="h-10 flex border rounded-xl overflow-hidden p-0.5 bg-muted/40">
-                  <button
-                    type="button"
-                    onClick={() => setStatus('active')}
-                    className={`flex-1 text-xs font-bold rounded-lg transition-all ${
-                      status === 'active'
-                        ? 'bg-sky-600 text-white shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Ativo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStatus('inactive')}
-                    className={`flex-1 text-xs font-bold rounded-lg transition-all ${
-                      status === 'inactive'
-                        ? 'bg-slate-500 text-white shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Inativo
-                  </button>
+                {/* Linha 3 (Mão de Obra): Salário + Encargos + Benefícios + Total */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3.5 rounded-2xl bg-muted/30 border border-border/60">
+                  {/* Salário */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Salário:
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs text-muted-foreground font-semibold">
+                        R$
+                      </span>
+                      <Input
+                        value={salario}
+                        onChange={(e) => setSalario(e.target.value)}
+                        placeholder="0,00"
+                        className="h-10 pl-8 rounded-xl bg-background border-border text-right font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Encargos */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Encargos:
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        value={encargos}
+                        onChange={(e) => setEncargos(e.target.value)}
+                        placeholder="0,00"
+                        className="h-10 pr-8 rounded-xl bg-background border-border text-right font-medium"
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs text-muted-foreground font-semibold">
+                        %
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Benefícios */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Benefícios:
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs text-muted-foreground font-semibold">
+                        R$
+                      </span>
+                      <Input
+                        value={beneficios}
+                        onChange={(e) => setBeneficios(e.target.value)}
+                        placeholder="0,00"
+                        className="h-10 pl-8 rounded-xl bg-background border-border text-right font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Total (Calculado automaticamente e desabilitado com fundo cinza) */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Total:
+                    </Label>
+                    <div className="h-10 px-3 rounded-xl bg-muted/90 border border-border flex items-center justify-end font-bold text-foreground text-sm font-mono">
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      }).format(totalMaoDeObra)}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            ) : (
+              /* ═══════════════════════════════════════════════════════════════ */
+              /* LAYOUT PADRÃO (MATERIAL, EQUIPAMENTO, OUTROS)                  */
+              /* ═══════════════════════════════════════════════════════════════ */
+              <>
+                {/* Linha 1: Código, Descrição, Unidade */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+                  {/* Código */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                      Código: <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      placeholder="2433"
+                      className="h-10 rounded-xl bg-background border-blue-400/60 focus:border-blue-600 font-mono text-sm"
+                    />
+                  </div>
 
-            {/* Linha 3: Observações */}
+                  {/* Descrição */}
+                  <div className="md:col-span-6 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                        Descrição: <span className="text-destructive">*</span>
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => setIsSupplyPickerOpen(true)}
+                        className="text-[11px] font-bold text-primary hover:text-primary/80 flex items-center gap-1 hover:underline transition-all"
+                      >
+                        <Package className="w-3 h-3" />
+                        Puxar de Suprimentos
+                      </button>
+                    </div>
+                    <Input
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Ex: Saco de Cimento Poty - 50 Kg"
+                      className="h-10 rounded-xl bg-background border-border"
+                    />
+                  </div>
+
+                  {/* Unidade */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                      Unidade: <span className="text-destructive">*</span>
+                    </Label>
+                    <Select value={unit} onValueChange={setUnit}>
+                      <SelectTrigger className="h-10 rounded-xl bg-background border-border">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
+                        {INSUMO_UNIDADES_PADRAO.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {u}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Linha 2: Tipo, Base, Custo, Status */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                  {/* Tipo */}
+                  <div className="md:col-span-4 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Tipo:
+                    </Label>
+                    <Select value={type} onValueChange={setType}>
+                      <SelectTrigger className="h-10 rounded-xl bg-background border-border">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
+                        {INSUMO_TIPOS_PADRAO.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="Outro">+ Outro (digitar)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {type === 'Outro' && (
+                      <Input
+                        value={customType}
+                        onChange={(e) => setCustomType(e.target.value)}
+                        placeholder="Digite a disciplina/tipo"
+                        className="h-9 mt-1 rounded-lg text-xs"
+                      />
+                    )}
+                  </div>
+
+                  {/* Base */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                      Base:
+                      <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <Select value={base} onValueChange={setBase}>
+                      <SelectTrigger className="h-10 rounded-xl bg-background border-border">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover border shadow-lg z-50">
+                        {INSUMO_BASES_PADRAO.map((b) => (
+                          <SelectItem key={b} value={b}>
+                            {b}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Custo */}
+                  <div className="md:col-span-2 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Custo:
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs text-muted-foreground font-semibold">
+                        R$
+                      </span>
+                      <Input
+                        value={unitCost}
+                        onChange={(e) => setUnitCost(e.target.value)}
+                        placeholder="0,00"
+                        className="h-10 pl-8 rounded-xl bg-background border-border text-right font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <div className="md:col-span-3 space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground block">
+                      Status:
+                    </Label>
+                    <div className="h-10 flex border rounded-xl overflow-hidden p-0.5 bg-muted/40">
+                      <button
+                        type="button"
+                        onClick={() => setStatus('active')}
+                        className={`flex-1 text-xs font-bold rounded-lg transition-all ${
+                          status === 'active'
+                            ? 'bg-sky-600 text-white shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Ativo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStatus('inactive')}
+                        className={`flex-1 text-xs font-bold rounded-lg transition-all ${
+                          status === 'inactive'
+                            ? 'bg-slate-500 text-white shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Inativo
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Linha: Observações */}
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-muted-foreground">
                 Observações:
@@ -472,12 +766,12 @@ export function InsumoFormModal({
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Insira links, especificações técnicas, normas ou informes sobre este insumo..."
+                placeholder="Insira links, especificações técnicas, normas trabalhistas ou informes sobre este insumo..."
                 className="min-h-[75px] rounded-xl bg-background border-border text-sm"
               />
             </div>
 
-            {/* Linha 4: Arquivos / Fotos do produto */}
+            {/* Linha: Arquivos / Fotos do produto */}
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-muted-foreground">
                 Arquivos:

@@ -34,7 +34,10 @@ export interface Insumo {
   unit: string; // m², m³, und, km, ml, l, kg, h, etc.
   type: string; // Tipo/Disciplina: estrutura, marcenaria, instalações hidráulicas, etc.
   base: string; // Base própria ou tabela SINAPI/SEINFRA/SICRO/ORSE
-  unitCost: number; // Custo unitário R$
+  unitCost: number; // Custo unitário R$ (ou total calculado da mão de obra)
+  salario?: number; // Salário base R$ (para Mão de Obra)
+  encargosPercent?: number; // Percentual de encargos trabalhistas (%)
+  beneficios?: number; // Benefícios adicionais R$
   status: InsumoStatus; // Ativo ou Inativo
   notes?: string; // Observações, links ou informe
   files?: InsumoFile[]; // Fotos do produto ou anexos

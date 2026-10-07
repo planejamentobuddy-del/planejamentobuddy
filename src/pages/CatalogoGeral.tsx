@@ -570,8 +570,16 @@ export default function CatalogoGeral() {
                             </td>
 
                             {/* Custo Unitário */}
-                            <td className="py-2.5 px-3 text-right font-bold text-foreground font-mono text-sm">
-                              {formatCurrency(item.unitCost)}
+                            <td className="py-2.5 px-3 text-right font-mono text-sm">
+                              <span className="font-bold text-foreground">
+                                {formatCurrency(item.unitCost)}
+                              </span>
+                              {item.group === 'labor' && item.salario !== undefined && item.salario > 0 && (
+                                <div className="text-[10px] text-muted-foreground font-normal">
+                                  Sal: {formatCurrency(item.salario)}
+                                  {item.encargosPercent ? ` + ${item.encargosPercent}% enc.` : ''}
+                                </div>
+                              )}
                             </td>
 
                             {/* Status */}
