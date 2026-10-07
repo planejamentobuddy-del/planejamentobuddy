@@ -26,6 +26,7 @@ import {
   PieChart,
   CalendarDays,
   Coins,
+  FolderTree,
 } from 'lucide-react';
 import {
   Dialog,
@@ -225,6 +226,16 @@ export default function OrcamentoGeral() {
             >
               <Sliders className="w-3.5 h-3.5 text-accent" />
               BDI: {bdiRate.toFixed(1)}%
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/catalogo')}
+              className="rounded-xl text-xs flex items-center gap-1.5 text-primary border-primary/30 hover:bg-primary/5 font-semibold"
+            >
+              <FolderTree className="w-3.5 h-3.5" />
+              Catálogo
             </Button>
 
             <Button

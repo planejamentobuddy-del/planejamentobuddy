@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet, FileSpreadsheet, Sun, ShoppingCart, Users, Calculator } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, TableProperties, GanttChart, Columns3, TrendingUp, FileText, Triangle, ChevronDown, AlertTriangle, Loader2, ClipboardCheck, Wallet, FileSpreadsheet, Sun, ShoppingCart, Users, Calculator, FolderTree } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { useProjects } from '@/hooks/useProjects';
@@ -123,6 +123,9 @@ export default function ProjectDetail() {
 
           {/* Notifications */}
           <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-2 rounded-xl text-primary border-primary/20 hover:bg-primary/5 hidden md:flex" onClick={() => navigate('/catalogo')}>
+              <FolderTree className="w-4 h-4" /> Catálogo
+            </Button>
             <Button variant="outline" className="gap-2 rounded-xl text-primary border-primary/20 hover:bg-primary/5 hidden sm:flex" onClick={() => navigate('/suprimentos')}>
               <ShoppingCart className="w-4 h-4" /> Suprimentos Geral
             </Button>

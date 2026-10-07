@@ -24,7 +24,9 @@ import SuprimentosGeral from "./pages/SuprimentosGeral.tsx";
 import RelatorioFisicoFinanceiro from "./pages/RelatorioFisicoFinanceiro.tsx";
 import RelatorioCronogramaGeral from "./pages/RelatorioCronogramaGeral.tsx";
 import OrcamentoGeral from "./pages/OrcamentoGeral.tsx";
+import CatalogoGeral from "./pages/CatalogoGeral.tsx";
 import { BudgetProvider } from "./hooks/useBudget.tsx";
+import { CatalogProvider } from "./hooks/useCatalog.tsx";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -86,6 +88,7 @@ const AppRoutes = () => (
     <Route path="/relatorio-fisico-financeiro/:id" element={<ProtectedRoute><RelatorioFisicoFinanceiro /></ProtectedRoute>} />
     <Route path="/relatorio-cronograma-geral" element={<ProtectedRoute><RelatorioCronogramaGeral /></ProtectedRoute>} />
     <Route path="/orcamento" element={<ProtectedRoute><OrcamentoGeral /></ProtectedRoute>} />
+    <Route path="/catalogo" element={<ProtectedRoute><CatalogoGeral /></ProtectedRoute>} />
     <Route path="/share/:token" element={<SharedReport />} />
     <Route path="*" element={<NotFound />} />
   </Routes>
@@ -98,11 +101,13 @@ const App = () => (
         <AuthProvider>
           <ProjectsProvider>
             <BudgetProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter>
-                <AppRoutes />
-              </BrowserRouter>
+              <CatalogProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter>
+                  <AppRoutes />
+                </BrowserRouter>
+              </CatalogProvider>
             </BudgetProvider>
           </ProjectsProvider>
         </AuthProvider>
