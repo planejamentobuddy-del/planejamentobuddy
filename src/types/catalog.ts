@@ -72,6 +72,9 @@ export interface Composicao {
   costEquipment: number;
   costOther: number;
   costTotal: number;
+  detailedDescription?: string;
+  bdi?: number;
+  sellingPrice?: number;
   notes?: string;
   files?: InsumoFile[];
   createdAt: string;

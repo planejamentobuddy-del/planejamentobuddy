@@ -744,6 +744,12 @@ export default function CatalogoGeral() {
                             {comp.description}
                           </h3>
 
+                          {comp.detailedDescription && (
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {comp.detailedDescription}
+                            </p>
+                          )}
+
                           {comp.notes && (
                             <p className="text-xs text-muted-foreground line-clamp-1">
                               {comp.notes}
@@ -755,16 +761,23 @@ export default function CatalogoGeral() {
                         <div className="flex items-center gap-4 sm:gap-6 shrink-0 justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0">
                           <div className="text-right">
                             <div className="text-xs text-muted-foreground">
-                              Material: <strong>{formatCurrency(comp.costMaterial)}</strong>
+                              Mat: <strong>{formatCurrency(comp.costMaterial)}</strong> | MO: <strong>{formatCurrency(comp.costLabor)}</strong>
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              Mão de Obra: <strong>{formatCurrency(comp.costLabor)}</strong>
-                            </div>
+                            {(comp.costEquipment > 0 || comp.costOther > 0) && (
+                              <div className="text-xs text-muted-foreground">
+                                Eq: <strong>{formatCurrency(comp.costEquipment)}</strong> | Outros: <strong>{formatCurrency(comp.costOther)}</strong>
+                              </div>
+                            )}
+                            {comp.bdi !== undefined && comp.bdi > 0 && (
+                              <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                                BDI: {comp.bdi}% {comp.sellingPrice ? `• Venda: ${formatCurrency(comp.sellingPrice)}` : ''}
+                              </div>
+                            )}
                           </div>
 
                           <div className="text-right pl-4 border-l">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
-                              Total / {comp.unit}
+                              Custo / {comp.unit}
                             </span>
                             <span className="text-lg font-black font-display text-primary">
                               {formatCurrency(comp.costTotal)}
@@ -842,37 +855,45 @@ export default function CatalogoGeral() {
                                 </tr>
                               </thead>
                               <tbody className="divide-y">
-                                {comp.items.map((item) => (
-                                  <tr key={item.id} className="hover:bg-muted/10">
-                                    <td className="py-2 px-3 font-mono text-muted-foreground">
-                                      #{item.code}
-                                    </td>
-                                    <td className="py-2 px-3 font-semibold text-foreground">
-                                      {item.description}
-                                    </td>
-                                    <td className="py-2 px-2 text-center">
-                                      <span
-                                        className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${
-                                          INSUMO_GRUPO_COLORS[item.group]
-                                        }`}
-                                      >
-                                        {INSUMO_GRUPO_LABELS[item.group]}
-                                      </span>
-                                    </td>
-                                    <td className="py-2 px-2 text-center font-mono text-muted-foreground">
-                                      {item.unit}
-                                    </td>
-                                    <td className="py-2 px-3 text-right font-mono">
-                                      {item.coefficient}
-                                    </td>
-                                    <td className="py-2 px-3 text-right font-mono text-muted-foreground">
-                                      {formatCurrency(item.unitCost)}
-                                    </td>
-                                    <td className="py-2 px-3 text-right font-mono font-bold text-foreground">
-                                      {formatCurrency(item.totalCost)}
+                                {(!comp.items || comp.items.length === 0) ? (
+                                  <tr>
+                                    <td colSpan={7} className="py-6 text-center text-muted-foreground text-xs">
+                                      Nenhum insumo granular vinculado. Custos definidos diretamente na composição.
                                     </td>
                                   </tr>
-                                ))}
+                                ) : (
+                                  comp.items.map((item) => (
+                                    <tr key={item.id} className="hover:bg-muted/10">
+                                      <td className="py-2 px-3 font-mono text-muted-foreground">
+                                        #{item.code}
+                                      </td>
+                                      <td className="py-2 px-3 font-semibold text-foreground">
+                                        {item.description}
+                                      </td>
+                                      <td className="py-2 px-2 text-center">
+                                        <span
+                                          className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${
+                                            INSUMO_GRUPO_COLORS[item.group]
+                                          }`}
+                                        >
+                                          {INSUMO_GRUPO_LABELS[item.group]}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-2 text-center font-mono text-muted-foreground">
+                                        {item.unit}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono">
+                                        {item.coefficient}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono text-muted-foreground">
+                                        {formatCurrency(item.unitCost)}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono font-bold text-foreground">
+                                        {formatCurrency(item.totalCost)}
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
                               </tbody>
                             </table>
                           </div>
