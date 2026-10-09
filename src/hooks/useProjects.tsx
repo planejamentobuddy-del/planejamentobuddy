@@ -1653,6 +1653,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       getResourcesForProject, addResource, updateResource, deleteResource,
       // Supply chain
       supplyPackages,
+      supplies: supplyPackages,
       getSupplyPackagesForProject,
       addSupplyPackage,
       updateSupplyPackage,

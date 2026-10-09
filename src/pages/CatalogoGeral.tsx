@@ -63,8 +63,8 @@ function formatCurrency(val: number): string {
 export default function CatalogoGeral() {
   const navigate = useNavigate();
   const {
-    insumos,
-    composicoes,
+    insumos = [],
+    composicoes = [],
     deleteInsumo,
     deleteComposicao,
     addComposicao,
@@ -100,13 +100,15 @@ export default function CatalogoGeral() {
 
   // Métricas
   const metrics = useMemo(() => {
-    const totalInsumos = insumos.length;
-    const materials = insumos.filter((i) => i.group === 'material').length;
-    const labor = insumos.filter((i) => i.group === 'labor').length;
-    const equipment = insumos.filter((i) => i.group === 'equipment').length;
-    const other = insumos.filter((i) => i.group === 'other').length;
-    const totalComps = composicoes.length;
-    const activeInsumos = insumos.filter((i) => i.status === 'active').length;
+    const safeInsumos = insumos || [];
+    const safeComposicoes = composicoes || [];
+    const totalInsumos = safeInsumos.length;
+    const materials = safeInsumos.filter((i) => i.group === 'material').length;
+    const labor = safeInsumos.filter((i) => i.group === 'labor').length;
+    const equipment = safeInsumos.filter((i) => i.group === 'equipment').length;
+    const other = safeInsumos.filter((i) => i.group === 'other').length;
+    const totalComps = safeComposicoes.length;
+    const activeInsumos = safeInsumos.filter((i) => i.status === 'active').length;
 
     return {
       totalInsumos,
@@ -121,7 +123,7 @@ export default function CatalogoGeral() {
 
   // Lista filtrada de insumos
   const filteredInsumos = useMemo(() => {
-    return insumos.filter((item) => {
+    return (insumos || []).filter((item) => {
       const matchSearch =
         item.description.toLowerCase().includes(searchInsumo.toLowerCase()) ||
         item.code.toLowerCase().includes(searchInsumo.toLowerCase()) ||
@@ -138,7 +140,7 @@ export default function CatalogoGeral() {
 
   // Lista filtrada de composições
   const filteredComposicoes = useMemo(() => {
-    return composicoes.filter((comp) => {
+    return (composicoes || []).filter((comp) => {
       const matchSearch =
         comp.description.toLowerCase().includes(searchComp.toLowerCase()) ||
         comp.code.toLowerCase().includes(searchComp.toLowerCase());

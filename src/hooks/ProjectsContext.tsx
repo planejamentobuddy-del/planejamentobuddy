@@ -53,6 +53,7 @@ export interface ProjectsContextType {
   users: any[];
   // Supply Packages
   supplyPackages: SupplyPackage[];
+  supplies?: SupplyPackage[];
   getSupplyPackagesForProject: (projectId: string) => SupplyPackage[];
   addSupplyPackage: (pkg: Omit<SupplyPackage, 'id' | 'createdAt'>, options?: { autoSendToPurchasing?: boolean }) => Promise<SupplyPackage | null>;
   updateSupplyPackage: (pkg: SupplyPackage) => Promise<void>;

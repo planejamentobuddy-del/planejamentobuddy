@@ -55,7 +55,8 @@ export function InsumoFormModal({
   onSuccess,
 }: InsumoFormModalProps) {
   const { addInsumo, updateInsumo, getNextInsumoCode } = useCatalog();
-  const { supplies, projects } = useProjects();
+  const { supplyPackages = [], projects = [] } = useProjects();
+  const supplies = supplyPackages || [];
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -232,11 +233,11 @@ export function InsumoFormModal({
   };
 
   // Puxar item de suprimentos
-  const filteredSupplies = supplies.filter((s) => {
-    const query = supplySearch.toLowerCase();
-    const pkgName = s.name.toLowerCase();
+  const filteredSupplies = (supplies || []).filter((s) => {
+    const query = (supplySearch || '').toLowerCase();
+    const pkgName = (s.name || '').toLowerCase();
     const supplier = (s.supplier || '').toLowerCase();
-    const proj = projects.find((p) => p.id === s.projectId);
+    const proj = (projects || []).find((p) => p.id === s.projectId);
     const projName = (proj?.name || '').toLowerCase();
     return pkgName.includes(query) || supplier.includes(query) || projName.includes(query);
   });

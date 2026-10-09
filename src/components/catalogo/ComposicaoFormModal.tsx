@@ -75,7 +75,7 @@ export function ComposicaoFormModal({
   composicaoToEdit,
   onSuccess,
 }: ComposicaoFormModalProps) {
-  const { insumos, addComposicao, updateComposicao, getNextComposicaoCode } = useCatalog();
+  const { insumos = [], addComposicao, updateComposicao, getNextComposicaoCode } = useCatalog();
 
   // Informações Principais
   const [code, setCode] = useState<string>('');
@@ -410,7 +410,7 @@ export function ComposicaoFormModal({
   };
 
   const filteredInsumos = useMemo(() => {
-    return insumos.filter((i) => {
+    return (insumos || []).filter((i) => {
       const matchSearch =
         i.description.toLowerCase().includes(insumoSearch.toLowerCase()) ||
         i.code.toLowerCase().includes(insumoSearch.toLowerCase());
