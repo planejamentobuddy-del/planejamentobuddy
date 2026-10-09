@@ -20,7 +20,11 @@ export function exportBudgetToExcel(project: BudgetProject) {
     let sLab = 0;
     let sEq = 0;
 
-    stage.items.forEach(item => {
+    const stageItems = (stage.substages && stage.substages.length > 0)
+      ? stage.substages.flatMap(s => s.items || [])
+      : (stage.items || []);
+
+    stageItems.forEach(item => {
       const q = item.quantity || 0;
       sMat += (item.unitCostMaterial || 0) * q;
       sLab += (item.unitCostLabor || 0) * q;
@@ -146,7 +150,11 @@ export function exportBudgetToExcel(project: BudgetProject) {
 
     let stageSubtotal = 0;
 
-    stage.items.forEach(item => {
+    const stageItems = (stage.substages && stage.substages.length > 0)
+      ? stage.substages.flatMap(s => s.items || [])
+      : (stage.items || []);
+
+    stageItems.forEach(item => {
       const q = item.quantity || 0;
       const unitTotal = item.unitCostTotal || 0;
       const costTotal = unitTotal * q;
@@ -233,7 +241,11 @@ export function exportBudgetToExcel(project: BudgetProject) {
 
   project.stages.forEach(stage => {
     let sDirect = 0;
-    stage.items.forEach(it => {
+    const stageItems = (stage.substages && stage.substages.length > 0)
+      ? stage.substages.flatMap(s => s.items || [])
+      : (stage.items || []);
+
+    stageItems.forEach(it => {
       sDirect += (it.unitCostTotal || 0) * (it.quantity || 0);
     });
     const sSelling = sDirect * (1 + bdiRate / 100);

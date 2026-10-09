@@ -71,6 +71,7 @@ export default function OrcamentoGeral() {
   const [isSinapiModalOpen, setIsSinapiModalOpen] = useState(false);
   const [isProjectConfigOpen, setIsProjectConfigOpen] = useState(false);
   const [targetStageIdForAdd, setTargetStageIdForAdd] = useState<string | undefined>();
+  const [targetSubstageIdForAdd, setTargetSubstageIdForAdd] = useState<string | undefined>();
 
   // Novo orçamento
   const [isNewOpen, setIsNewOpen] = useState(false);
@@ -79,8 +80,9 @@ export default function OrcamentoGeral() {
   const [newLocation, setNewLocation] = useState('');
   const [newArea, setNewArea] = useState('250');
 
-  const handleOpenAddModal = (stageId?: string) => {
+  const handleOpenAddModal = (stageId?: string, substageId?: string) => {
     setTargetStageIdForAdd(stageId || activeProject?.stages[0]?.id);
+    setTargetSubstageIdForAdd(substageId);
     setIsSinapiModalOpen(true);
   };
 
@@ -531,6 +533,7 @@ export default function OrcamentoGeral() {
         open={isSinapiModalOpen}
         onOpenChange={setIsSinapiModalOpen}
         defaultStageId={targetStageIdForAdd}
+        defaultSubstageId={targetSubstageIdForAdd}
       />
 
       <ProjectConfigModal

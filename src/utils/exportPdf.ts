@@ -21,7 +21,8 @@ export function exportBudgetToPdf(project: BudgetProject) {
   let totalDirect = 0;
 
   project.stages.forEach(s => {
-    s.items.forEach(it => {
+    const items = (s.substages && s.substages.length > 0) ? s.substages.flatMap(sub => sub.items || []) : (s.items || []);
+    items.forEach(it => {
       totalDirect += (it.unitCostTotal || 0) * (it.quantity || 0);
     });
   });
@@ -82,7 +83,8 @@ export function exportBudgetToPdf(project: BudgetProject) {
 
   project.stages.forEach(st => {
     let stageTotal = 0;
-    st.items.forEach(it => {
+    const items = (st.substages && st.substages.length > 0) ? st.substages.flatMap(sub => sub.items || []) : (st.items || []);
+    items.forEach(it => {
       stageTotal += (it.unitCostTotal || 0) * (it.quantity || 0);
     });
     const stageSelling = stageTotal * (1 + bdiRate / 100);

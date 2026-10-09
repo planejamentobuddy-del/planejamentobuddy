@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import {
   BudgetProject,
   BudgetStage,
+  BudgetSubstage,
   BudgetItem,
   BdiConfig,
   calculateBdiRate,
@@ -19,7 +20,15 @@ export interface StageSummary {
   materialCost: number;
   laborCost: number;
   equipmentCost: number;
+  otherCost: number;
   sellingPrice: number;
+  // Valores por m² de área construída
+  directCostPerM2: number;
+  materialPerM2: number;
+  laborPerM2: number;
+  equipmentPerM2: number;
+  otherPerM2: number;
+  sellingPerM2: number;
   percentageOfTotal: number;
 }
 
@@ -36,6 +45,7 @@ interface BudgetContextType {
   materialCostTotal: number;
   laborCostTotal: number;
   equipmentCostTotal: number;
+  otherCostTotal: number;
   sellingPriceTotal: number;
   costPerSquareMeter: number;
   sellingPerSquareMeter: number;
@@ -50,11 +60,25 @@ interface BudgetContextType {
   getBudgetByProjectId: (projectId: string) => BudgetProject | undefined;
   getOrCreateBudgetForProject: (projectId: string, projectName: string) => BudgetProject;
 
-  // Ações de Etapas e Itens
+  // Ações de Etapas, Subetapas e Itens
   addStage: (title: string, code?: string) => void;
   updateStage: (stageId: string, title: string, code: string) => void;
   deleteStage: (stageId: string) => void;
-  addItemToStage: (stageId: string, item: Omit<BudgetItem, 'id' | 'stageId' | 'order'>) => void;
+
+  addSubstage: (stageId: string, title: string, code?: string) => void;
+  updateSubstage: (stageId: string, substageId: string, title: string, code: string) => void;
+  deleteSubstage: (stageId: string, substageId: string) => void;
+
+  addItemToSubstage: (
+    stageId: string,
+    substageId: string,
+    item: Omit<BudgetItem, 'id' | 'stageId' | 'substageId' | 'order'>
+  ) => void;
+  addItemToStage: (
+    stageId: string,
+    item: Omit<BudgetItem, 'id' | 'stageId' | 'order'>,
+    substageId?: string
+  ) => void;
   updateItem: (itemId: string, updates: Partial<BudgetItem>) => void;
   deleteItem: (itemId: string) => void;
 
@@ -63,16 +87,83 @@ interface BudgetContextType {
   updateDisbursementSchedule: (schedule: DisbursementSchedule) => void;
 }
 
-const STORAGE_KEY = 'buddy_orcamentos_v2';
+const STORAGE_KEY = 'buddy_orcamentos_v3';
 const ACTIVE_PROJ_KEY = 'buddy_orcamento_active_id';
+
+/**
+ * Garante que todas as etapas possuam substages e numeração padronizada (Etapa 1 -> Subetapa 1.1 -> Item 1.1.1)
+ */
+export function normalizeProjectStages(stages: BudgetStage[]): BudgetStage[] {
+  return stages.map((stage, sIdx) => {
+    const stageNum = String(stage.order || sIdx + 1);
+    const stageCode = stage.code || stageNum;
+
+    if (stage.substages && stage.substages.length > 0) {
+      return {
+        ...stage,
+        code: stageCode,
+        substages: stage.substages.map((sub, subIdx) => {
+          const subNum = String(sub.order || subIdx + 1);
+          const subCode = sub.code || `${stageCode}.${subNum}`;
+          return {
+            ...sub,
+            stageId: stage.id,
+            code: subCode,
+            items: (sub.items || []).map((it, itIdx) => ({
+              ...it,
+              stageId: stage.id,
+              substageId: sub.id,
+              code: it.code || `${subCode}.${it.order || itIdx + 1}`,
+              unitCostOther: it.unitCostOther || 0,
+            })),
+          };
+        }),
+      };
+    }
+
+    // Se a etapa tiver apenas items legados (sem substages)
+    const legacyItems = stage.items || [];
+    const defaultSubstage: BudgetSubstage = {
+      id: `sub-${stage.id}-1`,
+      stageId: stage.id,
+      order: 1,
+      code: `${stageCode}.1`,
+      title: stage.title || 'Geral',
+      items: legacyItems.map((it, itIdx) => ({
+        ...it,
+        stageId: stage.id,
+        substageId: `sub-${stage.id}-1`,
+        code: it.code || `${stageCode}.1.${it.order || itIdx + 1}`,
+        unitCostOther: it.unitCostOther || 0,
+      })),
+    };
+
+    return {
+      ...stage,
+      code: stageCode,
+      substages: [defaultSubstage],
+      items: legacyItems,
+    };
+  });
+}
+
+/**
+ * Retorna todos os itens de uma etapa desdobrada
+ */
+export function getStageItems(stage: BudgetStage): BudgetItem[] {
+  if (stage.substages && stage.substages.length > 0) {
+    return stage.substages.flatMap((sub) => sub.items || []);
+  }
+  return stage.items || [];
+}
 
 const INITIAL_DEMO_BUDGETS: BudgetProject[] = [
   {
     id: 'orc-demo-01',
-    title: 'Casa Praia Serena - Casana',
-    clientName: 'Casana Empreendimentos',
+    title: 'N&J House - Mansão Casana',
+    clientName: 'N&J Empreendimentos',
     location: 'Praia do Preá, Cruz - CE',
-    totalArea: 285.50,
+    totalArea: 285.5,
     dateBase: '09/2026 - SINAPI Desonerado (CE)',
     status: 'draft',
     bdiConfig: {
@@ -83,9 +174,9 @@ const INITIAL_DEMO_BUDGETS: BudgetProject[] = [
       profitMargin: 9.0,
       taxes: {
         pis: 0.65,
-        cofins: 3.00,
-        iss: 3.00,
-        cprb: 4.50,
+        cofins: 3.0,
+        iss: 3.0,
+        cprb: 4.5,
       },
     },
     stages: [
@@ -93,40 +184,79 @@ const INITIAL_DEMO_BUDGETS: BudgetProject[] = [
         id: 'stg-1',
         budgetId: 'orc-demo-01',
         order: 1,
-        code: '01',
-        title: 'Serviços Preliminares e Canteiro',
-        items: [
+        code: '1',
+        title: 'Serviços Preliminares',
+        substages: [
           {
-            id: 'it-1',
+            id: 'sub-1-1',
             stageId: 'stg-1',
             order: 1,
-            code: '01.01',
-            source: 'sinapi',
-            sinapiCode: '98458',
-            description: 'Tapume de chapa de madeira compensada resinada 6mm com portão',
-            unit: 'm²',
-            quantity: 110,
-            unitCostMaterial: 48.50,
-            unitCostLabor: 24.10,
-            unitCostEquipment: 0.00,
-            unitCostTotal: 72.60,
-            composition: SINAPI_DATABASE.find(i => i.code === '98458')?.composition,
+            code: '1.1',
+            title: 'Tapumes e Fechamentos Provisórios',
+            items: [
+              {
+                id: 'it-1',
+                stageId: 'stg-1',
+                substageId: 'sub-1-1',
+                order: 1,
+                code: '1.1.1',
+                source: 'proprio',
+                description: 'Tapume de telhas metálicas trapezoidais h=2,20m com montantes de madeira',
+                unit: 'm²',
+                quantity: 110,
+                unitCostMaterial: 54.0,
+                unitCostLabor: 28.5,
+                unitCostEquipment: 0.0,
+                unitCostOther: 0.0,
+                unitCostTotal: 82.5,
+                bdi: 32.6,
+              },
+              {
+                id: 'it-2',
+                stageId: 'stg-1',
+                substageId: 'sub-1-1',
+                order: 2,
+                code: '1.1.2',
+                source: 'proprio',
+                description: 'Portão de correr em chapa metálica para acesso de veículos da obra',
+                unit: 'und',
+                quantity: 2,
+                unitCostMaterial: 850.0,
+                unitCostLabor: 320.0,
+                unitCostEquipment: 0.0,
+                unitCostOther: 50.0,
+                unitCostTotal: 1220.0,
+                bdi: 32.6,
+              },
+            ],
           },
           {
-            id: 'it-2',
+            id: 'sub-1-2',
             stageId: 'stg-1',
             order: 2,
-            code: '01.02',
-            source: 'sinapi',
-            sinapiCode: '98460',
-            description: 'Locação convencional de obra com gabarito corrido pontaletado',
-            unit: 'm',
-            quantity: 75,
-            unitCostMaterial: 14.80,
-            unitCostLabor: 16.50,
-            unitCostEquipment: 0.00,
-            unitCostTotal: 31.30,
-            composition: SINAPI_DATABASE.find(i => i.code === '98460')?.composition,
+            code: '1.2',
+            title: 'Locação e Gabarito da Obra',
+            items: [
+              {
+                id: 'it-3',
+                stageId: 'stg-1',
+                substageId: 'sub-1-2',
+                order: 1,
+                code: '1.2.1',
+                source: 'sinapi',
+                sinapiCode: '98460',
+                description: 'Locação convencional de obra com gabarito corrido pontaletado',
+                unit: 'm',
+                quantity: 75,
+                unitCostMaterial: 14.8,
+                unitCostLabor: 16.5,
+                unitCostEquipment: 0.0,
+                unitCostOther: 0.0,
+                unitCostTotal: 31.3,
+                bdi: 32.6,
+                composition: SINAPI_DATABASE.find((i) => i.code === '98460')?.composition,
+              },
+            ],
           },
         ],
       },
@@ -134,40 +264,51 @@ const INITIAL_DEMO_BUDGETS: BudgetProject[] = [
         id: 'stg-2',
         budgetId: 'orc-demo-01',
         order: 2,
-        code: '02',
-        title: 'Fundações e Estrutura de Concreto',
-        items: [
+        code: '2',
+        title: 'Movimento de Terra',
+        substages: [
           {
-            id: 'it-3',
+            id: 'sub-2-1',
             stageId: 'stg-2',
             order: 1,
-            code: '02.01',
-            source: 'sinapi',
-            sinapiCode: '94970',
-            description: 'Concreto armado Fck 25MPa usinado lançado em baldrames e pilares',
-            unit: 'm³',
-            quantity: 58,
-            unitCostMaterial: 395.00,
-            unitCostLabor: 148.50,
-            unitCostEquipment: 26.50,
-            unitCostTotal: 570.00,
-            composition: SINAPI_DATABASE.find(i => i.code === '94970')?.composition,
-          },
-          {
-            id: 'it-4',
-            stageId: 'stg-2',
-            order: 2,
-            code: '02.02',
-            source: 'sinapi',
-            sinapiCode: '92778',
-            description: 'Armação de estrutura em aço CA-50 corte, dobra e amarração',
-            unit: 'kg',
-            quantity: 3800,
-            unitCostMaterial: 8.90,
-            unitCostLabor: 3.80,
-            unitCostEquipment: 0.00,
-            unitCostTotal: 12.70,
-            composition: SINAPI_DATABASE.find(i => i.code === '92778')?.composition,
+            code: '2.1',
+            title: 'Escavação e Aterro',
+            items: [
+              {
+                id: 'it-4',
+                stageId: 'stg-2',
+                substageId: 'sub-2-1',
+                order: 1,
+                code: '2.1.1',
+                source: 'proprio',
+                description: 'Escavação manual de valas para baldrames e sapatas em solo arenoso',
+                unit: 'm³',
+                quantity: 45,
+                unitCostMaterial: 0.0,
+                unitCostLabor: 48.0,
+                unitCostEquipment: 0.0,
+                unitCostOther: 0.0,
+                unitCostTotal: 48.0,
+                bdi: 30.0,
+              },
+              {
+                id: 'it-5',
+                stageId: 'stg-2',
+                substageId: 'sub-2-1',
+                order: 2,
+                code: '2.1.2',
+                source: 'proprio',
+                description: 'Reaterro manual apiloado com maço de 30kg',
+                unit: 'm³',
+                quantity: 28,
+                unitCostMaterial: 0.0,
+                unitCostLabor: 32.0,
+                unitCostEquipment: 0.0,
+                unitCostOther: 0.0,
+                unitCostTotal: 32.0,
+                bdi: 30.0,
+              },
+            ],
           },
         ],
       },
@@ -175,40 +316,64 @@ const INITIAL_DEMO_BUDGETS: BudgetProject[] = [
         id: 'stg-3',
         budgetId: 'orc-demo-01',
         order: 3,
-        code: '03',
-        title: 'Alvenarias e Revestimentos',
-        items: [
+        code: '3',
+        title: 'Fundações e Estruturas',
+        substages: [
           {
-            id: 'it-5',
+            id: 'sub-3-1',
             stageId: 'stg-3',
             order: 1,
-            code: '03.01',
-            source: 'sinapi',
-            sinapiCode: '87520',
-            description: 'Alvenaria de bloco cerâmico furado 14x19x29cm com argamassa 1:2:8',
-            unit: 'm²',
-            quantity: 340,
-            unitCostMaterial: 36.50,
-            unitCostLabor: 36.80,
-            unitCostEquipment: 0.00,
-            unitCostTotal: 73.30,
-            composition: SINAPI_DATABASE.find(i => i.code === '87520')?.composition,
+            code: '3.1',
+            title: 'Concretagem Estrutural',
+            items: [
+              {
+                id: 'it-6',
+                stageId: 'stg-3',
+                substageId: 'sub-3-1',
+                order: 1,
+                code: '3.1.1',
+                source: 'sinapi',
+                sinapiCode: '94970',
+                description: 'Concreto armado Fck 25MPa usinado lançado em baldrames e pilares',
+                unit: 'm³',
+                quantity: 58,
+                unitCostMaterial: 395.0,
+                unitCostLabor: 148.5,
+                unitCostEquipment: 26.5,
+                unitCostOther: 0.0,
+                unitCostTotal: 570.0,
+                bdi: 32.6,
+                composition: SINAPI_DATABASE.find((i) => i.code === '94970')?.composition,
+              },
+            ],
           },
           {
-            id: 'it-6',
+            id: 'sub-3-2',
             stageId: 'stg-3',
             order: 2,
-            code: '03.02',
-            source: 'sinapi',
-            sinapiCode: '87251',
-            description: 'Piso em porcelanato 60x60cm assentado com argamassa AC-II e rejunte',
-            unit: 'm²',
-            quantity: 210,
-            unitCostMaterial: 48.00,
-            unitCostLabor: 28.50,
-            unitCostEquipment: 0.00,
-            unitCostTotal: 76.50,
-            composition: SINAPI_DATABASE.find(i => i.code === '87251')?.composition,
+            code: '3.2',
+            title: 'Armaduras de Aço',
+            items: [
+              {
+                id: 'it-7',
+                stageId: 'stg-3',
+                substageId: 'sub-3-2',
+                order: 1,
+                code: '3.2.1',
+                source: 'sinapi',
+                sinapiCode: '92778',
+                description: 'Armação de estrutura em aço CA-50 corte, dobra e amarração',
+                unit: 'kg',
+                quantity: 3800,
+                unitCostMaterial: 8.9,
+                unitCostLabor: 3.8,
+                unitCostEquipment: 0.0,
+                unitCostOther: 0.0,
+                unitCostTotal: 12.7,
+                bdi: 32.6,
+                composition: SINAPI_DATABASE.find((i) => i.code === '92778')?.composition,
+              },
+            ],
           },
         ],
       },
@@ -218,8 +383,8 @@ const INITIAL_DEMO_BUDGETS: BudgetProject[] = [
       monthsLabels: ['Mês 1', 'Mês 2', 'Mês 3', 'Mês 4', 'Mês 5', 'Mês 6'],
       distributions: {
         'stg-1': [70, 30, 0, 0, 0, 0],
-        'stg-2': [20, 50, 30, 0, 0, 0],
-        'stg-3': [0, 20, 50, 30, 0, 0],
+        'stg-2': [50, 50, 0, 0, 0, 0],
+        'stg-3': [20, 50, 30, 0, 0, 0],
       },
     },
     createdAt: new Date().toISOString(),
@@ -233,17 +398,28 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<BudgetProject[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((p: BudgetProject) => ({
+            ...p,
+            stages: normalizeProjectStages(p.stages || []),
+          }));
+        }
+      }
     } catch (e) {
       console.error('Falha ao carregar orçamentos locais', e);
     }
-    return INITIAL_DEMO_BUDGETS;
+    return INITIAL_DEMO_BUDGETS.map((p) => ({
+      ...p,
+      stages: normalizeProjectStages(p.stages),
+    }));
   });
 
   const [activeProjectId, setActiveProjectIdState] = useState<string>(() => {
     try {
       const savedId = localStorage.getItem(ACTIVE_PROJ_KEY);
-      if (savedId && projects.some(p => p.id === savedId)) return savedId;
+      if (savedId && projects.some((p) => p.id === savedId)) return savedId;
     } catch (e) {}
     return projects[0]?.id || '';
   });
@@ -264,7 +440,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
   };
 
   const activeProject = useMemo(() => {
-    return projects.find(p => p.id === activeProjectId) || projects[0] || null;
+    return projects.find((p) => p.id === activeProjectId) || projects[0] || null;
   }, [projects, activeProjectId]);
 
   const bdiRate = useMemo(() => {
@@ -272,11 +448,14 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     return calculateBdiRate(activeProject.bdiConfig);
   }, [activeProject]);
 
+  // Cálculos consolidados por Etapa e Categorias (Mão de Obra, Material, Equipamento, Outros)
   const {
     directCostTotal,
     materialCostTotal,
     laborCostTotal,
     equipmentCostTotal,
+    otherCostTotal,
+    sellingPriceTotal,
     stageSummaries,
   } = useMemo(() => {
     if (!activeProject) {
@@ -285,68 +464,105 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         materialCostTotal: 0,
         laborCostTotal: 0,
         equipmentCostTotal: 0,
+        otherCostTotal: 0,
+        sellingPriceTotal: 0,
         stageSummaries: [],
       };
     }
 
-    let directTotal = 0;
-    let matTotal = 0;
-    let labTotal = 0;
-    let eqTotal = 0;
+    let grandDirect = 0;
+    let grandMat = 0;
+    let grandLab = 0;
+    let grandEq = 0;
+    let grandOth = 0;
+    let grandSelling = 0;
 
-    const rawSummaries = activeProject.stages.map(stage => {
+    const area = activeProject.totalArea || 0;
+
+    const rawSummaries = activeProject.stages.map((stage) => {
       let stageMat = 0;
       let stageLab = 0;
       let stageEq = 0;
-      let stageTotal = 0;
+      let stageOth = 0;
+      let stageDirect = 0;
+      let stageSelling = 0;
 
-      stage.items.forEach(item => {
-        const itemMat = (item.unitCostMaterial || 0) * (item.quantity || 0);
-        const itemLab = (item.unitCostLabor || 0) * (item.quantity || 0);
-        const itemEq = (item.unitCostEquipment || 0) * (item.quantity || 0);
-        const itemTot = (item.unitCostTotal || 0) * (item.quantity || 0);
+      const items = getStageItems(stage);
+
+      items.forEach((item) => {
+        const q = item.quantity || 0;
+        const itemMat = (item.unitCostMaterial || 0) * q;
+        const itemLab = (item.unitCostLabor || 0) * q;
+        const itemEq = (item.unitCostEquipment || 0) * q;
+        const itemOth = (item.unitCostOther || 0) * q;
+
+        const calculatedUnitTotal =
+          (item.unitCostMaterial || 0) +
+          (item.unitCostLabor || 0) +
+          (item.unitCostEquipment || 0) +
+          (item.unitCostOther || 0);
+
+        const unitCostTotal = item.unitCostTotal || calculatedUnitTotal;
+        const itemDirect = unitCostTotal * q;
+
+        // BDI individual por item ou BDI global da obra
+        const effectiveBdi =
+          item.bdi !== undefined && item.bdi !== null && !isNaN(item.bdi)
+            ? Number(item.bdi)
+            : bdiRate;
+
+        const itemSelling = itemDirect * (1 + effectiveBdi / 100);
 
         stageMat += itemMat;
         stageLab += itemLab;
         stageEq += itemEq;
-        stageTotal += itemTot;
+        stageOth += itemOth;
+        stageDirect += itemDirect;
+        stageSelling += itemSelling;
       });
 
-      directTotal += stageTotal;
-      matTotal += stageMat;
-      labTotal += stageLab;
-      eqTotal += stageEq;
+      grandDirect += stageDirect;
+      grandMat += stageMat;
+      grandLab += stageLab;
+      grandEq += stageEq;
+      grandOth += stageOth;
+      grandSelling += stageSelling;
 
       return {
         stageId: stage.id,
         code: stage.code,
         title: stage.title,
-        directCost: stageTotal,
+        directCost: stageDirect,
         materialCost: stageMat,
         laborCost: stageLab,
         equipmentCost: stageEq,
-        sellingPrice: stageTotal * (1 + bdiRate / 100),
+        otherCost: stageOth,
+        sellingPrice: stageSelling,
+        directCostPerM2: area > 0 ? stageDirect / area : 0,
+        materialPerM2: area > 0 ? stageMat / area : 0,
+        laborPerM2: area > 0 ? stageLab / area : 0,
+        equipmentPerM2: area > 0 ? stageEq / area : 0,
+        otherPerM2: area > 0 ? stageOth / area : 0,
+        sellingPerM2: area > 0 ? stageSelling / area : 0,
         percentageOfTotal: 0,
       };
     });
 
-    const summaries = rawSummaries.map(s => ({
+    const summaries: StageSummary[] = rawSummaries.map((s) => ({
       ...s,
-      percentageOfTotal: directTotal > 0 ? (s.directCost / directTotal) * 100 : 0,
+      percentageOfTotal: grandDirect > 0 ? (s.directCost / grandDirect) * 100 : 0,
     }));
 
     return {
-      directCostTotal: directTotal,
-      materialCostTotal: matTotal,
-      laborCostTotal: labTotal,
-      equipmentCostTotal: eqTotal,
+      directCostTotal: grandDirect,
+      materialCostTotal: grandMat,
+      laborCostTotal: grandLab,
+      equipmentCostTotal: grandEq,
+      otherCostTotal: grandOth,
+      sellingPriceTotal: grandSelling,
       stageSummaries: summaries,
     };
   }, [activeProject, bdiRate]);
-
-  const sellingPriceTotal = useMemo(() => {
-    return directCostTotal * (1 + bdiRate / 100);
-  }, [directCostTotal, bdiRate]);
 
   const costPerSquareMeter = useMemo(() => {
     const area = activeProject?.totalArea || 0;
@@ -362,8 +578,9 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     if (!activeProject || directCostTotal === 0) return [];
 
     const allItems: { item: BudgetItem; totalCost: number }[] = [];
-    activeProject.stages.forEach(stage => {
-      stage.items.forEach(item => {
+    activeProject.stages.forEach((stage) => {
+      const items = getStageItems(stage);
+      items.forEach((item) => {
         const total = (item.quantity || 0) * (item.unitCostTotal || 0);
         if (total > 0) {
           allItems.push({ item, totalCost: total });
@@ -401,8 +618,9 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
   }, [activeProject, directCostTotal]);
 
   const createProject = (data: Partial<BudgetProject>): BudgetProject => {
+    const newProjId = 'orc-' + Date.now();
     const newProject: BudgetProject = {
-      id: 'orc-' + Date.now(),
+      id: newProjId,
       projectId: data.projectId,
       title: data.title || 'Novo Orçamento de Obra',
       clientName: data.clientName || 'Cliente Exemplo',
@@ -418,32 +636,41 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         profitMargin: 9.0,
         taxes: { pis: 0.65, cofins: 3.0, iss: 3.0, cprb: 4.5 },
       },
-      stages: [
+      stages: normalizeProjectStages([
         {
           id: 'stg-' + Date.now(),
-          budgetId: 'orc-' + Date.now(),
+          budgetId: newProjId,
           order: 1,
-          code: '01',
+          code: '1',
           title: 'Serviços Preliminares',
-          items: [],
+          substages: [
+            {
+              id: 'sub-' + Date.now(),
+              stageId: 'stg-' + Date.now(),
+              order: 1,
+              code: '1.1',
+              title: 'Tapumes e Canteiro',
+              items: [],
+            },
+          ],
         },
-      ],
+      ]),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    setProjects(prev => [newProject, ...prev]);
+    setProjects((prev) => [newProject, ...prev]);
     setActiveProjectId(newProject.id);
     toast.success('Orçamento criado com sucesso!');
     return newProject;
   };
 
   const getBudgetByProjectId = (projId: string): BudgetProject | undefined => {
-    return projects.find(p => p.projectId === projId);
+    return projects.find((p) => p.projectId === projId);
   };
 
   const getOrCreateBudgetForProject = (projId: string, projName: string): BudgetProject => {
-    const existing = projects.find(p => p.projectId === projId);
+    const existing = projects.find((p) => p.projectId === projId);
     if (existing) return existing;
 
     const created = createProject({
@@ -455,10 +682,9 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateProject = (id: string, data: Partial<BudgetProject>) => {
-    setProjects(prev =>
-      prev.map(p => (p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p))
+    setProjects((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p))
     );
-    toast.success('Orçamento atualizado');
   };
 
   const deleteProject = (id: string) => {
@@ -466,29 +692,41 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       toast.error('Você deve manter ao menos um orçamento.');
       return;
     }
-    setProjects(prev => prev.filter(p => p.id !== id));
+    setProjects((prev) => prev.filter((p) => p.id !== id));
     if (activeProjectId === id) {
-      const remaining = projects.filter(p => p.id !== id);
+      const remaining = projects.filter((p) => p.id !== id);
       if (remaining.length > 0) setActiveProjectId(remaining[0].id);
     }
     toast.success('Orçamento removido');
   };
 
   const duplicateProject = (id: string) => {
-    const orig = projects.find(p => p.id === id);
+    const orig = projects.find((p) => p.id === id);
     if (!orig) return;
 
     const newId = 'orc-' + Date.now();
-    const clonedStages = orig.stages.map((st, i) => ({
-      ...st,
-      id: `stg-${Date.now()}-${i}`,
-      budgetId: newId,
-      items: st.items.map((it, j) => ({
-        ...it,
-        id: `it-${Date.now()}-${i}-${j}`,
-        stageId: `stg-${Date.now()}-${i}`,
-      })),
-    }));
+    const clonedStages = (orig.stages || []).map((st, i) => {
+      const newStgId = `stg-${Date.now()}-${i}`;
+      return {
+        ...st,
+        id: newStgId,
+        budgetId: newId,
+        substages: (st.substages || []).map((sub, j) => {
+          const newSubId = `sub-${Date.now()}-${i}-${j}`;
+          return {
+            ...sub,
+            id: newSubId,
+            stageId: newStgId,
+            items: (sub.items || []).map((it, k) => ({
+              ...it,
+              id: `it-${Date.now()}-${i}-${j}-${k}`,
+              stageId: newStgId,
+              substageId: newSubId,
+            })),
+          };
+        }),
+      };
+    });
 
     const cloned: BudgetProject = {
       ...orig,
@@ -499,34 +737,45 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       updatedAt: new Date().toISOString(),
     };
 
-    setProjects(prev => [cloned, ...prev]);
+    setProjects((prev) => [cloned, ...prev]);
     setActiveProjectId(cloned.id);
     toast.success('Orçamento duplicado com sucesso!');
   };
 
+  // --- AÇÕES DE ETAPA (Nível 1) ---
   const addStage = (title: string, code?: string) => {
     if (!activeProject) return;
     const stageNum = activeProject.stages.length + 1;
-    const finalCode = code || (stageNum < 10 ? `0${stageNum}` : `${stageNum}`);
+    const finalCode = code || String(stageNum);
+    const newStageId = 'stg-' + Date.now();
 
     const newStage: BudgetStage = {
-      id: 'stg-' + Date.now(),
+      id: newStageId,
       budgetId: activeProject.id,
       order: stageNum,
       code: finalCode,
       title: title.trim(),
-      items: [],
+      substages: [
+        {
+          id: 'sub-' + Date.now(),
+          stageId: newStageId,
+          order: 1,
+          code: `${finalCode}.1`,
+          title: 'Geral',
+          items: [],
+        },
+      ],
     };
 
     updateProject(activeProject.id, {
       stages: [...activeProject.stages, newStage],
     });
-    toast.success(`Etapa "${title}" adicionada`);
+    toast.success(`Etapa "${finalCode} - ${title}" adicionada`);
   };
 
   const updateStage = (stageId: string, title: string, code: string) => {
     if (!activeProject) return;
-    const updatedStages = activeProject.stages.map(st =>
+    const updatedStages = activeProject.stages.map((st) =>
       st.id === stageId ? { ...st, title, code } : st
     );
     updateProject(activeProject.id, { stages: updatedStages });
@@ -534,62 +783,185 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
 
   const deleteStage = (stageId: string) => {
     if (!activeProject) return;
-    const updatedStages = activeProject.stages.filter(st => st.id !== stageId);
+    const updatedStages = activeProject.stages.filter((st) => st.id !== stageId);
     updateProject(activeProject.id, { stages: updatedStages });
     toast.success('Etapa excluída');
   };
 
-  const addItemToStage = (stageId: string, item: Omit<BudgetItem, 'id' | 'stageId' | 'order'>) => {
+  // --- AÇÕES DE SUBETAPA (Nível 2) ---
+  const addSubstage = (stageId: string, title: string, code?: string) => {
     if (!activeProject) return;
 
-    const targetStage = activeProject.stages.find(s => s.id === stageId);
-    const order = (targetStage?.items.length || 0) + 1;
-    const totalUnit =
-      (item.unitCostMaterial || 0) +
-      (item.unitCostLabor || 0) +
-      (item.unitCostEquipment || 0);
+    const updatedStages = activeProject.stages.map((st) => {
+      if (st.id !== stageId) return st;
 
-    const newItem: BudgetItem = {
-      ...item,
-      id: 'it-' + Date.now(),
-      stageId,
-      order,
-      unitCostTotal: item.unitCostTotal || totalUnit,
-    };
+      const currentSubs = st.substages || [];
+      const subNum = currentSubs.length + 1;
+      const finalCode = code || `${st.code}.${subNum}`;
 
-    const updatedStages = activeProject.stages.map(st => {
-      if (st.id === stageId) {
-        return { ...st, items: [...st.items, newItem] };
-      }
-      return st;
+      const newSub: BudgetSubstage = {
+        id: 'sub-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
+        stageId,
+        order: subNum,
+        code: finalCode,
+        title: title.trim(),
+        items: [],
+      };
+
+      return {
+        ...st,
+        substages: [...currentSubs, newSub],
+      };
+    });
+
+    updateProject(activeProject.id, { stages: updatedStages });
+    toast.success(`Subetapa "${title}" adicionada`);
+  };
+
+  const updateSubstage = (
+    stageId: string,
+    substageId: string,
+    title: string,
+    code: string
+  ) => {
+    if (!activeProject) return;
+
+    const updatedStages = activeProject.stages.map((st) => {
+      if (st.id !== stageId) return st;
+      return {
+        ...st,
+        substages: (st.substages || []).map((sub) =>
+          sub.id === substageId ? { ...sub, title, code } : sub
+        ),
+      };
+    });
+
+    updateProject(activeProject.id, { stages: updatedStages });
+  };
+
+  const deleteSubstage = (stageId: string, substageId: string) => {
+    if (!activeProject) return;
+
+    const updatedStages = activeProject.stages.map((st) => {
+      if (st.id !== stageId) return st;
+      return {
+        ...st,
+        substages: (st.substages || []).filter((sub) => sub.id !== substageId),
+      };
+    });
+
+    updateProject(activeProject.id, { stages: updatedStages });
+    toast.success('Subetapa excluída');
+  };
+
+  // --- AÇÕES DE ITENS (Nível 3) ---
+  const addItemToSubstage = (
+    stageId: string,
+    substageId: string,
+    item: Omit<BudgetItem, 'id' | 'stageId' | 'substageId' | 'order'>
+  ) => {
+    if (!activeProject) return;
+
+    const updatedStages = activeProject.stages.map((st) => {
+      if (st.id !== stageId) return st;
+
+      const updatedSubs = (st.substages || []).map((sub) => {
+        if (sub.id !== substageId) return sub;
+
+        const order = (sub.items || []).length + 1;
+        const totalUnit =
+          (item.unitCostMaterial || 0) +
+          (item.unitCostLabor || 0) +
+          (item.unitCostEquipment || 0) +
+          (item.unitCostOther || 0);
+
+        const autoCode = `${sub.code}.${order}`;
+
+        const newItem: BudgetItem = {
+          ...item,
+          id: 'it-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
+          stageId,
+          substageId,
+          order,
+          code: item.code || autoCode,
+          unitCostTotal: item.unitCostTotal || totalUnit,
+          bdi: item.bdi !== undefined ? item.bdi : bdiRate,
+        };
+
+        return {
+          ...sub,
+          items: [...(sub.items || []), newItem],
+        };
+      });
+
+      return {
+        ...st,
+        substages: updatedSubs,
+      };
     });
 
     updateProject(activeProject.id, { stages: updatedStages });
     toast.success(`Item "${item.description.slice(0, 30)}..." adicionado`);
   };
 
+  const addItemToStage = (
+    stageId: string,
+    item: Omit<BudgetItem, 'id' | 'stageId' | 'order'>,
+    substageId?: string
+  ) => {
+    if (!activeProject) return;
+    const stage = activeProject.stages.find((s) => s.id === stageId);
+    if (!stage) return;
+
+    // Se informou substageId ou se existe uma subetapa, usa
+    const targetSubstageId =
+      substageId ||
+      stage.substages?.[0]?.id ||
+      `sub-${stageId}-1`;
+
+    if (!stage.substages || stage.substages.length === 0) {
+      // Cria a subetapa padrão primeiro
+      addSubstage(stageId, 'Geral', `${stage.code}.1`);
+    }
+
+    addItemToSubstage(stageId, targetSubstageId, item);
+  };
+
   const updateItem = (itemId: string, updates: Partial<BudgetItem>) => {
     if (!activeProject) return;
 
-    const updatedStages = activeProject.stages.map(st => {
-      const itemExists = st.items.some(it => it.id === itemId);
-      if (!itemExists) return st;
+    const updatedStages = activeProject.stages.map((st) => {
+      let changed = false;
 
-      const updatedItems = st.items.map(it => {
-        if (it.id !== itemId) return it;
-        const merged = { ...it, ...updates };
-        const calculatedTotal =
-          (merged.unitCostMaterial || 0) +
-          (merged.unitCostLabor || 0) +
-          (merged.unitCostEquipment || 0);
-        return {
-          ...merged,
-          unitCostTotal:
-            updates.unitCostTotal !== undefined ? updates.unitCostTotal : calculatedTotal,
-        };
+      const updatedSubs = (st.substages || []).map((sub) => {
+        const itemExists = (sub.items || []).some((it) => it.id === itemId);
+        if (!itemExists) return sub;
+
+        changed = true;
+        const updatedItems = sub.items.map((it) => {
+          if (it.id !== itemId) return it;
+
+          const merged = { ...it, ...updates };
+          const calculatedTotal =
+            (merged.unitCostMaterial || 0) +
+            (merged.unitCostLabor || 0) +
+            (merged.unitCostEquipment || 0) +
+            (merged.unitCostOther || 0);
+
+          return {
+            ...merged,
+            unitCostTotal:
+              updates.unitCostTotal !== undefined ? updates.unitCostTotal : calculatedTotal,
+          };
+        });
+
+        return { ...sub, items: updatedItems };
       });
 
-      return { ...st, items: updatedItems };
+      if (changed) {
+        return { ...st, substages: updatedSubs };
+      }
+      return st;
     });
 
     updateProject(activeProject.id, { stages: updatedStages });
@@ -598,10 +970,17 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
   const deleteItem = (itemId: string) => {
     if (!activeProject) return;
 
-    const updatedStages = activeProject.stages.map(st => ({
-      ...st,
-      items: st.items.filter(it => it.id !== itemId),
-    }));
+    const updatedStages = activeProject.stages.map((st) => {
+      const updatedSubs = (st.substages || []).map((sub) => ({
+        ...sub,
+        items: (sub.items || []).filter((it) => it.id !== itemId),
+      }));
+
+      return {
+        ...st,
+        substages: updatedSubs,
+      };
+    });
 
     updateProject(activeProject.id, { stages: updatedStages });
     toast.success('Item removido da planilha');
@@ -632,6 +1011,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         materialCostTotal,
         laborCostTotal,
         equipmentCostTotal,
+        otherCostTotal,
         sellingPriceTotal,
         costPerSquareMeter,
         sellingPerSquareMeter,
@@ -646,6 +1026,10 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         addStage,
         updateStage,
         deleteStage,
+        addSubstage,
+        updateSubstage,
+        deleteSubstage,
+        addItemToSubstage,
         addItemToStage,
         updateItem,
         deleteItem,

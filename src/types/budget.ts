@@ -28,28 +28,43 @@ export interface CompositionInput {
 export interface BudgetItem {
   id: string;
   stageId: string;
+  substageId?: string;
   order: number;
-  code: string;
-  source: 'sinapi' | 'custom' | 'proprio';
+  code: string; // Ex: "1.1.1", "1.1.2"
+  source: 'sinapi' | 'custom' | 'proprio' | 'catalogo';
   sinapiCode?: string;
+  catalogId?: string;
+  catalogType?: 'insumo' | 'composicao';
   description: string;
   unit: string;
   quantity: number;
   unitCostMaterial: number;
   unitCostLabor: number;
   unitCostEquipment: number;
+  unitCostOther?: number;
   unitCostTotal: number;
+  bdi?: number; // BDI individual por item (%)
   composition?: CompositionInput[];
   notes?: string;
+}
+
+export interface BudgetSubstage {
+  id: string;
+  stageId: string;
+  order: number;
+  code: string; // Ex: "1.1", "1.2"
+  title: string; // Ex: "Tapume", "Portões e Fechamentos"
+  items: BudgetItem[];
 }
 
 export interface BudgetStage {
   id: string;
   budgetId: string;
   order: number;
-  code: string;
+  code: string; // Ex: "1", "2"
   title: string;
-  items: BudgetItem[];
+  substages?: BudgetSubstage[];
+  items?: BudgetItem[]; // Mantido para compatibilidade com orçamentos existentes
 }
 
 export interface DisbursementSchedule {
