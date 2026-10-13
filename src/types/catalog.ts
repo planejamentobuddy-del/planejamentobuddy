@@ -46,9 +46,13 @@ export interface Insumo {
   updatedAt: string;
 }
 
+export type ComposicaoItemType = 'insumo' | 'composicao';
+
 export interface ComposicaoItem {
   id: string;
+  itemType?: ComposicaoItemType;
   insumoId?: string;
+  composicaoId?: string;
   code: string;
   description: string;
   group: InsumoGrupo;
@@ -56,6 +60,12 @@ export interface ComposicaoItem {
   coefficient: number; // Coeficiente / consumo unitário
   unitCost: number;
   totalCost: number; // coefficient * unitCost
+  breakdown?: {
+    costMaterial: number;
+    costLabor: number;
+    costEquipment: number;
+    costOther: number;
+  };
 }
 
 export interface Composicao {

@@ -867,19 +867,38 @@ export default function CatalogoGeral() {
                                   comp.items.map((item) => (
                                     <tr key={item.id} className="hover:bg-muted/10">
                                       <td className="py-2 px-3 font-mono text-muted-foreground">
-                                        #{item.code}
+                                        {item.itemType === 'composicao' ? (
+                                          <span className="font-bold text-[11px] bg-purple-500/10 text-purple-700 dark:text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                            {item.code}
+                                          </span>
+                                        ) : (
+                                          `#${item.code}`
+                                        )}
                                       </td>
                                       <td className="py-2 px-3 font-semibold text-foreground">
-                                        {item.description}
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span>{item.description}</span>
+                                          {item.itemType === 'composicao' && (
+                                            <span className="text-[9px] bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20 px-1.5 py-0.2 rounded font-bold">
+                                              CPU Auxiliar
+                                            </span>
+                                          )}
+                                        </div>
                                       </td>
                                       <td className="py-2 px-2 text-center">
-                                        <span
-                                          className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${
-                                            INSUMO_GRUPO_COLORS[item.group]
-                                          }`}
-                                        >
-                                          {INSUMO_GRUPO_LABELS[item.group]}
-                                        </span>
+                                        {item.itemType === 'composicao' ? (
+                                          <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400">
+                                            Composição
+                                          </span>
+                                        ) : (
+                                          <span
+                                            className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${
+                                              INSUMO_GRUPO_COLORS[item.group]
+                                            }`}
+                                          >
+                                            {INSUMO_GRUPO_LABELS[item.group]}
+                                          </span>
+                                        )}
                                       </td>
                                       <td className="py-2 px-2 text-center font-mono text-muted-foreground">
                                         {item.unit}

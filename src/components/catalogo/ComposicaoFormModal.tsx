@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import {
   Composicao,
@@ -77,7 +78,7 @@ export function ComposicaoFormModal({
   composicaoToEdit,
   onSuccess,
 }: ComposicaoFormModalProps) {
-  const { insumos = [], addComposicao, updateComposicao, getNextComposicaoCode } = useCatalog();
+  const { insumos = [], composicoes = [], addComposicao, updateComposicao, getNextComposicaoCode } = useCatalog();
 
   // Informações Principais
   const [code, setCode] = useState<string>('');
@@ -89,7 +90,7 @@ export function ComposicaoFormModal({
   const [detailedDescription, setDetailedDescription] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
-  // Tabela de Insumos da composição
+  // Tabela de Itens (Insumos e Composições Auxiliares) da composição
   const [items, setItems] = useState<ComposicaoItem[]>([]);
 
   // Custos das 4 categorias (permitindo modo granular via itens OU modo manual direto)
@@ -112,10 +113,13 @@ export function ComposicaoFormModal({
   const [isEditingPrice, setIsEditingPrice] = useState<boolean>(false);
   const [priceInput, setPriceInput] = useState<string>('R$ 0,00');
 
-  // Modal para escolher insumo do catálogo
-  const [isInsumoPickerOpen, setIsInsumoPickerOpen] = useState(false);
+  // Modal para escolher item (Insumo ou Composição Auxiliar) do catálogo
+  const [isItemPickerOpen, setIsItemPickerOpen] = useState(false);
+  const [pickerTab, setPickerTab] = useState<'insumos' | 'composicoes'>('insumos');
   const [insumoSearch, setInsumoSearch] = useState('');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
+  const [compSearch, setCompSearch] = useState('');
+  const [compTypeFilter, setCompTypeFilter] = useState<string>('all');
 
   // Modal para cadastrar novo insumo diretamente de dentro da composição
   const [isCreateInsumoOpen, setIsCreateInsumoOpen] = useState(false);
@@ -200,19 +204,38 @@ export function ComposicaoFormModal({
     let hasOth = false;
 
     currentItems.forEach((item) => {
-      const tot = (item.coefficient || 0) * (item.unitCost || 0);
-      if (item.group === 'material') {
-        mat += tot;
-        hasMat = true;
-      } else if (item.group === 'labor') {
-        lab += tot;
-        hasLab = true;
-      } else if (item.group === 'equipment') {
-        eq += tot;
-        hasEq = true;
+      const coef = item.coefficient || 0;
+      if (item.itemType === 'composicao' && item.breakdown) {
+        const itemMat = (item.breakdown.costMaterial || 0) * coef;
+        const itemLab = (item.breakdown.costLabor || 0) * coef;
+        const itemEq = (item.breakdown.costEquipment || 0) * coef;
+        const itemOth = (item.breakdown.costOther || 0) * coef;
+
+        if (itemMat > 0) { mat += itemMat; hasMat = true; }
+        if (itemLab > 0) { lab += itemLab; hasLab = true; }
+        if (itemEq > 0) { eq += itemEq; hasEq = true; }
+        if (itemOth > 0) { oth += itemOth; hasOth = true; }
+
+        if (itemMat === 0 && itemLab === 0 && itemEq === 0 && itemOth === 0) {
+          const tot = (item.unitCost || 0) * coef;
+          oth += tot;
+          hasOth = true;
+        }
       } else {
-        oth += tot;
-        hasOth = true;
+        const tot = coef * (item.unitCost || 0);
+        if (item.group === 'material') {
+          mat += tot;
+          hasMat = true;
+        } else if (item.group === 'labor') {
+          lab += tot;
+          hasLab = true;
+        } else if (item.group === 'equipment') {
+          eq += tot;
+          hasEq = true;
+        } else {
+          oth += tot;
+          hasOth = true;
+        }
       }
     });
 
@@ -317,6 +340,7 @@ export function ComposicaoFormModal({
   const handleAddInsumoFromCatalog = (insumo: Insumo) => {
     const newItem: ComposicaoItem = {
       id: `ci-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      itemType: 'insumo',
       insumoId: insumo.id,
       code: insumo.code,
       description: insumo.description,
@@ -330,14 +354,47 @@ export function ComposicaoFormModal({
     const updated = [...items, newItem];
     setItems(updated);
     syncCostsFromItems(updated);
-    setIsInsumoPickerOpen(false);
+    setIsItemPickerOpen(false);
     toast.success(`"${insumo.description}" adicionado com sucesso!`);
+  };
+
+  // Adicionar Composição Auxiliar do catálogo à Composição atual
+  const handleAddComposicaoFromCatalog = (comp: Composicao) => {
+    if (composicaoToEdit && comp.id === composicaoToEdit.id) {
+      toast.error('Não é possível adicionar a própria composição como auxiliar dela mesma.');
+      return;
+    }
+
+    const newItem: ComposicaoItem = {
+      id: `ci-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      itemType: 'composicao',
+      composicaoId: comp.id,
+      code: comp.code,
+      description: comp.description,
+      group: 'other',
+      unit: comp.unit || 'und',
+      coefficient: 1.0,
+      unitCost: comp.costTotal,
+      totalCost: comp.costTotal * 1.0,
+      breakdown: {
+        costMaterial: comp.costMaterial || 0,
+        costLabor: comp.costLabor || 0,
+        costEquipment: comp.costEquipment || 0,
+        costOther: comp.costOther || 0,
+      },
+    };
+
+    const updated = [...items, newItem];
+    setItems(updated);
+    syncCostsFromItems(updated);
+    setIsItemPickerOpen(false);
+    toast.success(`Composição auxiliar "${comp.description}" adicionada com sucesso!`);
   };
 
   // Abrir modal de criação de insumo
   const handleOpenCreateInsumo = (prefillDesc?: string) => {
     setInitialInsumoDesc(prefillDesc !== undefined ? prefillDesc : insumoSearch);
-    setIsInsumoPickerOpen(false);
+    setIsItemPickerOpen(false);
     setIsCreateInsumoOpen(true);
   };
 
@@ -374,6 +431,16 @@ export function ComposicaoFormModal({
           ...item,
           unitCost,
           totalCost: item.coefficient * unitCost,
+          ...(item.itemType === 'composicao' && item.breakdown && item.unitCost > 0
+            ? {
+                breakdown: {
+                  costMaterial: (item.breakdown.costMaterial / item.unitCost) * unitCost,
+                  costLabor: (item.breakdown.costLabor / item.unitCost) * unitCost,
+                  costEquipment: (item.breakdown.costEquipment / item.unitCost) * unitCost,
+                  costOther: (item.breakdown.costOther / item.unitCost) * unitCost,
+                },
+              }
+            : {}),
         };
       }
       return item;
@@ -438,6 +505,22 @@ export function ComposicaoFormModal({
       return matchSearch && matchGroup;
     });
   }, [insumos, insumoSearch, selectedGroupFilter]);
+
+  const availableComposicoes = useMemo(() => {
+    return (composicoes || []).filter((c) => {
+      // Evita referência recursiva: não pode adicionar a própria composição dentro dela mesma
+      if (composicaoToEdit && c.id === composicaoToEdit.id) return false;
+      const matchType = compTypeFilter === 'all' || c.type === compTypeFilter;
+      const q = compSearch.toLowerCase();
+      const matchSearch =
+        !compSearch.trim() ||
+        c.code.toLowerCase().includes(q) ||
+        c.description.toLowerCase().includes(q) ||
+        (c.type && c.type.toLowerCase().includes(q)) ||
+        (c.base && c.base.toLowerCase().includes(q));
+      return matchType && matchSearch;
+    });
+  }, [composicoes, composicaoToEdit, compSearch, compTypeFilter]);
 
   return (
     <>
@@ -699,20 +782,25 @@ export function ComposicaoFormModal({
               </div>
             </div>
 
-            {/* CARD 2: Insumos (Tabela + Botão verde "+ Item") */}
+            {/* CARD 2: Itens (Insumos e Composições Auxiliares) */}
             <div className="bg-card border rounded-xl p-5 shadow-sm space-y-4">
-              <h3 className="text-base font-bold text-foreground/85 pb-2 border-b">
-                Insumos
-              </h3>
+              <div className="flex items-center justify-between pb-2 border-b">
+                <h3 className="text-base font-bold text-foreground/85">
+                  Itens da Composição (Insumos e Composições Auxiliares)
+                </h3>
+                <span className="text-xs text-muted-foreground">
+                  {items.length} {items.length === 1 ? 'item vinculado' : 'itens vinculados'}
+                </span>
+              </div>
 
-              {/* Tabela de Insumos da Composição */}
+              {/* Tabela de Itens da Composição */}
               <div className="border rounded-lg overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-muted/40 border-b text-muted-foreground font-semibold">
                     <tr>
                       <th className="py-2.5 px-3 text-left w-24">Código</th>
-                      <th className="py-2.5 px-3 text-left">Descrição</th>
-                      <th className="py-2.5 px-2 text-center w-28">Grupo</th>
+                      <th className="py-2.5 px-3 text-left">Descrição do Item / Serviço</th>
+                      <th className="py-2.5 px-2 text-center w-28">Tipo / Grupo</th>
                       <th className="py-2.5 px-2 text-center w-16">Unidade</th>
                       <th className="py-2.5 px-3 text-right w-28">
                         <span className="inline-flex items-center gap-1 justify-end">
@@ -735,26 +823,58 @@ export function ComposicaoFormModal({
                           colSpan={8}
                           className="py-10 text-center text-sm text-muted-foreground"
                         >
-                          Nenhum item adicionado.
+                          Nenhum item adicionado. Adicione insumos ou composições auxiliares abaixo.
                         </td>
                       </tr>
                     ) : (
                       items.map((item) => (
                         <tr key={item.id} className="hover:bg-muted/20 transition-colors">
                           <td className="py-2.5 px-3 font-mono text-muted-foreground">
-                            {item.code}
+                            {item.itemType === 'composicao' ? (
+                              <span className="font-bold text-xs bg-purple-500/10 text-purple-700 dark:text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                {item.code}
+                              </span>
+                            ) : (
+                              `#${item.code}`
+                            )}
                           </td>
                           <td className="py-2.5 px-3 font-medium text-foreground">
-                            {item.description}
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-medium text-foreground">{item.description}</span>
+                                {item.itemType === 'composicao' && (
+                                  <span className="text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 px-1.5 py-0.2 rounded font-bold inline-flex items-center gap-1">
+                                    <Layers className="w-2.5 h-2.5" />
+                                    CPU Auxiliar
+                                  </span>
+                                )}
+                              </div>
+                              {item.itemType === 'composicao' && item.breakdown && (
+                                <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 font-mono">
+                                  <span>Mat: {formatCurrency(item.breakdown.costMaterial)}</span>
+                                  <span>• M.O.: {formatCurrency(item.breakdown.costLabor)}</span>
+                                  {(item.breakdown.costEquipment > 0 || item.breakdown.costOther > 0) && (
+                                    <span>• Eq/Outros: {formatCurrency(item.breakdown.costEquipment + item.breakdown.costOther)}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-2 text-center">
-                            <span
-                              className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${
-                                INSUMO_GRUPO_COLORS[item.group]
-                              }`}
-                            >
-                              {INSUMO_GRUPO_LABELS[item.group]}
-                            </span>
+                            {item.itemType === 'composicao' ? (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full border font-bold bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400 inline-flex items-center gap-1">
+                                <Layers className="w-2.5 h-2.5" />
+                                Composição
+                              </span>
+                            ) : (
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${
+                                  INSUMO_GRUPO_COLORS[item.group]
+                                }`}
+                              >
+                                {INSUMO_GRUPO_LABELS[item.group]}
+                              </span>
+                            )}
                           </td>
                           <td className="py-2.5 px-2 text-center text-muted-foreground font-mono">
                             {item.unit}
@@ -789,7 +909,7 @@ export function ComposicaoFormModal({
                               type="button"
                               onClick={() => handleRemoveItem(item.id)}
                               className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
-                              title="Remover insumo da composição"
+                              title="Remover item da composição"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -801,15 +921,30 @@ export function ComposicaoFormModal({
                 </table>
               </div>
 
-              {/* Botões de Insumos abaixo da tabela */}
+              {/* Botões de Ação abaixo da tabela */}
               <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   type="button"
-                  onClick={() => setIsInsumoPickerOpen(true)}
+                  onClick={() => {
+                    setPickerTab('insumos');
+                    setIsItemPickerOpen(true);
+                  }}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm h-8"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Item do Catálogo
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setPickerTab('composicoes');
+                    setIsItemPickerOpen(true);
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm h-8"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  + Composição Auxiliar
                 </Button>
 
                 <Button
@@ -902,110 +1037,223 @@ export function ComposicaoFormModal({
         </DialogContent>
       </Dialog>
 
-      {/* Modal Seletor de Insumos do Catálogo */}
-      <Dialog open={isInsumoPickerOpen} onOpenChange={setIsInsumoPickerOpen}>
-        <DialogContent className="max-w-2xl w-full p-6 rounded-2xl bg-card border shadow-2xl">
+      {/* Modal Seletor de Itens do Catálogo (Insumos ou Composições Auxiliares) */}
+      <Dialog open={isItemPickerOpen} onOpenChange={setIsItemPickerOpen}>
+        <DialogContent className="max-w-3xl w-full p-6 rounded-2xl bg-card border shadow-2xl">
           <DialogHeader>
             <div className="flex items-center justify-between gap-3">
               <DialogTitle className="flex items-center gap-2 text-lg font-bold">
                 <Calculator className="w-5 h-5 text-primary" />
-                Selecionar Insumo do Catálogo
+                Selecionar Item do Catálogo
               </DialogTitle>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => handleOpenCreateInsumo(insumoSearch)}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold gap-1.5 h-8 shrink-0"
-              >
-                <PlusCircle className="w-3.5 h-3.5" />
-                Cadastrar Novo Insumo
-              </Button>
+              {pickerTab === 'insumos' && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleOpenCreateInsumo(insumoSearch)}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold gap-1.5 h-8 shrink-0"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  Cadastrar Novo Insumo
+                </Button>
+              )}
             </div>
           </DialogHeader>
 
-          <div className="space-y-4 pt-2">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
-                <Input
-                  value={insumoSearch}
-                  onChange={(e) => setInsumoSearch(e.target.value)}
-                  placeholder="Buscar por descrição ou código do insumo..."
-                  className="pl-9 h-10 rounded-xl"
-                />
+          {/* Abas: Insumos x Composições Auxiliares */}
+          <Tabs
+            value={pickerTab}
+            onValueChange={(v) => setPickerTab(v as 'insumos' | 'composicoes')}
+            className="w-full pt-1"
+          >
+            <TabsList className="grid w-full grid-cols-2 rounded-xl h-10 p-1 bg-muted/60">
+              <TabsTrigger
+                value="insumos"
+                className="rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 data-[state=active]:bg-card data-[state=active]:text-foreground"
+              >
+                Insumos ({insumos.length})
+              </TabsTrigger>
+              <TabsTrigger
+                value="composicoes"
+                className="rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 data-[state=active]:bg-card data-[state=active]:text-purple-600 dark:data-[state=active]:text-purple-400"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Composições Auxiliares ({availableComposicoes.length})
+              </TabsTrigger>
+            </TabsList>
+
+            {/* ABA DE INSUMOS */}
+            <TabsContent value="insumos" className="space-y-4 pt-3">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+                  <Input
+                    value={insumoSearch}
+                    onChange={(e) => setInsumoSearch(e.target.value)}
+                    placeholder="Buscar por descrição ou código do insumo..."
+                    className="pl-9 h-10 rounded-xl"
+                  />
+                </div>
+
+                <Select value={selectedGroupFilter} onValueChange={setSelectedGroupFilter}>
+                  <SelectTrigger className="w-40 h-10 rounded-xl">
+                    <SelectValue placeholder="Grupo" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border shadow-lg z-50">
+                    <SelectItem value="all">Todos Grupos</SelectItem>
+                    <SelectItem value="material">Material</SelectItem>
+                    <SelectItem value="labor">Mão de Obra</SelectItem>
+                    <SelectItem value="equipment">Equipamento</SelectItem>
+                    <SelectItem value="other">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <Select value={selectedGroupFilter} onValueChange={setSelectedGroupFilter}>
-                <SelectTrigger className="w-40 h-10 rounded-xl">
-                  <SelectValue placeholder="Grupo" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border shadow-lg z-50">
-                  <SelectItem value="all">Todos Grupos</SelectItem>
-                  <SelectItem value="material">Material</SelectItem>
-                  <SelectItem value="labor">Mão de Obra</SelectItem>
-                  <SelectItem value="equipment">Equipamento</SelectItem>
-                  <SelectItem value="other">Outros</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
-              {filteredInsumos.length === 0 ? (
-                <div className="p-8 text-center space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum insumo encontrado no catálogo com esses filtros.
-                  </p>
-                  <Button
-                    type="button"
-                    onClick={() => handleOpenCreateInsumo(insumoSearch)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs gap-1.5"
-                  >
-                    <PlusCircle className="w-3.5 h-3.5" />
-                    Cadastrar {insumoSearch ? `"${insumoSearch}"` : 'novo insumo'} agora
-                  </Button>
-                </div>
-              ) : (
-                filteredInsumos.map((insumo) => (
-                  <div
-                    key={insumo.id}
-                    onClick={() => handleAddInsumoFromCatalog(insumo)}
-                    className="p-3 rounded-xl border bg-card hover:bg-primary/5 hover:border-primary/40 cursor-pointer transition-all flex items-center justify-between group"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-muted-foreground">
-                          #{insumo.code}
-                        </span>
-                        <span className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">
-                          {insumo.description}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
-                            INSUMO_GRUPO_COLORS[insumo.group]
-                          }`}
-                        >
-                          {INSUMO_GRUPO_LABELS[insumo.group]}
-                        </span>
-                        <span>• Und: {insumo.unit}</span>
-                        <span>• Tipo: {insumo.type}</span>
-                        <span>• Base: {insumo.base}</span>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0 pl-3">
-                      <div className="font-bold text-sm text-primary">
-                        {formatCurrency(insumo.unitCost)}
-                      </div>
-                      <span className="text-xs font-bold text-emerald-600 block mt-0.5">
-                        + Incluir
-                      </span>
-                    </div>
+              <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                {filteredInsumos.length === 0 ? (
+                  <div className="p-8 text-center space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum insumo encontrado no catálogo com esses filtros.
+                    </p>
+                    <Button
+                      type="button"
+                      onClick={() => handleOpenCreateInsumo(insumoSearch)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs gap-1.5"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      Cadastrar {insumoSearch ? `"${insumoSearch}"` : 'novo insumo'} agora
+                    </Button>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
+                ) : (
+                  filteredInsumos.map((insumo) => (
+                    <div
+                      key={insumo.id}
+                      onClick={() => handleAddInsumoFromCatalog(insumo)}
+                      className="p-3 rounded-xl border bg-card hover:bg-primary/5 hover:border-primary/40 cursor-pointer transition-all flex items-center justify-between group"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-muted-foreground">
+                            #{insumo.code}
+                          </span>
+                          <span className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">
+                            {insumo.description}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
+                              INSUMO_GRUPO_COLORS[insumo.group]
+                            }`}
+                          >
+                            {INSUMO_GRUPO_LABELS[insumo.group]}
+                          </span>
+                          <span>• Und: {insumo.unit}</span>
+                          <span>• Tipo: {insumo.type}</span>
+                          <span>• Base: {insumo.base}</span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 pl-3">
+                        <div className="font-bold text-sm text-primary">
+                          {formatCurrency(insumo.unitCost)}
+                        </div>
+                        <span className="text-xs font-bold text-emerald-600 block mt-0.5">
+                          + Incluir
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
+            {/* ABA DE COMPOSIÇÕES AUXILIARES */}
+            <TabsContent value="composicoes" className="space-y-4 pt-3">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+                  <Input
+                    value={compSearch}
+                    onChange={(e) => setCompSearch(e.target.value)}
+                    placeholder="Buscar composição por código, serviço ou disciplina..."
+                    className="pl-9 h-10 rounded-xl"
+                  />
+                </div>
+
+                <Select value={compTypeFilter} onValueChange={setCompTypeFilter}>
+                  <SelectTrigger className="w-44 h-10 rounded-xl">
+                    <SelectValue placeholder="Disciplina" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
+                    <SelectItem value="all">Todas Disciplinas</SelectItem>
+                    {INSUMO_TIPOS_PADRAO.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                {availableComposicoes.length === 0 ? (
+                  <div className="p-8 text-center space-y-2">
+                    <Layers className="w-8 h-8 mx-auto text-muted-foreground/40 mb-1" />
+                    <p className="text-sm font-semibold text-foreground/80">
+                      Nenhuma composição auxiliar encontrada.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {composicaoToEdit
+                        ? 'Apenas outras composições do catálogo podem ser inseridas (a própria composição atual é ocultada para evitar referência circular).'
+                        : 'Cadastre composições no catálogo para reutilizá-las como composições auxiliares aqui.'}
+                    </p>
+                  </div>
+                ) : (
+                  availableComposicoes.map((comp) => (
+                    <div
+                      key={comp.id}
+                      onClick={() => handleAddComposicaoFromCatalog(comp)}
+                      className="p-3 rounded-xl border bg-card hover:bg-purple-500/5 hover:border-purple-500/40 cursor-pointer transition-all flex items-center justify-between group"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold bg-purple-500/10 text-purple-700 dark:text-purple-400 px-2 py-0.5 rounded border border-purple-500/20">
+                            {comp.code}
+                          </span>
+                          <span className="font-bold text-sm text-foreground group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors">
+                            {comp.description}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold bg-purple-500/10 text-purple-700 border-purple-500/30">
+                            CPU Auxiliar
+                          </span>
+                          <span>• Und: {comp.unit}</span>
+                          <span>• Tipo: {comp.type}</span>
+                          <span>• Base: {comp.base}</span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-2 pt-0.5">
+                          <span>Mat: {formatCurrency(comp.costMaterial || 0)}</span>
+                          <span>• M.O.: {formatCurrency(comp.costLabor || 0)}</span>
+                          {(comp.costEquipment > 0 || comp.costOther > 0) && (
+                            <span>• Eq/Outros: {formatCurrency((comp.costEquipment || 0) + (comp.costOther || 0))}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 pl-3">
+                        <div className="font-bold text-sm text-purple-700 dark:text-purple-400">
+                          {formatCurrency(comp.costTotal)}
+                        </div>
+                        <span className="text-xs font-bold text-purple-600 block mt-0.5">
+                          + Incluir
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 
