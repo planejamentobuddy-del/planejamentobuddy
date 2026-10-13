@@ -15,9 +15,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { SINAPI_DATABASE, searchSinapiItems, SinapiItemReference } from '@/data/sinapiDatabase';
 import { useBudget } from '@/hooks/useBudget';
 import { useCatalog } from '@/hooks/useCatalog';
+import { ComposicaoItensEditor, summarizeItems } from '@/components/catalogo/ComposicaoItensEditor';
 import {
   Insumo,
   Composicao,
+  ComposicaoItem,
   INSUMO_GRUPO_LABELS,
   INSUMO_GRUPO_COLORS,
   INSUMO_UNIDADES_PADRAO,
@@ -92,6 +94,19 @@ export function SinapiSearchModal({
   const [customOth, setCustomOth] = useState<number>(0);
   const [customBdi, setCustomBdi] = useState<number>(bdiRate);
   const [saveToGlobalCatalog, setSaveToGlobalCatalog] = useState(true);
+
+  // Itens (insumos / composições) que compõem o novo item cadastrado
+  const [customItems, setCustomItems] = useState<ComposicaoItem[]>([]);
+  const itemsSummary = useMemo(() => summarizeItems(customItems), [customItems]);
+  const useItems = customType === 'composicao' && customItems.length > 0;
+
+  // Custo efetivo por categoria: soma dos itens quando existirem na categoria,
+  // caso contrário usa o valor manual digitado.
+  const effMat = useItems && itemsSummary.hasMaterial ? itemsSummary.material : customMat;
+  const effLab = useItems && itemsSummary.hasLabor ? itemsSummary.labor : customLab;
+  const effEq = useItems && itemsSummary.hasEquipment ? itemsSummary.equipment : customEq;
+  const effOth = useItems && itemsSummary.hasOther ? itemsSummary.other : customOth;
+  const effTotal = effMat + effLab + effEq + effOth;
 
   // Sincronizar destino ao abrir
   useEffect(() => {
@@ -268,12 +283,15 @@ export function SinapiSearchModal({
 
     const targetSubstageId = getEnsureSubstageId();
     const qty = Number(customQty) > 0 ? Number(customQty) : 1;
-    const mat = Number(customMat) || 0;
-    const lab = Number(customLab) || 0;
-    const eq = Number(customEq) || 0;
-    const oth = Number(customOth) || 0;
+    const mat = Number(effMat) || 0;
+    const lab = Number(effLab) || 0;
+    const eq = Number(effEq) || 0;
+    const oth = Number(effOth) || 0;
     const unitTot = mat + lab + eq + oth;
     const bdiVal = customBdi !== undefined ? Number(customBdi) : bdiRate;
+
+    // Itens vinculados (somente para composição)
+    const itemsToSave = customType === 'composicao' ? customItems : [];
 
     // Salvar também no catálogo se marcado
     if (saveToGlobalCatalog) {
@@ -296,7 +314,7 @@ export function SinapiSearchModal({
           type: currentStage?.title || 'Geral',
           base: 'Própria',
           status: 'active',
-          items: [],
+          items: itemsToSave,
           costMaterial: mat,
           costLabor: lab,
           costEquipment: eq,
@@ -307,6 +325,30 @@ export function SinapiSearchModal({
         });
       }
     }
+
+    // Detalhamento (composição analítica) exibido no item do orçamento
+    const compositionDetail = itemsToSave.map((it) => {
+      let type: 'material' | 'labor' | 'equipment' = 'material';
+      if (it.itemType === 'composicao' && it.breakdown) {
+        const b = it.breakdown;
+        const max = Math.max(b.costMaterial, b.costLabor, b.costEquipment);
+        if (max === b.costLabor && b.costLabor > 0) type = 'labor';
+        else if (max === b.costEquipment && b.costEquipment > 0) type = 'equipment';
+      } else if (it.group === 'labor') {
+        type = 'labor';
+      } else if (it.group === 'equipment') {
+        type = 'equipment';
+      }
+      return {
+        id: it.id,
+        type,
+        code: it.code,
+        description: it.description,
+        unit: it.unit,
+        coefficient: it.coefficient,
+        unitCost: it.unitCost,
+      };
+    });
 
     addItemToStage(selectedStageId, {
       code: `PROP-${Date.now().toString().slice(-4)}`,
@@ -321,6 +363,7 @@ export function SinapiSearchModal({
       unitCostTotal: unitTot,
       bdi: bdiVal,
       notes: customNotes.trim() || undefined,
+      composition: compositionDetail.length > 0 ? compositionDetail : undefined,
     }, targetSubstageId || undefined);
 
     // Resetar formulário
@@ -330,6 +373,7 @@ export function SinapiSearchModal({
     setCustomLab(0);
     setCustomEq(0);
     setCustomOth(0);
+    setCustomItems([]);
     onOpenChange(false);
   };
 
@@ -838,58 +882,57 @@ export function SinapiSearchModal({
                 </div>
               </div>
 
+              {/* Composição do item: selecionar insumos/composições existentes ou criar novo */}
+              {customType === 'composicao' && (
+                <div className="p-3.5 rounded-xl border bg-muted/20">
+                  <ComposicaoItensEditor
+                    items={customItems}
+                    onChange={setCustomItems}
+                    suggestedInsumoDescription={customDesc}
+                  />
+                </div>
+              )}
+
               {/* 4 Categorias de Custos: Material, Mão de Obra, Equipamento, Outros */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                    Custo Mat. (R$)
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={customMat}
-                    onChange={(e) => setCustomMat(parseFloat(e.target.value) || 0)}
-                    className="h-10 rounded-xl text-sm font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                    Custo M.O. (R$)
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={customLab}
-                    onChange={(e) => setCustomLab(parseFloat(e.target.value) || 0)}
-                    className="h-10 rounded-xl text-sm font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-amber-600 dark:text-amber-400">
-                    Custo Equip. (R$)
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={customEq}
-                    onChange={(e) => setCustomEq(parseFloat(e.target.value) || 0)}
-                    className="h-10 rounded-xl text-sm font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-purple-600 dark:text-purple-400">
-                    Custo Outros (R$)
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={customOth}
-                    onChange={(e) => setCustomOth(parseFloat(e.target.value) || 0)}
-                    className="h-10 rounded-xl text-sm font-mono"
-                  />
+              <div className="space-y-1.5 pt-1">
+                {customType === 'composicao' && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {useItems
+                      ? 'Categorias com itens são somadas automaticamente. As demais podem ser informadas manualmente.'
+                      : 'Sem itens vinculados: informe os custos manualmente ou adicione insumos/composições acima.'}
+                  </p>
+                )}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Custo Mat. (R$)', color: 'text-blue-600 dark:text-blue-400', has: itemsSummary.hasMaterial, eff: effMat, set: setCustomMat },
+                    { label: 'Custo M.O. (R$)', color: 'text-emerald-600 dark:text-emerald-400', has: itemsSummary.hasLabor, eff: effLab, set: setCustomLab },
+                    { label: 'Custo Equip. (R$)', color: 'text-amber-600 dark:text-amber-400', has: itemsSummary.hasEquipment, eff: effEq, set: setCustomEq },
+                    { label: 'Custo Outros (R$)', color: 'text-purple-600 dark:text-purple-400', has: itemsSummary.hasOther, eff: effOth, set: setCustomOth },
+                  ].map((field) => {
+                    const locked = useItems && field.has;
+                    return (
+                      <div key={field.label} className="space-y-1.5">
+                        <Label className={`text-xs font-semibold ${field.color} flex items-center gap-1`}>
+                          {field.label}
+                          {locked && (
+                            <span className="text-[9px] font-bold bg-muted px-1 rounded text-muted-foreground">
+                              auto
+                            </span>
+                          )}
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          readOnly={locked}
+                          value={locked ? Number(field.eff.toFixed(2)) : field.eff}
+                          onChange={(e) => field.set(parseFloat(e.target.value) || 0)}
+                          className={`h-10 rounded-xl text-sm font-mono ${
+                            locked ? 'bg-muted/50 cursor-not-allowed' : ''
+                          }`}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -898,7 +941,7 @@ export function SinapiSearchModal({
                 <div>
                   <span className="text-muted-foreground block">Custo Unitário Total:</span>
                   <span className="font-bold text-base text-foreground font-display">
-                    {formatCurrency(customMat + customLab + customEq + customOth)} / {customUnit}
+                    {formatCurrency(effTotal)} / {customUnit}
                   </span>
                 </div>
 
@@ -907,9 +950,7 @@ export function SinapiSearchModal({
                     Preço de Venda Unit. (+BDI {customBdi}%):
                   </span>
                   <span className="font-black text-base text-primary font-display">
-                    {formatCurrency(
-                      (customMat + customLab + customEq + customOth) * (1 + customBdi / 100)
-                    )}{' '}
+                    {formatCurrency(effTotal * (1 + customBdi / 100))}{' '}
                     / {customUnit}
                   </span>
                 </div>
