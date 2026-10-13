@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useBudget } from '@/hooks/useBudget';
+import { useBudget, getStageItems } from '@/hooks/useBudget';
 import { BudgetSpreadsheet } from '@/components/orcamento/BudgetSpreadsheet';
 import { CurvaABCView } from '@/components/orcamento/CurvaABCView';
 import { CronogramaDesembolsoView } from '@/components/orcamento/CronogramaDesembolsoView';
@@ -133,7 +133,10 @@ export default function OrcamentoGeral() {
     );
   }
 
-  const totalItemsCount = activeProject.stages.reduce((acc, st) => acc + st.items.length, 0);
+  const totalItemsCount = activeProject.stages.reduce(
+    (acc, st) => acc + (getStageItems(st)?.length || 0),
+    0
+  );
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

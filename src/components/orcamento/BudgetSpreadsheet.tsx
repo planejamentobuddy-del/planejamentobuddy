@@ -312,6 +312,8 @@ function BudgetItemTable({
   onUpdateBdi: (itemId: string, newBdi: number | undefined) => void;
   onUpdateQty: (itemId: string, newQty: number) => void;
 }) {
+  const safeItems = items || [];
+
   return (
     <div className="divide-y divide-border/60">
       {/* Cabeçalho da tabela com Coluna de BDI clara e explícita */}
@@ -329,7 +331,7 @@ function BudgetItemTable({
         <span className="col-span-1 text-right">Ações</span>
       </div>
 
-      {items.length === 0 ? (
+      {safeItems.length === 0 ? (
         <div className="p-5 text-center text-xs text-muted-foreground">
           {emptyMessage}{' '}
           <button
@@ -341,7 +343,7 @@ function BudgetItemTable({
           </button>
         </div>
       ) : (
-        items.map((item) => (
+        safeItems.map((item) => (
           <BudgetItemRow
             key={item.id}
             item={item}
