@@ -167,7 +167,54 @@ function QuantityInputCell({
 }
 
 /**
- * Linha de Item Orçamentário com a coluna de BDI (%) individual
+ * Campo de edição inline de Observação do Item (ex: Bloco A e B, etc)
+ */
+function ItemNotesInput({
+  item,
+  onUpdateNotes,
+}: {
+  item: BudgetItem;
+  onUpdateNotes: (itemId: string, notes: string) => void;
+}) {
+  const [val, setVal] = useState(item.notes || '');
+
+  useEffect(() => {
+    setVal(item.notes || '');
+  }, [item.notes]);
+
+  const handleBlur = () => {
+    if (val !== (item.notes || '')) {
+      onUpdateNotes(item.id, val.trim());
+    }
+  };
+
+  return (
+    <div className="mt-1.5 w-full">
+      <input
+        type="text"
+        placeholder="Adicionar observação sobre o item..."
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            handleBlur();
+            e.currentTarget.blur();
+          }
+        }}
+        className={`w-full h-6 text-[11px] px-2 py-0.5 rounded border transition-colors ${
+          val
+            ? 'border-border/80 bg-background text-foreground font-medium shadow-2xs'
+            : 'border-dashed border-border/60 bg-muted/20 text-muted-foreground/70 hover:border-border hover:bg-background'
+        } focus:border-primary focus:bg-background focus:text-foreground focus:ring-1 focus:ring-primary focus:outline-none`}
+        title="Observação técnica ou especificação deste serviço (ex: BLOCOS A e B)"
+      />
+    </div>
+  );
+}
+
+/**
+ * Linha de Item Orçamentário com a coluna de BDI (%) individual e campo de Observação
  */
 function BudgetItemRow({
   item,
@@ -177,6 +224,7 @@ function BudgetItemRow({
   onDelete,
   onUpdateBdi,
   onUpdateQty,
+  onUpdateNotes,
 }: {
   item: BudgetItem;
   viewMode: 'cost' | 'selling';
@@ -185,6 +233,7 @@ function BudgetItemRow({
   onDelete: (itemId: string) => void;
   onUpdateBdi: (itemId: string, newBdi: number | undefined) => void;
   onUpdateQty: (itemId: string, newQty: number) => void;
+  onUpdateNotes: (itemId: string, notes: string) => void;
 }) {
   const itemEffectiveBdi = item.bdi !== undefined ? Number(item.bdi) : globalBdi;
   const unitCost = item.unitCostTotal || 0;
@@ -205,8 +254,8 @@ function BudgetItemRow({
         </span>
       </div>
 
-      {/* 2. Descrição do Serviço */}
-      <div className="lg:col-span-4 pr-2">
+      {/* 2. Descrição do Serviço + Campo de Observação */}
+      <div className="lg:col-span-4 pr-2 flex flex-col justify-center">
         <p className="font-medium text-foreground text-xs leading-snug">
           {item.description}
         </p>
@@ -219,6 +268,9 @@ function BudgetItemRow({
             <Layers className="w-3 h-3" /> Ver Composição CPU ({item.composition.length} insumos)
           </button>
         )}
+
+        {/* CAMPO DE OBSERVAÇÃO DO ITEM (CONFORME MOCKUP) */}
+        <ItemNotesInput item={item} onUpdateNotes={onUpdateNotes} />
       </div>
 
       {/* 3. Unidade */}
@@ -300,6 +352,7 @@ function BudgetItemTable({
   onDelete,
   onUpdateBdi,
   onUpdateQty,
+  onUpdateNotes,
 }: {
   items: BudgetItem[];
   emptyMessage: string;
@@ -311,6 +364,7 @@ function BudgetItemTable({
   onDelete: (itemId: string) => void;
   onUpdateBdi: (itemId: string, newBdi: number | undefined) => void;
   onUpdateQty: (itemId: string, newQty: number) => void;
+  onUpdateNotes: (itemId: string, notes: string) => void;
 }) {
   const safeItems = items || [];
 
@@ -353,6 +407,7 @@ function BudgetItemTable({
             onDelete={onDelete}
             onUpdateBdi={onUpdateBdi}
             onUpdateQty={onUpdateQty}
+            onUpdateNotes={onUpdateNotes}
           />
         ))
       )}
@@ -422,6 +477,10 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
 
   const handleUpdateItemQty = (itemId: string, newQty: number) => {
     updateItem(itemId, { quantity: newQty });
+  };
+
+  const handleUpdateItemNotes = (itemId: string, notes: string) => {
+    updateItem(itemId, { notes });
   };
 
   const handleCreateStage = (e: React.FormEvent) => {
@@ -668,6 +727,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                                   onDelete={deleteItem}
                                   onUpdateBdi={handleUpdateItemBdi}
                                   onUpdateQty={handleUpdateItemQty}
+                                  onUpdateNotes={handleUpdateItemNotes}
                                 />
 
                                 {/* Barra de Ações da Subetapa */}
@@ -721,6 +781,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                         onDelete={deleteItem}
                         onUpdateBdi={handleUpdateItemBdi}
                         onUpdateQty={handleUpdateItemQty}
+                        onUpdateNotes={handleUpdateItemNotes}
                       />
                     </div>
                   )}

@@ -83,6 +83,7 @@ export function SinapiSearchModal({
   // Formulário de Cadastro Rápido
   const [customType, setCustomType] = useState<'composicao' | 'insumo'>('composicao');
   const [customDesc, setCustomDesc] = useState('');
+  const [customNotes, setCustomNotes] = useState('');
   const [customUnit, setCustomUnit] = useState('m²');
   const [customQty, setCustomQty] = useState<number>(1);
   const [customMat, setCustomMat] = useState<number>(0);
@@ -319,10 +320,12 @@ export function SinapiSearchModal({
       unitCostOther: oth,
       unitCostTotal: unitTot,
       bdi: bdiVal,
+      notes: customNotes.trim() || undefined,
     }, targetSubstageId || undefined);
 
     // Resetar formulário
     setCustomDesc('');
+    setCustomNotes('');
     setCustomMat(0);
     setCustomLab(0);
     setCustomEq(0);
@@ -779,6 +782,19 @@ export function SinapiSearchModal({
                   value={customDesc}
                   onChange={(e) => setCustomDesc(e.target.value)}
                   className="h-10 rounded-xl text-sm"
+                />
+              </div>
+
+              {/* Observação sobre o Item */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">
+                  Observações do Item (opcional)
+                </Label>
+                <Input
+                  placeholder="Ex: BLOCOS A e B, especificação técnica, marca ou detalhe..."
+                  value={customNotes}
+                  onChange={(e) => setCustomNotes(e.target.value)}
+                  className="h-9 rounded-xl text-xs"
                 />
               </div>
 

@@ -172,7 +172,7 @@ export function exportBudgetToExcel(project: BudgetProject) {
         item.code,
         item.sinapiCode || '-',
         item.source.toUpperCase(),
-        item.description,
+        item.notes ? `${item.description} (Obs: ${item.notes})` : item.description,
         item.unit,
         q,
         item.unitCostMaterial || 0,
