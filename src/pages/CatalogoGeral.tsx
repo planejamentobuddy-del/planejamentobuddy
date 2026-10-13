@@ -12,6 +12,7 @@ import {
 } from '@/types/catalog';
 import { InsumoFormModal } from '@/components/catalogo/InsumoFormModal';
 import { ComposicaoFormModal } from '@/components/catalogo/ComposicaoFormModal';
+import { ExpandToggle, NestedCompositionRows } from '@/components/catalogo/NestedCompositionRows';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -85,6 +86,8 @@ export default function CatalogoGeral() {
 
   // Composição expandida na tabela
   const [expandedCompId, setExpandedCompId] = useState<string | null>(null);
+  // Composições auxiliares expandidas na tabela de insumos
+  const [expandedAuxCompIds, setExpandedAuxCompIds] = useState<Record<string, boolean>>({});
 
   // Filtros - Insumos
   const [searchInsumo, setSearchInsumo] = useState('');
@@ -864,56 +867,98 @@ export default function CatalogoGeral() {
                                     </td>
                                   </tr>
                                 ) : (
-                                  comp.items.map((item) => (
-                                    <tr key={item.id} className="hover:bg-muted/10">
-                                      <td className="py-2 px-3 font-mono text-muted-foreground">
-                                        {item.itemType === 'composicao' ? (
-                                          <span className="font-bold text-[11px] bg-purple-500/10 text-purple-700 dark:text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20">
-                                            {item.code}
-                                          </span>
-                                        ) : (
-                                          `#${item.code}`
+                                  comp.items.map((item) => {
+                                    const isComp = item.itemType === 'composicao' && !!item.composicaoId;
+                                    const isAuxExpanded = !!expandedAuxCompIds[`${comp.id}-${item.id}`];
+
+                                    return (
+                                      <React.Fragment key={item.id}>
+                                        <tr className="hover:bg-muted/10">
+                                          <td className="py-2 px-3 font-mono text-muted-foreground">
+                                            {item.itemType === 'composicao' ? (
+                                              <span className="font-bold text-[11px] bg-purple-500/10 text-purple-700 dark:text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                                {item.code}
+                                              </span>
+                                            ) : (
+                                              `#${item.code}`
+                                            )}
+                                          </td>
+                                          <td className="py-2 px-3 font-semibold text-foreground">
+                                            <div className="space-y-0.5">
+                                              <div className="flex items-center gap-1.5 flex-wrap">
+                                                {isComp && (
+                                                  <ExpandToggle
+                                                    expanded={isAuxExpanded}
+                                                    onClick={() =>
+                                                      setExpandedAuxCompIds((prev) => ({
+                                                        ...prev,
+                                                        [`${comp.id}-${item.id}`]: !prev[`${comp.id}-${item.id}`],
+                                                      }))
+                                                    }
+                                                  />
+                                                )}
+                                                <span>{item.description}</span>
+                                                {item.itemType === 'composicao' && (
+                                                  <span className="text-[9px] bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20 px-1.5 py-0.2 rounded font-bold">
+                                                    CPU Auxiliar
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {item.itemType === 'composicao' && item.breakdown && (
+                                                <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 font-mono">
+                                                  <span>Mat: {formatCurrency(item.breakdown.costMaterial)}</span>
+                                                  <span>• M.O.: {formatCurrency(item.breakdown.costLabor)}</span>
+                                                  {(item.breakdown.costEquipment > 0 || item.breakdown.costOther > 0) && (
+                                                    <span>
+                                                      • Eq/Outros: {formatCurrency(item.breakdown.costEquipment + item.breakdown.costOther)}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </td>
+                                          <td className="py-2 px-2 text-center">
+                                            {item.itemType === 'composicao' ? (
+                                              <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400">
+                                                Composição
+                                              </span>
+                                            ) : (
+                                              <span
+                                                className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${
+                                                  INSUMO_GRUPO_COLORS[item.group]
+                                                }`}
+                                              >
+                                                {INSUMO_GRUPO_LABELS[item.group]}
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="py-2 px-2 text-center font-mono text-muted-foreground">
+                                            {item.unit}
+                                          </td>
+                                          <td className="py-2 px-3 text-right font-mono">
+                                            {item.coefficient}
+                                          </td>
+                                          <td className="py-2 px-3 text-right font-mono text-muted-foreground">
+                                            {formatCurrency(item.unitCost)}
+                                          </td>
+                                          <td className="py-2 px-3 text-right font-mono font-bold text-foreground">
+                                            {formatCurrency(item.totalCost)}
+                                          </td>
+                                        </tr>
+
+                                        {isComp && isAuxExpanded && (
+                                          <NestedCompositionRows
+                                            composicaoId={item.composicaoId as string}
+                                            multiplier={item.coefficient || 1}
+                                            depth={1}
+                                            visited={[comp.id]}
+                                            showActionCol={false}
+                                            fallbackBreakdown={item.breakdown}
+                                          />
                                         )}
-                                      </td>
-                                      <td className="py-2 px-3 font-semibold text-foreground">
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                          <span>{item.description}</span>
-                                          {item.itemType === 'composicao' && (
-                                            <span className="text-[9px] bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20 px-1.5 py-0.2 rounded font-bold">
-                                              CPU Auxiliar
-                                            </span>
-                                          )}
-                                        </div>
-                                      </td>
-                                      <td className="py-2 px-2 text-center">
-                                        {item.itemType === 'composicao' ? (
-                                          <span className="text-[9px] px-2 py-0.5 rounded-full border font-bold bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400">
-                                            Composição
-                                          </span>
-                                        ) : (
-                                          <span
-                                            className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${
-                                              INSUMO_GRUPO_COLORS[item.group]
-                                            }`}
-                                          >
-                                            {INSUMO_GRUPO_LABELS[item.group]}
-                                          </span>
-                                        )}
-                                      </td>
-                                      <td className="py-2 px-2 text-center font-mono text-muted-foreground">
-                                        {item.unit}
-                                      </td>
-                                      <td className="py-2 px-3 text-right font-mono">
-                                        {item.coefficient}
-                                      </td>
-                                      <td className="py-2 px-3 text-right font-mono text-muted-foreground">
-                                        {formatCurrency(item.unitCost)}
-                                      </td>
-                                      <td className="py-2 px-3 text-right font-mono font-bold text-foreground">
-                                        {formatCurrency(item.totalCost)}
-                                      </td>
-                                    </tr>
-                                  ))
+                                      </React.Fragment>
+                                    );
+                                  })
                                 )}
                               </tbody>
                             </table>

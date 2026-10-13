@@ -25,6 +25,7 @@ import {
 } from '@/types/catalog';
 import { useCatalog } from '@/hooks/useCatalog';
 import { InsumoFormModal } from './InsumoFormModal';
+import { ExpandToggle, NestedCompositionRows } from './NestedCompositionRows';
 import { Calculator, Layers, Plus, PlusCircle, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -119,6 +120,9 @@ export function ComposicaoItensEditor({
 
   const [isCreateInsumoOpen, setIsCreateInsumoOpen] = useState(false);
   const [initialInsumoDesc, setInitialInsumoDesc] = useState('');
+
+  // Controle de expansão das composições auxiliares
+  const [expandedCompIds, setExpandedCompIds] = useState<Record<string, boolean>>({});
 
   const filteredInsumos = useMemo(() => {
     const q = insumoSearch.toLowerCase();
@@ -277,63 +281,122 @@ export function ComposicaoItensEditor({
                 </td>
               </tr>
             ) : (
-              items.map((item) => (
-                <tr key={item.id} className="hover:bg-muted/20">
-                  <td className="py-2 px-2.5 font-mono text-muted-foreground">
-                    {item.itemType === 'composicao' ? item.code : `#${item.code}`}
-                  </td>
-                  <td className="py-2 px-2.5 font-medium text-foreground">{item.description}</td>
-                  <td className="py-2 px-2 text-center">
-                    {item.itemType === 'composicao' ? (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400">
-                        CPU
-                      </span>
-                    ) : (
-                      <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${
-                          INSUMO_GRUPO_COLORS[item.group]
-                        }`}
-                      >
-                        {INSUMO_GRUPO_LABELS[item.group]}
-                      </span>
+              items.map((item) => {
+                const isComp = item.itemType === 'composicao' && !!item.composicaoId;
+                const isExpanded = !!expandedCompIds[item.id];
+
+                return (
+                  <React.Fragment key={item.id}>
+                    <tr className="hover:bg-muted/20">
+                      <td className="py-2 px-2.5 font-mono text-muted-foreground">
+                        {item.itemType === 'composicao' ? (
+                          <span className="font-bold text-xs bg-purple-500/10 text-purple-700 dark:text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20">
+                            {item.code}
+                          </span>
+                        ) : (
+                          `#${item.code}`
+                        )}
+                      </td>
+                      <td className="py-2 px-2.5 font-medium text-foreground">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {isComp && (
+                              <ExpandToggle
+                                expanded={isExpanded}
+                                onClick={() =>
+                                  setExpandedCompIds((prev) => ({
+                                    ...prev,
+                                    [item.id]: !prev[item.id],
+                                  }))
+                                }
+                              />
+                            )}
+                            <span className="font-medium text-foreground">{item.description}</span>
+                            {item.itemType === 'composicao' && (
+                              <span className="text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 px-1.5 py-0.2 rounded font-bold inline-flex items-center gap-1">
+                                <Layers className="w-2.5 h-2.5" />
+                                CPU Auxiliar
+                              </span>
+                            )}
+                          </div>
+                          {item.itemType === 'composicao' && item.breakdown && (
+                            <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 font-mono">
+                              <span>Mat: {formatCurrency(item.breakdown.costMaterial)}</span>
+                              <span>• M.O.: {formatCurrency(item.breakdown.costLabor)}</span>
+                              {(item.breakdown.costEquipment > 0 || item.breakdown.costOther > 0) && (
+                                <span>
+                                  • Eq/Outros: {formatCurrency(item.breakdown.costEquipment + item.breakdown.costOther)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        {item.itemType === 'composicao' ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full border font-bold bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400 inline-flex items-center gap-1">
+                            <Layers className="w-2.5 h-2.5" />
+                            CPU
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${
+                              INSUMO_GRUPO_COLORS[item.group]
+                            }`}
+                          >
+                            {INSUMO_GRUPO_LABELS[item.group]}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-center font-mono text-muted-foreground">
+                        {item.unit}
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        <Input
+                          type="number"
+                          step="0.0001"
+                          value={item.coefficient}
+                          onChange={(e) => updateCoefficient(item.id, e.target.value)}
+                          className="h-7 w-20 text-right font-mono text-xs ml-auto"
+                        />
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={item.unitCost}
+                          onChange={(e) => updateUnitCost(item.id, e.target.value)}
+                          className="h-7 w-24 text-right font-mono text-xs ml-auto"
+                        />
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-bold font-mono">
+                        {formatCurrency(item.totalCost)}
+                      </td>
+                      <td className="py-2 px-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => removeItem(item.id)}
+                          className="text-muted-foreground hover:text-destructive p-1 rounded"
+                          title="Remover item"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+
+                    {isComp && isExpanded && (
+                      <NestedCompositionRows
+                        composicaoId={item.composicaoId as string}
+                        multiplier={item.coefficient || 1}
+                        depth={1}
+                        visited={[excludeComposicaoId || ''].filter(Boolean)}
+                        showActionCol={true}
+                        fallbackBreakdown={item.breakdown}
+                      />
                     )}
-                  </td>
-                  <td className="py-2 px-2 text-center font-mono text-muted-foreground">
-                    {item.unit}
-                  </td>
-                  <td className="py-2 px-2 text-right">
-                    <Input
-                      type="number"
-                      step="0.0001"
-                      value={item.coefficient}
-                      onChange={(e) => updateCoefficient(item.id, e.target.value)}
-                      className="h-7 w-20 text-right font-mono text-xs ml-auto"
-                    />
-                  </td>
-                  <td className="py-2 px-2 text-right">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={item.unitCost}
-                      onChange={(e) => updateUnitCost(item.id, e.target.value)}
-                      className="h-7 w-24 text-right font-mono text-xs ml-auto"
-                    />
-                  </td>
-                  <td className="py-2 px-2.5 text-right font-bold font-mono">
-                    {formatCurrency(item.totalCost)}
-                  </td>
-                  <td className="py-2 px-1 text-center">
-                    <button
-                      type="button"
-                      onClick={() => removeItem(item.id)}
-                      className="text-muted-foreground hover:text-destructive p-1 rounded"
-                      title="Remover item"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))
+                  </React.Fragment>
+                );
+              })
             )}
           </tbody>
         </table>
