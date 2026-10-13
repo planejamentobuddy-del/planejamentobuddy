@@ -46,6 +46,7 @@ interface InsumoFormModalProps {
   onOpenChange: (open: boolean) => void;
   insumoToEdit?: Insumo | null;
   onSuccess?: (savedInsumo: Insumo) => void;
+  initialDescription?: string;
 }
 
 export function InsumoFormModal({
@@ -53,6 +54,7 @@ export function InsumoFormModal({
   onOpenChange,
   insumoToEdit,
   onSuccess,
+  initialDescription,
 }: InsumoFormModalProps) {
   const { addInsumo, updateInsumo, getNextInsumoCode } = useCatalog();
   const { supplyPackages = [], projects = [] } = useProjects();
@@ -167,7 +169,7 @@ export function InsumoFormModal({
         // Novo insumo
         setGroup('material');
         setCode(getNextInsumoCode());
-        setDescription('');
+        setDescription(initialDescription || '');
         setUnit('und');
         setType('Estrutura');
         setCustomType('');
@@ -181,7 +183,7 @@ export function InsumoFormModal({
         setBeneficios('0,00');
       }
     }
-  }, [open, insumoToEdit]);
+  }, [open, insumoToEdit, initialDescription]);
 
   const handleGroupChange = (newGroup: InsumoGrupo) => {
     setGroup(newGroup);
@@ -341,7 +343,7 @@ export function InsumoFormModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl w-full p-0 overflow-hidden bg-card border rounded-2xl shadow-2xl">
+        <DialogContent className="max-w-3xl w-full p-0 overflow-hidden bg-card border rounded-2xl shadow-2xl z-[70]">
           {/* Header exatamente como o mockup com botão voltar laranja */}
           <div className="flex items-center justify-between px-6 py-4 border-b bg-card">
             <h2 className="text-xl font-display font-semibold text-foreground/90">
@@ -880,7 +882,7 @@ export function InsumoFormModal({
 
       {/* Modal para Puxar Itens de Suprimentos */}
       <Dialog open={isSupplyPickerOpen} onOpenChange={setIsSupplyPickerOpen}>
-        <DialogContent className="max-w-2xl w-full p-6 rounded-2xl bg-card border shadow-2xl">
+        <DialogContent className="max-w-2xl w-full p-6 rounded-2xl bg-card border shadow-2xl z-[80]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg font-bold">
               <Package className="w-5 h-5 text-primary" />

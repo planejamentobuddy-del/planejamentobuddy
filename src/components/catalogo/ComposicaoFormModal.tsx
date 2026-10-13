@@ -30,9 +30,11 @@ import {
   INSUMO_BASES_PADRAO,
 } from '@/types/catalog';
 import { useCatalog } from '@/hooks/useCatalog';
+import { InsumoFormModal } from './InsumoFormModal';
 import {
   ArrowLeft,
   Plus,
+  PlusCircle,
   Trash2,
   Check,
   Search,
@@ -114,6 +116,10 @@ export function ComposicaoFormModal({
   const [isInsumoPickerOpen, setIsInsumoPickerOpen] = useState(false);
   const [insumoSearch, setInsumoSearch] = useState('');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
+
+  // Modal para cadastrar novo insumo diretamente de dentro da composição
+  const [isCreateInsumoOpen, setIsCreateInsumoOpen] = useState(false);
+  const [initialInsumoDesc, setInitialInsumoDesc] = useState('');
 
   // Inicialização ao abrir modal
   useEffect(() => {
@@ -326,6 +332,20 @@ export function ComposicaoFormModal({
     syncCostsFromItems(updated);
     setIsInsumoPickerOpen(false);
     toast.success(`"${insumo.description}" adicionado com sucesso!`);
+  };
+
+  // Abrir modal de criação de insumo
+  const handleOpenCreateInsumo = (prefillDesc?: string) => {
+    setInitialInsumoDesc(prefillDesc !== undefined ? prefillDesc : insumoSearch);
+    setIsInsumoPickerOpen(false);
+    setIsCreateInsumoOpen(true);
+  };
+
+  // Callback chamado quando um novo insumo é salvo com sucesso no InsumoFormModal
+  const handleInsumoCreated = (newInsumo: Insumo) => {
+    handleAddInsumoFromCatalog(newInsumo);
+    setIsCreateInsumoOpen(false);
+    toast.success(`Insumo "${newInsumo.description}" cadastrado e incluído na composição!`);
   };
 
   // Atualizar coeficiente de um item
@@ -781,15 +801,25 @@ export function ComposicaoFormModal({
                 </table>
               </div>
 
-              {/* Botão verde "+ Item" abaixo da tabela */}
-              <div>
+              {/* Botões de Insumos abaixo da tabela */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   type="button"
                   onClick={() => setIsInsumoPickerOpen(true)}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm h-8"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Item
+                  Item do Catálogo
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleOpenCreateInsumo()}
+                  className="border-dashed border-primary/50 text-primary hover:bg-primary/10 font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm h-8"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  Cadastrar Novo Insumo
                 </Button>
               </div>
             </div>
@@ -876,10 +906,21 @@ export function ComposicaoFormModal({
       <Dialog open={isInsumoPickerOpen} onOpenChange={setIsInsumoPickerOpen}>
         <DialogContent className="max-w-2xl w-full p-6 rounded-2xl bg-card border shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-              <Calculator className="w-5 h-5 text-primary" />
-              Selecionar Insumo do Catálogo
-            </DialogTitle>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+                <Calculator className="w-5 h-5 text-primary" />
+                Selecionar Insumo do Catálogo
+              </DialogTitle>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => handleOpenCreateInsumo(insumoSearch)}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold gap-1.5 h-8 shrink-0"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                Cadastrar Novo Insumo
+              </Button>
+            </div>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
@@ -910,8 +951,18 @@ export function ComposicaoFormModal({
 
             <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
               {filteredInsumos.length === 0 ? (
-                <div className="p-8 text-center text-sm text-muted-foreground">
-                  Nenhum insumo encontrado no catálogo com esses filtros.
+                <div className="p-8 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum insumo encontrado no catálogo com esses filtros.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={() => handleOpenCreateInsumo(insumoSearch)}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs gap-1.5"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    Cadastrar {insumoSearch ? `"${insumoSearch}"` : 'novo insumo'} agora
+                  </Button>
                 </div>
               ) : (
                 filteredInsumos.map((insumo) => (
@@ -957,6 +1008,14 @@ export function ComposicaoFormModal({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal para Cadastrar Novo Insumo Diretamente */}
+      <InsumoFormModal
+        open={isCreateInsumoOpen}
+        onOpenChange={setIsCreateInsumoOpen}
+        initialDescription={initialInsumoDesc}
+        onSuccess={handleInsumoCreated}
+      />
     </>
   );
 }
