@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useBudget } from '@/hooks/useBudget';
 import { BudgetItem, BudgetSubstage, BudgetStage } from '@/types/budget';
 import { Button } from '@/components/ui/button';
@@ -11,11 +11,8 @@ import {
   ChevronRight,
   Search,
   FolderPlus,
-  Check,
-  X,
-  Edit2,
-  FolderTree,
-  Sliders,
+  RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import { CompositionDetailModal } from './CompositionDetailModal';
 import { AreaBreakdownTable } from './AreaBreakdownTable';
@@ -30,6 +27,335 @@ function formatNumber(val: number, dec: number = 2): string {
 
 function formatPercent(val: number, dec: number = 2): string {
   return `${val.toFixed(dec)}%`;
+}
+
+/**
+ * Célula de edição inline do BDI (%) do item
+ */
+function BdiInputCell({
+  item,
+  globalBdi,
+  onUpdateBdi,
+}: {
+  item: BudgetItem;
+  globalBdi: number;
+  onUpdateBdi: (itemId: string, newBdi: number | undefined) => void;
+}) {
+  const isCustom = item.bdi !== undefined && item.bdi !== null;
+  const effectiveVal = isCustom ? Number(item.bdi) : globalBdi;
+  const [val, setVal] = useState<string>(effectiveVal.toString());
+
+  useEffect(() => {
+    setVal(effectiveVal.toString());
+  }, [item.bdi, globalBdi, effectiveVal]);
+
+  const handleCommit = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      // Reverter para BDI global
+      onUpdateBdi(item.id, undefined);
+      setVal(globalBdi.toString());
+      return;
+    }
+
+    const parsed = parseFloat(trimmed.replace(',', '.'));
+    if (!isNaN(parsed) && parsed >= 0) {
+      onUpdateBdi(item.id, parsed);
+    } else {
+      setVal(effectiveVal.toString());
+    }
+  };
+
+  const handleResetToGlobal = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onUpdateBdi(item.id, undefined);
+    setVal(globalBdi.toString());
+  };
+
+  return (
+    <div className="flex items-center justify-end gap-1 group/bdi">
+      <div className="relative flex items-center">
+        <input
+          type="number"
+          step="0.1"
+          min="0"
+          max="300"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={(e) => handleCommit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleCommit(e.currentTarget.value);
+              e.currentTarget.blur();
+            }
+          }}
+          className={`h-7 w-16 text-right text-xs font-mono font-bold px-1.5 py-0.5 rounded border transition-all ${
+            isCustom
+              ? 'border-amber-500/80 bg-amber-500/15 text-amber-900 dark:text-amber-200 ring-1 ring-amber-500/30'
+              : 'border-border/70 bg-background text-foreground hover:border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary'
+          }`}
+          title={
+            isCustom
+              ? `BDI individual de ${val}%. Padrão da obra é ${globalBdi.toFixed(1)}%.`
+              : `Usando BDI padrão da obra (${globalBdi.toFixed(1)}%). Digite para personalizar.`
+          }
+        />
+        <span className="text-[11px] font-mono font-bold text-muted-foreground ml-1 select-none">
+          %
+        </span>
+      </div>
+
+      {isCustom && (
+        <button
+          type="button"
+          onClick={handleResetToGlobal}
+          className="opacity-0 group-hover/bdi:opacity-100 transition-opacity text-muted-foreground hover:text-amber-600 p-0.5"
+          title={`Redefinir para o BDI geral da obra (${globalBdi.toFixed(1)}%)`}
+        >
+          <RotateCcw className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Célula de edição inline da Quantidade do item
+ */
+function QuantityInputCell({
+  item,
+  onUpdateQty,
+}: {
+  item: BudgetItem;
+  onUpdateQty: (itemId: string, newQty: number) => void;
+}) {
+  const [val, setVal] = useState<string>(String(item.quantity || 0));
+
+  useEffect(() => {
+    setVal(String(item.quantity || 0));
+  }, [item.quantity]);
+
+  const handleCommit = (raw: string) => {
+    const parsed = parseFloat(raw.replace(',', '.'));
+    if (!isNaN(parsed) && parsed >= 0) {
+      onUpdateQty(item.id, parsed);
+    } else {
+      setVal(String(item.quantity || 0));
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-end">
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={(e) => handleCommit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            handleCommit(e.currentTarget.value);
+            e.currentTarget.blur();
+          }
+        }}
+        className="h-7 w-16 text-right text-xs font-mono font-semibold px-1.5 py-0.5 rounded border border-border/70 bg-background text-foreground hover:border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary"
+        title="Quantidade do serviço"
+      />
+    </div>
+  );
+}
+
+/**
+ * Linha de Item Orçamentário com a coluna de BDI (%) individual
+ */
+function BudgetItemRow({
+  item,
+  viewMode,
+  globalBdi,
+  onOpenComposition,
+  onDelete,
+  onUpdateBdi,
+  onUpdateQty,
+}: {
+  item: BudgetItem;
+  viewMode: 'cost' | 'selling';
+  globalBdi: number;
+  onOpenComposition: (item: BudgetItem) => void;
+  onDelete: (itemId: string) => void;
+  onUpdateBdi: (itemId: string, newBdi: number | undefined) => void;
+  onUpdateQty: (itemId: string, newQty: number) => void;
+}) {
+  const itemEffectiveBdi = item.bdi !== undefined ? Number(item.bdi) : globalBdi;
+  const unitCost = item.unitCostTotal || 0;
+  const unitSelling = unitCost * (1 + itemEffectiveBdi / 100);
+  const itemTotal = (viewMode === 'selling' ? unitSelling : unitCost) * (item.quantity || 0);
+
+  return (
+    <div className="p-3 sm:px-3 sm:py-2.5 hover:bg-muted/30 transition-colors flex flex-col lg:grid lg:grid-cols-12 items-start lg:items-center gap-2 text-xs">
+      {/* 1. Item Code (1.1.1 ou 1.1) */}
+      <div className="lg:col-span-1 flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
+        <span className="font-bold text-foreground">{item.code}</span>
+        <span className="text-[8px] px-1 py-0 rounded font-semibold border bg-primary/10 text-primary border-primary/20">
+          {item.source === 'sinapi'
+            ? 'SINAPI'
+            : item.source === 'catalogo'
+            ? 'CAT'
+            : 'PROP'}
+        </span>
+      </div>
+
+      {/* 2. Descrição do Serviço */}
+      <div className="lg:col-span-4 pr-2">
+        <p className="font-medium text-foreground text-xs leading-snug">
+          {item.description}
+        </p>
+        {item.composition && item.composition.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onOpenComposition(item)}
+            className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline mt-0.5 font-medium"
+          >
+            <Layers className="w-3 h-3" /> Ver Composição CPU ({item.composition.length} insumos)
+          </button>
+        )}
+      </div>
+
+      {/* 3. Unidade */}
+      <div className="lg:col-span-1 text-left lg:text-center text-muted-foreground font-mono">
+        <span className="lg:hidden text-[10px] text-muted-foreground mr-1">Un:</span>
+        {item.unit}
+      </div>
+
+      {/* 4. Quantidade (Editável Direto no Input) */}
+      <div className="lg:col-span-1 text-left lg:text-right font-medium">
+        <span className="lg:hidden text-[10px] text-muted-foreground mr-1">Qtd:</span>
+        <QuantityInputCell item={item} onUpdateQty={onUpdateQty} />
+      </div>
+
+      {/* 5. Custo Unitário Direto */}
+      <div className="lg:col-span-1 text-left lg:text-right text-muted-foreground font-mono">
+        <span className="lg:hidden text-[10px] text-muted-foreground mr-1">Custo:</span>
+        {formatCurrency(unitCost)}
+      </div>
+
+      {/* 6. COLUNA DE BDI (%) INDIVIDUAL (EDITÁVEL DIRETAMENTE) */}
+      <div className="lg:col-span-1 text-left lg:text-right">
+        <span className="lg:hidden text-[10px] text-muted-foreground mr-1">BDI:</span>
+        <BdiInputCell
+          item={item}
+          globalBdi={globalBdi}
+          onUpdateBdi={onUpdateBdi}
+        />
+      </div>
+
+      {/* 7. Unitário com BDI */}
+      <div className="lg:col-span-1 text-left lg:text-right text-foreground font-mono font-medium">
+        <span className="lg:hidden text-[10px] text-muted-foreground mr-1">Unit. c/ BDI:</span>
+        {formatCurrency(unitSelling)}
+      </div>
+
+      {/* 8. Total */}
+      <div className="lg:col-span-1 text-left lg:text-right font-bold text-foreground font-mono">
+        <span className="lg:hidden text-[10px] text-muted-foreground mr-1">Total:</span>
+        {formatCurrency(itemTotal)}
+      </div>
+
+      {/* 9. Ações */}
+      <div className="lg:col-span-1 flex items-center justify-end gap-1 w-full lg:w-auto pt-1 lg:pt-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onOpenComposition(item)}
+          className="h-7 w-7 text-muted-foreground hover:text-primary"
+          title="Ver Composição Detalhada"
+        >
+          <Layers className="w-3.5 h-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onDelete(item.id)}
+          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+          title="Remover Item"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Tabela de Itens com Cabeçalho e Coluna de BDI (%) Destacada
+ */
+function BudgetItemTable({
+  items,
+  emptyMessage,
+  onAddItem,
+  addItemLabel,
+  viewMode,
+  globalBdi,
+  onOpenComposition,
+  onDelete,
+  onUpdateBdi,
+  onUpdateQty,
+}: {
+  items: BudgetItem[];
+  emptyMessage: string;
+  onAddItem: () => void;
+  addItemLabel: string;
+  viewMode: 'cost' | 'selling';
+  globalBdi: number;
+  onOpenComposition: (item: BudgetItem) => void;
+  onDelete: (itemId: string) => void;
+  onUpdateBdi: (itemId: string, newBdi: number | undefined) => void;
+  onUpdateQty: (itemId: string, newQty: number) => void;
+}) {
+  return (
+    <div className="divide-y divide-border/60">
+      {/* Cabeçalho da tabela com Coluna de BDI clara e explícita */}
+      <div className="grid grid-cols-12 bg-muted/25 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b hidden lg:grid select-none">
+        <span className="col-span-1">Item</span>
+        <span className="col-span-4">Descrição do Serviço</span>
+        <span className="col-span-1 text-center">Unid</span>
+        <span className="col-span-1 text-right">Qtd</span>
+        <span className="col-span-1 text-right">Custo Unit.</span>
+        <span className="col-span-1 text-right text-amber-600 dark:text-amber-400 font-extrabold flex items-center justify-end gap-0.5">
+          <span>BDI (%)</span>
+        </span>
+        <span className="col-span-1 text-right">Unit. c/ BDI</span>
+        <span className="col-span-1 text-right">Total</span>
+        <span className="col-span-1 text-right">Ações</span>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="p-5 text-center text-xs text-muted-foreground">
+          {emptyMessage}{' '}
+          <button
+            type="button"
+            onClick={onAddItem}
+            className="text-primary underline font-medium ml-1 cursor-pointer hover:text-primary/80"
+          >
+            {addItemLabel}
+          </button>
+        </div>
+      ) : (
+        items.map((item) => (
+          <BudgetItemRow
+            key={item.id}
+            item={item}
+            viewMode={viewMode}
+            globalBdi={globalBdi}
+            onOpenComposition={onOpenComposition}
+            onDelete={onDelete}
+            onUpdateBdi={onUpdateBdi}
+            onUpdateQty={onUpdateQty}
+          />
+        ))
+      )}
+    </div>
+  );
 }
 
 interface BudgetSpreadsheetProps {
@@ -80,14 +406,6 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
   const [addingSubstageForStageId, setAddingSubstageForStageId] = useState<string | null>(null);
   const [newSubstageTitle, setNewSubstageTitle] = useState('');
 
-  // Edição inline de Quantidade
-  const [editingQtyItemId, setEditingQtyItemId] = useState<string | null>(null);
-  const [editQty, setEditQty] = useState<string>('');
-
-  // Edição inline de BDI por item
-  const [editingBdiItemId, setEditingBdiItemId] = useState<string | null>(null);
-  const [editBdi, setEditBdi] = useState<string>('');
-
   const toggleStage = (stageId: string) => {
     setExpandedStages((prev) => ({ ...prev, [stageId]: !prev[stageId] }));
   };
@@ -96,31 +414,12 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
     setExpandedSubstages((prev) => ({ ...prev, [substageId]: !prev[substageId] }));
   };
 
-  const handleStartEditQty = (item: BudgetItem) => {
-    setEditingQtyItemId(item.id);
-    setEditQty(item.quantity.toString());
+  const handleUpdateItemBdi = (itemId: string, newBdi: number | undefined) => {
+    updateItem(itemId, { bdi: newBdi });
   };
 
-  const handleSaveQty = (item: BudgetItem) => {
-    const parsed = parseFloat(editQty.replace(',', '.'));
-    if (!isNaN(parsed) && parsed >= 0) {
-      updateItem(item.id, { quantity: parsed });
-    }
-    setEditingQtyItemId(null);
-  };
-
-  const handleStartEditBdi = (item: BudgetItem) => {
-    setEditingBdiItemId(item.id);
-    const currentBdi = item.bdi !== undefined ? item.bdi : bdiRate;
-    setEditBdi(currentBdi.toString());
-  };
-
-  const handleSaveBdi = (item: BudgetItem) => {
-    const parsed = parseFloat(editBdi.replace(',', '.'));
-    if (!isNaN(parsed)) {
-      updateItem(item.id, { bdi: parsed });
-    }
-    setEditingBdiItemId(null);
+  const handleUpdateItemQty = (itemId: string, newQty: number) => {
+    updateItem(itemId, { quantity: newQty });
   };
 
   const handleCreateStage = (e: React.FormEvent) => {
@@ -198,14 +497,16 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
         </div>
       </div>
 
-      {/* LISTA HIERÁRQUICA: ETAPAS -> SUBETAPAS -> ITENS */}
+      {/* LISTA HIERÁRQUICA: ETAPAS -> (SUBETAPAS / ITENS) */}
       <div className="space-y-4">
         {activeProject.stages.map((stage) => {
           const summary = stageSummaries.find((s) => s.stageId === stage.id);
           const isStageExpanded = expandedStages[stage.id] !== false;
 
-          // Contagem total de itens na etapa
-          const allStageItems = stage.substages?.flatMap((s) => s.items || []) || stage.items || [];
+          // Contagem total de itens na etapa (subetapas + itens diretos)
+          const subItemsAll = stage.substages?.flatMap((s) => s.items || []) || [];
+          const directItemsAll = stage.items || [];
+          const allStageItems = [...subItemsAll, ...directItemsAll];
 
           // Filtro de pesquisa
           const q = searchFilter.toLowerCase();
@@ -223,13 +524,24 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
           if (!hasMatchingItems) return null;
 
           const stageTotal = viewMode === 'selling' ? summary?.sellingPrice || 0 : summary?.directCost || 0;
+          const hasSubstages = stage.substages && stage.substages.length > 0;
+
+          // Itens diretos filtrados (para etapas sem subetapas ou com itens diretos)
+          const filteredDirectItems = directItemsAll.filter((it) => {
+            return (
+              !q ||
+              it.description.toLowerCase().includes(q) ||
+              it.code.toLowerCase().includes(q) ||
+              (it.sinapiCode && it.sinapiCode.includes(q))
+            );
+          });
 
           return (
             <div
               key={stage.id}
               className="rounded-2xl border bg-card text-card-foreground shadow-sm overflow-hidden transition-all"
             >
-              {/* NÍVEL 1: HEADER DA ETAPA (Número 1, 2, 3...) */}
+              {/* NÍVEL 1: HEADER DA ETAPA (Número 01, 02...) */}
               <div
                 onClick={() => toggleStage(stage.id)}
                 className="p-3.5 sm:p-4 bg-muted/40 hover:bg-muted/70 transition-colors flex items-center justify-between cursor-pointer select-none border-b"
@@ -252,7 +564,8 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                       {stage.title}
                     </h3>
                     <span className="text-[11px] text-muted-foreground font-mono">
-                      {stage.substages?.length || 0} subetapas • {allStageItems.length} serviços
+                      {hasSubstages ? `${stage.substages!.length} subetapas • ` : ''}
+                      {allStageItems.length} serviços
                     </span>
                   </div>
                 </div>
@@ -274,352 +587,192 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                 </div>
               </div>
 
-              {/* CORPO DA ETAPA: SUBETAPAS */}
+              {/* CORPO DA ETAPA */}
               {isStageExpanded && (
                 <div className="p-3 sm:p-4 space-y-3 bg-muted/10">
-                  {/* Lista de Subetapas (Nível 2) */}
-                  {(stage.substages || []).map((substage) => {
-                    const isSubExpanded = expandedSubstages[substage.id] !== false;
+                  {/* CASO A: ETAPA POSSUI SUBETAPAS (NÍVEL 2) */}
+                  {hasSubstages && (
+                    <div className="space-y-3">
+                      {stage.substages!.map((substage) => {
+                        const isSubExpanded = expandedSubstages[substage.id] !== false;
 
-                    const filteredSubItems = (substage.items || []).filter((it) => {
-                      return (
-                        !q ||
-                        it.description.toLowerCase().includes(q) ||
-                        it.code.toLowerCase().includes(q) ||
-                        (it.sinapiCode && it.sinapiCode.includes(q))
-                      );
-                    });
+                        const filteredSubItems = (substage.items || []).filter((it) => {
+                          return (
+                            !q ||
+                            it.description.toLowerCase().includes(q) ||
+                            it.code.toLowerCase().includes(q) ||
+                            (it.sinapiCode && it.sinapiCode.includes(q))
+                          );
+                        });
 
-                    // Subtotal da subetapa
-                    let subTotal = 0;
-                    (substage.items || []).forEach((it) => {
-                      const itemEffectiveBdi = it.bdi !== undefined ? it.bdi : bdiRate;
-                      const mult = viewMode === 'selling' ? 1 + itemEffectiveBdi / 100 : 1;
-                      subTotal += (it.unitCostTotal || 0) * mult * (it.quantity || 0);
-                    });
+                        // Subtotal da subetapa
+                        let subTotal = 0;
+                        (substage.items || []).forEach((it) => {
+                          const itemEffectiveBdi = it.bdi !== undefined ? Number(it.bdi) : bdiRate;
+                          const mult = viewMode === 'selling' ? 1 + itemEffectiveBdi / 100 : 1;
+                          subTotal += (it.unitCostTotal || 0) * mult * (it.quantity || 0);
+                        });
 
-                    return (
-                      <div
-                        key={substage.id}
-                        className="rounded-xl border bg-card/80 shadow-xs overflow-hidden"
-                      >
-                        {/* HEADER DA SUBETAPA (1.1, 1.2...) */}
-                        <div
-                          onClick={() => toggleSubstage(substage.id)}
-                          className="px-3 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-between cursor-pointer select-none border-b text-xs"
-                        >
-                          <div className="flex items-center gap-2">
-                            <button className="text-muted-foreground p-0.5 hover:text-foreground">
-                              {isSubExpanded ? (
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              ) : (
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                            <span className="font-mono font-bold text-[11px] bg-sky-500/15 text-sky-700 dark:text-sky-300 px-1.5 py-0.2 rounded border border-sky-500/30">
-                              {substage.code}
-                            </span>
-                            <span className="font-bold text-foreground">
-                              {substage.title}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground font-mono">
-                              ({substage.items?.length || 0} itens)
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <span className="font-bold font-mono text-foreground">
-                              {formatCurrency(subTotal)}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* TABELA DE ITENS (NÍVEL 3: 1.1.1, 1.1.2...) */}
-                        {isSubExpanded && (
-                          <div className="divide-y divide-border/60">
-                            {/* Cabeçalho da tabela de itens com coluna de BDI */}
-                            <div className="grid grid-cols-12 bg-muted/20 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hidden lg:grid">
-                              <span className="col-span-1">Item</span>
-                              <span className="col-span-4">Descrição do Serviço</span>
-                              <span className="col-span-1 text-center">Unid</span>
-                              <span className="col-span-1 text-right">Qtd</span>
-                              <span className="col-span-1 text-right">Custo Unit.</span>
-                              <span className="col-span-1 text-right">BDI (%)</span>
-                              <span className="col-span-1 text-right">Unit. c/ BDI</span>
-                              <span className="col-span-1 text-right">Total</span>
-                              <span className="col-span-1 text-right">Ações</span>
-                            </div>
-
-                            {filteredSubItems.length === 0 ? (
-                              <div className="p-5 text-center text-xs text-muted-foreground">
-                                Nenhum item cadastrado nesta subetapa.{' '}
-                                <button
-                                  type="button"
-                                  onClick={() => onOpenSinapiModal(stage.id, substage.id)}
-                                  className="text-primary underline font-medium ml-1"
-                                >
-                                  Adicionar item a {substage.code} agora
+                        return (
+                          <div
+                            key={substage.id}
+                            className="rounded-xl border bg-card/80 shadow-xs overflow-hidden"
+                          >
+                            {/* HEADER DA SUBETAPA (1.1, 1.2...) */}
+                            <div
+                              onClick={() => toggleSubstage(substage.id)}
+                              className="px-3 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-between cursor-pointer select-none border-b text-xs"
+                            >
+                              <div className="flex items-center gap-2">
+                                <button className="text-muted-foreground p-0.5 hover:text-foreground">
+                                  {isSubExpanded ? (
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  )}
                                 </button>
+                                <span className="font-mono font-bold text-[11px] bg-sky-500/15 text-sky-700 dark:text-sky-300 px-1.5 py-0.2 rounded border border-sky-500/30">
+                                  {substage.code}
+                                </span>
+                                <span className="font-bold text-foreground">
+                                  {substage.title}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  ({substage.items?.length || 0} itens)
+                                </span>
                               </div>
-                            ) : (
-                              filteredSubItems.map((item) => {
-                                const itemEffectiveBdi =
-                                  item.bdi !== undefined ? item.bdi : bdiRate;
-                                const unitCost = item.unitCostTotal || 0;
-                                const unitSelling = unitCost * (1 + itemEffectiveBdi / 100);
-                                const itemTotal =
-                                  (viewMode === 'selling' ? unitSelling : unitCost) *
-                                  (item.quantity || 0);
 
-                                return (
-                                  <div
-                                    key={item.id}
-                                    className="p-3 sm:px-3 sm:py-2.5 hover:bg-muted/30 transition-colors flex flex-col lg:grid lg:grid-cols-12 items-start lg:items-center gap-2 text-xs"
-                                  >
-                                    {/* Item Code (1.1.1) */}
-                                    <div className="lg:col-span-1 flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
-                                      <span className="font-bold text-foreground">
-                                        {item.code}
-                                      </span>
-                                      <span className="text-[8px] px-1 py-0 rounded font-semibold border bg-primary/10 text-primary border-primary/20">
-                                        {item.source === 'sinapi'
-                                          ? 'SINAPI'
-                                          : item.source === 'catalogo'
-                                          ? 'CAT'
-                                          : 'PROP'}
-                                      </span>
-                                    </div>
-
-                                    {/* Descrição do Serviço */}
-                                    <div className="lg:col-span-4 pr-2">
-                                      <p className="font-medium text-foreground text-xs leading-snug">
-                                        {item.description}
-                                      </p>
-                                      {item.composition && item.composition.length > 0 && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setSelectedCompositionItem(item);
-                                            setIsCompModalOpen(true);
-                                          }}
-                                          className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline mt-0.5 font-medium"
-                                        >
-                                          <Layers className="w-3 h-3" /> Ver Composição CPU (
-                                          {item.composition.length} insumos)
-                                        </button>
-                                      )}
-                                    </div>
-
-                                    {/* Unidade */}
-                                    <div className="lg:col-span-1 text-left lg:text-center text-muted-foreground font-mono">
-                                      <span className="lg:hidden text-[10px] text-muted-foreground mr-1">
-                                        Un:
-                                      </span>
-                                      {item.unit}
-                                    </div>
-
-                                    {/* Quantidade (Editável Inline) */}
-                                    <div className="lg:col-span-1 text-left lg:text-right font-medium">
-                                      {editingQtyItemId === item.id ? (
-                                        <div className="flex items-center gap-1 justify-end">
-                                          <Input
-                                            type="number"
-                                            step="0.01"
-                                            value={editQty}
-                                            onChange={(e) => setEditQty(e.target.value)}
-                                            className="h-7 w-16 text-xs text-right p-1 font-mono"
-                                            autoFocus
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'Enter') handleSaveQty(item);
-                                              if (e.key === 'Escape') setEditingQtyItemId(null);
-                                            }}
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSaveQty(item)}
-                                            className="text-emerald-600 hover:text-emerald-700"
-                                          >
-                                            <Check className="w-3.5 h-3.5" />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setEditingQtyItemId(null)}
-                                            className="text-muted-foreground hover:text-destructive"
-                                          >
-                                            <X className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleStartEditQty(item)}
-                                          className="font-mono hover:text-primary hover:underline cursor-pointer"
-                                          title="Clique para editar a quantidade"
-                                        >
-                                          {formatNumber(item.quantity, 2)}
-                                        </button>
-                                      )}
-                                    </div>
-
-                                    {/* Custo Unitário Direto */}
-                                    <div className="lg:col-span-1 text-left lg:text-right text-muted-foreground font-mono">
-                                      <span className="lg:hidden text-[10px] text-muted-foreground mr-1">
-                                        Custo:
-                                      </span>
-                                      {formatCurrency(unitCost)}
-                                    </div>
-
-                                    {/* COLUNA DE BDI DO ITEM (EDITÁVEL INLINE!) */}
-                                    <div className="lg:col-span-1 text-left lg:text-right">
-                                      {editingBdiItemId === item.id ? (
-                                        <div className="flex items-center gap-1 justify-end">
-                                          <Input
-                                            type="number"
-                                            step="0.1"
-                                            value={editBdi}
-                                            onChange={(e) => setEditBdi(e.target.value)}
-                                            className="h-7 w-16 text-xs text-right p-1 font-mono"
-                                            autoFocus
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'Enter') handleSaveBdi(item);
-                                              if (e.key === 'Escape') setEditingBdiItemId(null);
-                                            }}
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSaveBdi(item)}
-                                            className="text-emerald-600 hover:text-emerald-700"
-                                          >
-                                            <Check className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleStartEditBdi(item)}
-                                          className={`inline-flex items-center gap-0.5 font-mono px-1.5 py-0.5 rounded text-[11px] font-bold transition-all ${
-                                            item.bdi !== undefined
-                                              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30'
-                                              : 'text-muted-foreground hover:bg-muted'
-                                          }`}
-                                          title="Clique para editar o BDI deste item"
-                                        >
-                                          <span>{formatPercent(itemEffectiveBdi, 1)}</span>
-                                          <Edit2 className="w-2.5 h-2.5 opacity-60 ml-0.5" />
-                                        </button>
-                                      )}
-                                    </div>
-
-                                    {/* Unitário com BDI */}
-                                    <div className="lg:col-span-1 text-left lg:text-right text-foreground font-mono font-medium">
-                                      <span className="lg:hidden text-[10px] text-muted-foreground mr-1">
-                                        c/ BDI:
-                                      </span>
-                                      {formatCurrency(unitSelling)}
-                                    </div>
-
-                                    {/* Total */}
-                                    <div className="lg:col-span-1 text-left lg:text-right font-bold text-foreground font-mono">
-                                      <span className="lg:hidden text-[10px] text-muted-foreground mr-1">
-                                        Total:
-                                      </span>
-                                      {formatCurrency(itemTotal)}
-                                    </div>
-
-                                    {/* Ações */}
-                                    <div className="lg:col-span-1 flex items-center justify-end gap-1 w-full lg:w-auto pt-1 lg:pt-0">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          setSelectedCompositionItem(item);
-                                          setIsCompModalOpen(true);
-                                        }}
-                                        className="h-7 w-7 text-muted-foreground hover:text-primary"
-                                        title="Ver Composição Detalhada"
-                                      >
-                                        <Layers className="w-3.5 h-3.5" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => deleteItem(item.id)}
-                                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                        title="Remover Item"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            )}
-
-                            {/* Barra de Ações da Subetapa */}
-                            <div className="p-2 bg-muted/20 flex justify-between items-center text-xs">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => onOpenSinapiModal(stage.id, substage.id)}
-                                className="h-7 rounded-lg text-xs text-primary font-bold hover:bg-primary/10 flex items-center gap-1"
-                              >
-                                <Plus className="w-3 h-3" />
-                                Adicionar Item a {substage.code}
-                              </Button>
-
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteSubstage(stage.id, substage.id)}
-                                className="h-7 rounded-lg text-[11px] text-muted-foreground hover:text-destructive"
-                              >
-                                Excluir Subetapa {substage.code}
-                              </Button>
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold font-mono text-foreground">
+                                  {formatCurrency(subTotal)}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
 
-                  {/* FORMULÁRIO DE NOVA SUBETAPA / BOTÃO DE ADICIONAR SUBETAPA */}
-                  <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
-                    {addingSubstageForStageId === stage.id ? (
-                      <form
-                        onSubmit={(e) => handleCreateSubstage(stage.id, e)}
-                        className="flex items-center gap-2"
-                      >
-                        <Input
-                          autoFocus
-                          placeholder={`Nome da Subetapa (ex: ${stage.code}.${(stage.substages?.length || 0) + 1} Tapume)...`}
-                          value={newSubstageTitle}
-                          onChange={(e) => setNewSubstageTitle(e.target.value)}
-                          className="h-8 text-xs w-60 rounded-xl"
-                        />
-                        <Button type="submit" size="sm" className="h-8 px-3 text-xs rounded-xl">
-                          Salvar Subetapa
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setAddingSubstageForStageId(null)}
-                          className="h-8 text-xs rounded-xl"
-                        >
-                          Cancelar
-                        </Button>
-                      </form>
-                    ) : (
+                            {/* TABELA DE ITENS DA SUBETAPA COM COLUNA DE BDI */}
+                            {isSubExpanded && (
+                              <div>
+                                <BudgetItemTable
+                                  items={filteredSubItems}
+                                  emptyMessage="Nenhum item cadastrado nesta subetapa."
+                                  onAddItem={() => onOpenSinapiModal(stage.id, substage.id)}
+                                  addItemLabel={`Adicionar item a ${substage.code} agora`}
+                                  viewMode={viewMode}
+                                  globalBdi={bdiRate}
+                                  onOpenComposition={(item) => {
+                                    setSelectedCompositionItem(item);
+                                    setIsCompModalOpen(true);
+                                  }}
+                                  onDelete={deleteItem}
+                                  onUpdateBdi={handleUpdateItemBdi}
+                                  onUpdateQty={handleUpdateItemQty}
+                                />
+
+                                {/* Barra de Ações da Subetapa */}
+                                <div className="p-2 bg-muted/20 flex justify-between items-center text-xs border-t">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onOpenSinapiModal(stage.id, substage.id)}
+                                    className="h-7 rounded-lg text-xs text-primary font-bold hover:bg-primary/10 flex items-center gap-1"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    Adicionar Item a {substage.code}
+                                  </Button>
+
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => deleteSubstage(stage.id, substage.id)}
+                                    className="h-7 rounded-lg text-[11px] text-muted-foreground hover:text-destructive"
+                                  >
+                                    Excluir Subetapa {substage.code}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* CASO B: ETAPA SEM SUBETAPAS (OU ITENS DIRETOS DA ETAPA) */}
+                  {(!hasSubstages || filteredDirectItems.length > 0) && (
+                    <div className="rounded-xl border bg-card/80 shadow-xs overflow-hidden">
+                      {hasSubstages && (
+                        <div className="px-3 py-1.5 bg-muted/40 border-b text-[11px] font-semibold text-muted-foreground">
+                          Itens Diretos da Etapa {stage.code}
+                        </div>
+                      )}
+                      <BudgetItemTable
+                        items={filteredDirectItems}
+                        emptyMessage="Nenhum item cadastrado nesta etapa."
+                        onAddItem={() => onOpenSinapiModal(stage.id)}
+                        addItemLabel="Adicionar serviço agora"
+                        viewMode={viewMode}
+                        globalBdi={bdiRate}
+                        onOpenComposition={(item) => {
+                          setSelectedCompositionItem(item);
+                          setIsCompModalOpen(true);
+                        }}
+                        onDelete={deleteItem}
+                        onUpdateBdi={handleUpdateItemBdi}
+                        onUpdateQty={handleUpdateItemQty}
+                      />
+                    </div>
+                  )}
+
+                  {/* BARRA DE AÇÕES DA ETAPA: ADICIONAR ITEM, ADICIONAR SUBETAPA, EXCLUIR */}
+                  <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border/40">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Button
-                        variant="outline"
+                        variant="default"
                         size="sm"
-                        onClick={() => setAddingSubstageForStageId(stage.id)}
-                        className="h-8 rounded-xl text-xs text-primary font-semibold flex items-center gap-1.5"
+                        onClick={() => onOpenSinapiModal(stage.id)}
+                        className="h-8 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        + Adicionar Subetapa a {stage.code}
+                        + Adicionar Item a {stage.code}
                       </Button>
-                    )}
+
+                      {addingSubstageForStageId === stage.id ? (
+                        <form
+                          onSubmit={(e) => handleCreateSubstage(stage.id, e)}
+                          className="flex items-center gap-2"
+                        >
+                          <Input
+                            autoFocus
+                            placeholder={`Nome da Subetapa (ex: ${stage.code}.${(stage.substages?.length || 0) + 1} Tapume)...`}
+                            value={newSubstageTitle}
+                            onChange={(e) => setNewSubstageTitle(e.target.value)}
+                            className="h-8 text-xs w-60 rounded-xl"
+                          />
+                          <Button type="submit" size="sm" className="h-8 px-3 text-xs rounded-xl">
+                            Salvar Subetapa
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAddingSubstageForStageId(null)}
+                            className="h-8 text-xs rounded-xl"
+                          >
+                            Cancelar
+                          </Button>
+                        </form>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAddingSubstageForStageId(stage.id)}
+                          className="h-8 rounded-xl text-xs text-primary font-semibold flex items-center gap-1.5 border-primary/30 hover:bg-primary/5"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-primary" />
+                          + Adicionar Subetapa a {stage.code}
+                        </Button>
+                      )}
+                    </div>
 
                     <Button
                       variant="ghost"
@@ -637,7 +790,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
         })}
       </div>
 
-      {/* SEÇÃO NO FINAL DO ORÇAMENTO: TABELA POR ETAPA E ÁREA DE OBRA + GRÁFICO DONUT (IMAGENS 3 E 4) */}
+      {/* SEÇÃO NO FINAL DO ORÇAMENTO: TABELA POR ETAPA E ÁREA DE OBRA + GRÁFICO DONUT */}
       <AreaBreakdownTable />
 
       <CompositionDetailModal

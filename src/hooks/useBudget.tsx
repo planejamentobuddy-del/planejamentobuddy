@@ -98,63 +98,54 @@ export function normalizeProjectStages(stages: BudgetStage[]): BudgetStage[] {
     const stageNum = String(stage.order || sIdx + 1);
     const stageCode = stage.code || stageNum;
 
-    if (stage.substages && stage.substages.length > 0) {
+    const normalizedSubs = (stage.substages || []).map((sub, subIdx) => {
+      const subNum = String(sub.order || subIdx + 1);
+      const subCode = sub.code || `${stageCode}.${subNum}`;
       return {
-        ...stage,
-        code: stageCode,
-        substages: stage.substages.map((sub, subIdx) => {
-          const subNum = String(sub.order || subIdx + 1);
-          const subCode = sub.code || `${stageCode}.${subNum}`;
-          return {
-            ...sub,
-            stageId: stage.id,
-            code: subCode,
-            items: (sub.items || []).map((it, itIdx) => ({
-              ...it,
-              stageId: stage.id,
-              substageId: sub.id,
-              code: it.code || `${subCode}.${it.order || itIdx + 1}`,
-              unitCostOther: it.unitCostOther || 0,
-            })),
-          };
-        }),
-      };
-    }
-
-    // Se a etapa tiver apenas items legados (sem substages)
-    const legacyItems = stage.items || [];
-    const defaultSubstage: BudgetSubstage = {
-      id: `sub-${stage.id}-1`,
-      stageId: stage.id,
-      order: 1,
-      code: `${stageCode}.1`,
-      title: stage.title || 'Geral',
-      items: legacyItems.map((it, itIdx) => ({
-        ...it,
+        ...sub,
         stageId: stage.id,
-        substageId: `sub-${stage.id}-1`,
-        code: it.code || `${stageCode}.1.${it.order || itIdx + 1}`,
-        unitCostOther: it.unitCostOther || 0,
-      })),
-    };
+        code: subCode,
+        items: (sub.items || []).map((it, itIdx) => ({
+          ...it,
+          stageId: stage.id,
+          substageId: sub.id,
+          code: it.code || `${subCode}.${it.order || itIdx + 1}`,
+          unitCostOther: it.unitCostOther || 0,
+        })),
+      };
+    });
+
+    const normalizedDirectItems = (stage.items || []).map((it, itIdx) => ({
+      ...it,
+      stageId: stage.id,
+      code: it.code || `${stageCode}.${it.order || itIdx + 1}`,
+      unitCostOther: it.unitCostOther || 0,
+    }));
 
     return {
       ...stage,
       code: stageCode,
-      substages: [defaultSubstage],
-      items: legacyItems,
+      substages: normalizedSubs,
+      items: normalizedDirectItems,
     };
   });
 }
 
 /**
- * Retorna todos os itens de uma etapa desdobrada
+ * Retorna todos os itens de uma etapa desdobrada (subetapas + itens diretos)
  */
 export function getStageItems(stage: BudgetStage): BudgetItem[] {
-  if (stage.substages && stage.substages.length > 0) {
-    return stage.substages.flatMap((sub) => sub.items || []);
+  const subItems = stage.substages && stage.substages.length > 0
+    ? stage.substages.flatMap((sub) => sub.items || [])
+    : [];
+  const directItems = stage.items || [];
+  
+  if (subItems.length > 0) {
+    const subItemIds = new Set(subItems.map((i) => i.id));
+    const extraDirect = directItems.filter((i) => !subItemIds.has(i.id));
+    return [...subItems, ...extraDirect];
   }
-  return stage.items || [];
+  return directItems;
 }
 
 const INITIAL_DEMO_BUDGETS: BudgetProject[] = [
@@ -913,18 +904,47 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     const stage = activeProject.stages.find((s) => s.id === stageId);
     if (!stage) return;
 
-    // Se informou substageId ou se existe uma subetapa, usa
-    const targetSubstageId =
-      substageId ||
-      stage.substages?.[0]?.id ||
-      `sub-${stageId}-1`;
-
-    if (!stage.substages || stage.substages.length === 0) {
-      // Cria a subetapa padrão primeiro
-      addSubstage(stageId, 'Geral', `${stage.code}.1`);
+    // Se informou substageId e ele existe na etapa, adiciona na subetapa
+    if (substageId && stage.substages?.some((s) => s.id === substageId)) {
+      addItemToSubstage(stageId, substageId, item);
+      return;
     }
 
-    addItemToSubstage(stageId, targetSubstageId, item);
+    // Se a etapa possui subetapas e não foi especificado, usa a primeira subetapa
+    if (stage.substages && stage.substages.length > 0) {
+      addItemToSubstage(stageId, stage.substages[0].id, item);
+      return;
+    }
+
+    // Caso a etapa não tenha subetapas, adiciona como item direto da etapa
+    const currentDirectItems = stage.items || [];
+    const order = currentDirectItems.length + 1;
+    const totalUnit =
+      (item.unitCostMaterial || 0) +
+      (item.unitCostLabor || 0) +
+      (item.unitCostEquipment || 0) +
+      (item.unitCostOther || 0);
+
+    const autoCode = `${stage.code}.${order}`;
+
+    const newItem: BudgetItem = {
+      ...item,
+      id: 'it-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
+      stageId,
+      order,
+      code: item.code || autoCode,
+      unitCostTotal: item.unitCostTotal || totalUnit,
+      bdi: item.bdi !== undefined ? item.bdi : bdiRate,
+    };
+
+    const updatedStages = activeProject.stages.map((st) =>
+      st.id === stageId
+        ? { ...st, items: [...(st.items || []), newItem] }
+        : st
+    );
+
+    updateProject(activeProject.id, { stages: updatedStages });
+    toast.success(`Item "${item.description.slice(0, 30)}..." adicionado`);
   };
 
   const updateItem = (itemId: string, updates: Partial<BudgetItem>) => {
@@ -933,6 +953,25 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     const updatedStages = activeProject.stages.map((st) => {
       let changed = false;
 
+      // 1. Atualiza nos itens diretos da etapa
+      const updatedDirectItems = (st.items || []).map((it) => {
+        if (it.id !== itemId) return it;
+        changed = true;
+        const merged = { ...it, ...updates };
+        const calculatedTotal =
+          (merged.unitCostMaterial || 0) +
+          (merged.unitCostLabor || 0) +
+          (merged.unitCostEquipment || 0) +
+          (merged.unitCostOther || 0);
+
+        return {
+          ...merged,
+          unitCostTotal:
+            updates.unitCostTotal !== undefined ? updates.unitCostTotal : calculatedTotal,
+        };
+      });
+
+      // 2. Atualiza nas subetapas
       const updatedSubs = (st.substages || []).map((sub) => {
         const itemExists = (sub.items || []).some((it) => it.id === itemId);
         if (!itemExists) return sub;
@@ -959,7 +998,11 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (changed) {
-        return { ...st, substages: updatedSubs };
+        return {
+          ...st,
+          items: updatedDirectItems,
+          substages: updatedSubs,
+        };
       }
       return st;
     });
@@ -971,6 +1014,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     if (!activeProject) return;
 
     const updatedStages = activeProject.stages.map((st) => {
+      const updatedDirectItems = (st.items || []).filter((it) => it.id !== itemId);
       const updatedSubs = (st.substages || []).map((sub) => ({
         ...sub,
         items: (sub.items || []).filter((it) => it.id !== itemId),
@@ -978,6 +1022,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
 
       return {
         ...st,
+        items: updatedDirectItems,
         substages: updatedSubs,
       };
     });

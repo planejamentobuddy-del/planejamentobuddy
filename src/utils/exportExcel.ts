@@ -126,6 +126,7 @@ export function exportBudgetToExcel(project: BudgetProject) {
       'Unit. Equip. (R$)',
       'Custo Unit. Total (R$)',
       'Custo Total Direto (R$)',
+      'BDI (%)',
       'Preço Venda Unit. c/ BDI (R$)',
       'Preço Venda Total c/ BDI (R$)',
     ],
@@ -146,9 +147,11 @@ export function exportBudgetToExcel(project: BudgetProject) {
       '',
       '',
       '',
+      '',
     ]);
 
     let stageSubtotal = 0;
+    let stageSellingSubtotal = 0;
 
     const stageItems = (stage.substages && stage.substages.length > 0)
       ? stage.substages.flatMap(s => s.items || [])
@@ -158,10 +161,12 @@ export function exportBudgetToExcel(project: BudgetProject) {
       const q = item.quantity || 0;
       const unitTotal = item.unitCostTotal || 0;
       const costTotal = unitTotal * q;
-      const sellingUnit = unitTotal * (1 + bdiRate / 100);
-      const sellingTotal = costTotal * (1 + bdiRate / 100);
+      const itemEffectiveBdi = item.bdi !== undefined ? Number(item.bdi) : bdiRate;
+      const sellingUnit = unitTotal * (1 + itemEffectiveBdi / 100);
+      const sellingTotal = costTotal * (1 + itemEffectiveBdi / 100);
 
       stageSubtotal += costTotal;
+      stageSellingSubtotal += sellingTotal;
 
       analyticalData.push([
         item.code,
@@ -175,12 +180,12 @@ export function exportBudgetToExcel(project: BudgetProject) {
         item.unitCostEquipment || 0,
         unitTotal,
         Number(costTotal.toFixed(2)),
+        `${itemEffectiveBdi.toFixed(1)}%`,
         Number(sellingUnit.toFixed(2)),
         Number(sellingTotal.toFixed(2)),
       ]);
     });
 
-    const stageSellingSubtotal = stageSubtotal * (1 + bdiRate / 100);
     analyticalData.push([
       '',
       '',
@@ -193,6 +198,7 @@ export function exportBudgetToExcel(project: BudgetProject) {
       '',
       '',
       Number(stageSubtotal.toFixed(2)),
+      '',
       '',
       Number(stageSellingSubtotal.toFixed(2)),
     ]);

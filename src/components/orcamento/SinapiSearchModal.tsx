@@ -55,6 +55,7 @@ export function SinapiSearchModal({
     activeProject,
     bdiRate,
     addItemToSubstage,
+    addItemToStage,
     addSubstage,
   } = useBudget();
 
@@ -181,7 +182,7 @@ export function SinapiSearchModal({
       else if (insumo.group === 'equipment') eq = insumo.unitCost;
       else oth = insumo.unitCost;
 
-      addItemToSubstage(selectedStageId, targetSubstageId, {
+      addItemToStage(selectedStageId, {
         code: `INS-${insumo.code}`,
         source: 'catalogo',
         catalogId: insumo.id,
@@ -195,10 +196,10 @@ export function SinapiSearchModal({
         unitCostOther: oth,
         unitCostTotal: insumo.unitCost,
         bdi: bdiRate,
-      });
+      }, targetSubstageId || undefined);
     } else {
       const comp = item.data;
-      addItemToSubstage(selectedStageId, targetSubstageId, {
+      addItemToStage(selectedStageId, {
         code: comp.code || `CPU-${Date.now().toString().slice(-4)}`,
         source: 'catalogo',
         catalogId: comp.id,
@@ -221,7 +222,7 @@ export function SinapiSearchModal({
           coefficient: it.coefficient,
           unitCost: it.unitCost,
         })),
-      });
+      }, targetSubstageId || undefined);
     }
 
     onOpenChange(false);
@@ -237,7 +238,7 @@ export function SinapiSearchModal({
     const targetSubstageId = getEnsureSubstageId();
     const qty = Number(quantity) > 0 ? Number(quantity) : 1;
 
-    addItemToSubstage(selectedStageId, targetSubstageId, {
+    addItemToStage(selectedStageId, {
       code: `SINAPI-${item.code}`,
       source: 'sinapi',
       sinapiCode: item.code,
@@ -251,7 +252,7 @@ export function SinapiSearchModal({
       unitCostTotal: item.costTotal,
       bdi: bdiRate,
       composition: item.composition,
-    });
+    }, targetSubstageId || undefined);
 
     onOpenChange(false);
   };
@@ -306,7 +307,7 @@ export function SinapiSearchModal({
       }
     }
 
-    addItemToSubstage(selectedStageId, targetSubstageId, {
+    addItemToStage(selectedStageId, {
       code: `PROP-${Date.now().toString().slice(-4)}`,
       source: 'proprio',
       description: customDesc.trim(),
@@ -318,7 +319,7 @@ export function SinapiSearchModal({
       unitCostOther: oth,
       unitCostTotal: unitTot,
       bdi: bdiVal,
-    });
+    }, targetSubstageId || undefined);
 
     // Resetar formulário
     setCustomDesc('');

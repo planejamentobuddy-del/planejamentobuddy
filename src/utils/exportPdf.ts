@@ -19,15 +19,17 @@ export function exportBudgetToPdf(project: BudgetProject) {
 
   const bdiRate = calculateBdiRate(project.bdiConfig);
   let totalDirect = 0;
+  let totalSelling = 0;
 
   project.stages.forEach(s => {
     const items = (s.substages && s.substages.length > 0) ? s.substages.flatMap(sub => sub.items || []) : (s.items || []);
     items.forEach(it => {
-      totalDirect += (it.unitCostTotal || 0) * (it.quantity || 0);
+      const itCost = (it.unitCostTotal || 0) * (it.quantity || 0);
+      const effectiveBdi = it.bdi !== undefined ? Number(it.bdi) : bdiRate;
+      totalDirect += itCost;
+      totalSelling += itCost * (1 + effectiveBdi / 100);
     });
   });
-
-  const totalSelling = totalDirect * (1 + bdiRate / 100);
 
   // ── CABEÇALHO BUDDY BOUTIQUE CONSTRUTORA ──
   doc.setFillColor(15, 76, 92); // Teal da Buddy
@@ -83,11 +85,14 @@ export function exportBudgetToPdf(project: BudgetProject) {
 
   project.stages.forEach(st => {
     let stageTotal = 0;
+    let stageSelling = 0;
     const items = (st.substages && st.substages.length > 0) ? st.substages.flatMap(sub => sub.items || []) : (st.items || []);
     items.forEach(it => {
-      stageTotal += (it.unitCostTotal || 0) * (it.quantity || 0);
+      const itCost = (it.unitCostTotal || 0) * (it.quantity || 0);
+      const effectiveBdi = it.bdi !== undefined ? Number(it.bdi) : bdiRate;
+      stageTotal += itCost;
+      stageSelling += itCost * (1 + effectiveBdi / 100);
     });
-    const stageSelling = stageTotal * (1 + bdiRate / 100);
     const weight = totalDirect > 0 ? (stageTotal / totalDirect) * 100 : 0;
 
     tableRows.push([
