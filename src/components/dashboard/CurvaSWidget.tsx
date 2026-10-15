@@ -498,7 +498,9 @@ export default function CurvaSWidget({ projects, allTasks, printMode = false }: 
               stroke="#ef4444"
               strokeDasharray="4 4"
               strokeWidth={2}
-              label={{ value: 'HOJE', position: 'top', fontSize: 10, fill: '#ef4444', fontWeight: 700 }}
+              isFront={true}
+              ifOverflow="extendDomain"
+              label={{ value: 'HOJE', position: 'top', fontSize: 10, fill: '#ef4444', fontWeight: 700, offset: 5 }}
             />
           )}
 

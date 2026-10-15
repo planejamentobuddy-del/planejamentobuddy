@@ -76,6 +76,15 @@ export default function DashboardTab({ project }: { project: Project }) {
     return pastPoints.length > 0 ? pastPoints[pastPoints.length - 1] : curveSData[0];
   }, [curveSData, nowTs]);
 
+  const todayReferenceTs = useMemo(() => {
+    if (curveSData.length === 0) return null;
+    const start = curveSData[0].timestamp;
+    const end = curveSData[curveSData.length - 1].timestamp;
+    if (nowTs >= start && nowTs <= end) return nowTs;
+    if (nowTs > end) return end;
+    return start;
+  }, [curveSData, nowTs]);
+
   const curveDeviation = lastCurvePoint ? lastCurvePoint.planejado - lastCurvePoint.realizado : 0;
 
   // --- NEW ADVANCED METRICS ---
@@ -749,7 +758,7 @@ export default function DashboardTab({ project }: { project: Project }) {
             {curveSData.length > 0 ? (
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={curveSData} margin={{ top: 20, right: 15, left: -10, bottom: 0 }}>
+                  <ComposedChart data={curveSData} margin={{ top: 25, right: 15, left: -10, bottom: 0 }}>
                     <defs>
                       <linearGradient id="plannedGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="hsl(var(--chart-planned))" stopOpacity={0.1} />
@@ -758,11 +767,18 @@ export default function DashboardTab({ project }: { project: Project }) {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
                     <XAxis 
-                      dataKey="label" 
+                      dataKey="timestamp" 
+                      type="number"
+                      domain={['dataMin', 'dataMax']}
+                      tickCount={8}
                       tick={{ fontSize: 10 }} 
                       stroke="hsl(var(--muted-foreground))"
                       axisLine={false}
                       tickLine={false}
+                      tickFormatter={(ts: number) => {
+                        const d = new Date(ts);
+                        return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+                      }}
                     />
                     <YAxis 
                       domain={[0, 100]} 
@@ -773,7 +789,11 @@ export default function DashboardTab({ project }: { project: Project }) {
                       tickLine={false}
                     />
                     <ChartTooltip 
-                      formatter={(v: number) => `${v}%`}
+                      formatter={(v: number) => [`${v}%`]}
+                      labelFormatter={(ts: any) => {
+                        const n = Number(ts);
+                        return isNaN(n) ? ts : new Date(n).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+                      }}
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '12px', fontWeight: 'bold' }}
                     />
                     <Legend verticalAlign="bottom" height={36} />
@@ -795,13 +815,22 @@ export default function DashboardTab({ project }: { project: Project }) {
                       dot={false}
                       activeDot={{ r: 4, strokeWidth: 0 }}
                     />
-                    {lastCurvePoint && (
+                    {todayReferenceTs && (
                       <ReferenceLine
-                        x={lastCurvePoint.label}
+                        x={todayReferenceTs}
                         stroke="#ef4444"
                         strokeDasharray="4 4"
                         strokeWidth={2}
-                        label={{ value: 'HOJE', position: 'top', fontSize: 10, fill: '#ef4444', fontWeight: 700 }}
+                        isFront={true}
+                        ifOverflow="extendDomain"
+                        label={{
+                          value: 'HOJE',
+                          position: 'top',
+                          fontSize: 10,
+                          fill: '#ef4444',
+                          fontWeight: 700,
+                          offset: 5,
+                        }}
                       />
                     )}
                   </ComposedChart>

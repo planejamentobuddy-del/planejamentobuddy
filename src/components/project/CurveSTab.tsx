@@ -27,6 +27,15 @@ export default function CurveSTab({ project }: { project: Project }) {
     return pastPoints.length > 0 ? pastPoints[pastPoints.length - 1] : chartData[0];
   }, [chartData, nowTs]);
 
+  const todayReferenceTs = useMemo(() => {
+    if (chartData.length === 0) return null;
+    const start = chartData[0].timestamp;
+    const end = chartData[chartData.length - 1].timestamp;
+    if (nowTs >= start && nowTs <= end) return nowTs;
+    if (nowTs > end) return end;
+    return start;
+  }, [chartData, nowTs]);
+
   const diff = summaryPoint ? summaryPoint.planejado - summaryPoint.realizado : 0;
   const totalProgress = summaryPoint ? summaryPoint.realizado : 0;
   const status = diff > 10 ? 'Atrasado' : diff > 0 ? 'Atenção' : 'No prazo';
@@ -74,25 +83,42 @@ export default function CurveSTab({ project }: { project: Project }) {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 25, right: 15, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                <XAxis 
+                  dataKey="timestamp" 
+                  type="number"
+                  domain={['dataMin', 'dataMax']}
+                  tickCount={8}
+                  tick={{ fontSize: 10 }} 
+                  stroke="hsl(var(--muted-foreground))"
+                  tickFormatter={(ts: number) => new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="%" />
-                <Tooltip formatter={(v: number) => `${v}%`} />
+                <Tooltip 
+                  formatter={(v: number) => `${v}%`}
+                  labelFormatter={(ts: any) => {
+                    const n = Number(ts);
+                    return isNaN(n) ? ts : new Date(n).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+                  }}
+                />
                 <Legend verticalAlign="top" height={36}/>
                 <Line type="monotone" name="Planejado" dataKey="planejado" stroke="hsl(var(--chart-planned))" strokeWidth={2} strokeDasharray="6 3" dot={false} />
                 <Line type="monotone" name="Realizado" dataKey="realizado" stroke="hsl(var(--chart-actual))" strokeWidth={2.5} dot={{ r: 3 }} />
                 
-                {summaryPoint && (
+                {todayReferenceTs && (
                   <ReferenceLine
-                    x={summaryPoint.label}
+                    x={todayReferenceTs}
                     stroke="#ef4444"
                     strokeDasharray="4 4"
                     strokeWidth={2}
+                    isFront={true}
+                    ifOverflow="extendDomain"
                     label={{
                       value: `HOJE: ${diff > 0 ? 'Atraso' : 'Adiant.'} de ${Math.abs(diff).toFixed(1)}%`,
                       position: 'top',
                       fill: '#ef4444',
                       fontSize: 10,
                       fontWeight: 700,
+                      offset: 5,
                     }}
                   />
                 )}
