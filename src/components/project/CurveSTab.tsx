@@ -94,7 +94,7 @@ export default function CurveSTab({ project }: { project: Project }) {
                 />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="%" />
                 <Tooltip 
-                  formatter={(v: number) => `${v}%`}
+                  formatter={(v: number, name: string) => [`${v}%`, name]}
                   labelFormatter={(ts: any) => {
                     const n = Number(ts);
                     return isNaN(n) ? ts : new Date(n).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });

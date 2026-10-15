@@ -789,7 +789,7 @@ export default function DashboardTab({ project }: { project: Project }) {
                       tickLine={false}
                     />
                     <ChartTooltip 
-                      formatter={(v: number) => [`${v}%`]}
+                      formatter={(v: number, name: string) => [`${v}%`, name]}
                       labelFormatter={(ts: any) => {
                         const n = Number(ts);
                         return isNaN(n) ? ts : new Date(n).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
