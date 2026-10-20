@@ -79,7 +79,19 @@ export function ComposicaoFormModal({
   composicaoToEdit,
   onSuccess,
 }: ComposicaoFormModalProps) {
-  const { insumos = [], composicoes = [], addComposicao, updateComposicao, getNextComposicaoCode } = useCatalog();
+  const {
+    insumos = [],
+    composicoes = [],
+    addComposicao,
+    updateComposicao,
+    getNextComposicaoCode,
+    units,
+    types,
+    bases,
+    addCustomUnit,
+    addCustomType,
+    addCustomBase,
+  } = useCatalog();
 
   // Informações Principais
   const [code, setCode] = useState<string>('');
@@ -90,6 +102,55 @@ export function ComposicaoFormModal({
   const [status, setStatus] = useState<InsumoStatus>('active');
   const [detailedDescription, setDetailedDescription] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+
+  // Estados para criação rápida de novos itens (Unidade, Tipo, Base)
+  const [isCreatingUnit, setIsCreatingUnit] = useState(false);
+  const [newUnitInput, setNewUnitInput] = useState('');
+
+  const [isCreatingType, setIsCreatingType] = useState(false);
+  const [newTypeInput, setNewTypeInput] = useState('');
+
+  const [isCreatingBase, setIsCreatingBase] = useState(false);
+  const [newBaseInput, setNewBaseInput] = useState('');
+
+  const handleSaveNewUnit = () => {
+    const val = newUnitInput.trim();
+    if (!val) {
+      toast.error('Informe o nome da unidade de medida');
+      return;
+    }
+    const created = addCustomUnit(val);
+    setUnit(created);
+    setNewUnitInput('');
+    setIsCreatingUnit(false);
+    toast.success(`Unidade "${created}" adicionada e selecionada!`);
+  };
+
+  const handleSaveNewType = () => {
+    const val = newTypeInput.trim();
+    if (!val) {
+      toast.error('Informe o nome do tipo / disciplina');
+      return;
+    }
+    const created = addCustomType(val);
+    setType(created);
+    setNewTypeInput('');
+    setIsCreatingType(false);
+    toast.success(`Tipo "${created}" adicionado e selecionado!`);
+  };
+
+  const handleSaveNewBase = () => {
+    const val = newBaseInput.trim();
+    if (!val) {
+      toast.error('Informe o nome da base de dados');
+      return;
+    }
+    const created = addCustomBase(val);
+    setBase(created);
+    setNewBaseInput('');
+    setIsCreatingBase(false);
+    toast.success(`Base "${created}" adicionada e selecionada!`);
+  };
 
   // Tabela de Itens (Insumos e Composições Auxiliares) da composição
   const [items, setItems] = useState<ComposicaoItem[]>([]);
@@ -132,6 +193,13 @@ export function ComposicaoFormModal({
   // Inicialização ao abrir modal
   useEffect(() => {
     if (open) {
+      setIsCreatingUnit(false);
+      setNewUnitInput('');
+      setIsCreatingType(false);
+      setNewTypeInput('');
+      setIsCreatingBase(false);
+      setNewBaseInput('');
+
       if (composicaoToEdit) {
         setCode(composicaoToEdit.code);
         setDescription(composicaoToEdit.description);
@@ -467,6 +535,11 @@ export function ComposicaoFormModal({
       return;
     }
 
+    // Persistir novas unidades, tipos e bases caso não existam
+    if (unit) addCustomUnit(unit);
+    if (type) addCustomType(type);
+    if (base) addCustomBase(base);
+
     const payload = {
       code: code.trim() || getNextComposicaoCode(),
       description: description.trim(),
@@ -708,65 +781,290 @@ export function ComposicaoFormModal({
 
                   {/* Linha 2: Unidade, Tipo, Base */}
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    {/* Unidade */}
                     <div className="sm:col-span-4 space-y-1.5">
-                      <Label className="text-xs font-semibold text-muted-foreground">
-                        Unidade: <span className="text-destructive">*</span>
-                      </Label>
-                      <Select value={unit} onValueChange={setUnit}>
-                        <SelectTrigger className="h-10 rounded-lg bg-background text-sm">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
-                          {INSUMO_UNIDADES_PADRAO.map((u) => (
-                            <SelectItem key={u} value={u}>
-                              {u}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="sm:col-span-4 space-y-1.5">
-                      <Label className="text-xs font-semibold text-muted-foreground">
-                        Tipo:
-                      </Label>
-                      <Select value={type} onValueChange={setType}>
-                        <SelectTrigger className="h-10 rounded-lg bg-background text-sm">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
-                          {INSUMO_TIPOS_PADRAO.map((t) => (
-                            <SelectItem key={t} value={t}>
-                              {t}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="sm:col-span-4 space-y-1.5">
-                      <div className="flex items-center gap-1">
-                        <Label className="text-xs font-semibold text-muted-foreground">
-                          Base:
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                          Unidade: <span className="text-destructive">*</span>
                         </Label>
-                        <Info
-                          className="w-3.5 h-3.5 text-muted-foreground/70"
-                          title="Base de dados de referência ou Própria"
-                        />
-                        <span className="text-destructive text-xs font-semibold">*</span>
+                        {!isCreatingUnit && (
+                          <button
+                            type="button"
+                            onClick={() => setIsCreatingUnit(true)}
+                            className="text-[11px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                            title="Criar nova unidade de medida"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Nova
+                          </button>
+                        )}
                       </div>
-                      <Select value={base} onValueChange={setBase}>
-                        <SelectTrigger className="h-10 rounded-lg bg-background text-sm">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-popover border shadow-lg z-50">
-                          {INSUMO_BASES_PADRAO.map((b) => (
-                            <SelectItem key={b} value={b}>
-                              {b}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {isCreatingUnit ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            autoFocus
+                            value={newUnitInput}
+                            onChange={(e) => setNewUnitInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveNewUnit();
+                              } else if (e.key === 'Escape') {
+                                setIsCreatingUnit(false);
+                              }
+                            }}
+                            placeholder="Ex: m², m³, un"
+                            className="h-10 rounded-lg text-xs font-medium bg-background"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveNewUnit}
+                            className="h-10 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shrink-0 shadow-sm flex items-center justify-center"
+                            title="Salvar unidade"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCreatingUnit(false);
+                              setNewUnitInput('');
+                            }}
+                            className="h-10 px-2 text-muted-foreground hover:text-foreground rounded-lg shrink-0"
+                            title="Cancelar"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Select
+                          value={unit}
+                          onValueChange={(v) => {
+                            if (v === '__create_new_unit__') {
+                              setIsCreatingUnit(true);
+                            } else {
+                              setUnit(v);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-10 rounded-lg bg-background text-sm">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-64 bg-popover border shadow-lg z-[9999]">
+                            {units.map((u) => (
+                              <SelectItem key={u} value={u}>
+                                {u}
+                              </SelectItem>
+                            ))}
+                            <div className="p-1 border-t mt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsCreatingUnit(true);
+                                }}
+                                className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors text-left"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                + Criar nova unidade...
+                              </button>
+                            </div>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+
+                    {/* Tipo */}
+                    <div className="sm:col-span-4 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold text-muted-foreground">
+                          Tipo:
+                        </Label>
+                        {!isCreatingType && (
+                          <button
+                            type="button"
+                            onClick={() => setIsCreatingType(true)}
+                            className="text-[11px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                            title="Criar novo tipo / disciplina"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Novo
+                          </button>
+                        )}
+                      </div>
+                      {isCreatingType ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            autoFocus
+                            value={newTypeInput}
+                            onChange={(e) => setNewTypeInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveNewType();
+                              } else if (e.key === 'Escape') {
+                                setIsCreatingType(false);
+                              }
+                            }}
+                            placeholder="Ex: Instalações, Acabamentos"
+                            className="h-10 rounded-lg text-xs font-medium bg-background"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveNewType}
+                            className="h-10 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shrink-0 shadow-sm flex items-center justify-center"
+                            title="Salvar tipo"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCreatingType(false);
+                              setNewTypeInput('');
+                            }}
+                            className="h-10 px-2 text-muted-foreground hover:text-foreground rounded-lg shrink-0"
+                            title="Cancelar"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Select
+                          value={type}
+                          onValueChange={(v) => {
+                            if (v === '__create_new_type__') {
+                              setIsCreatingType(true);
+                            } else {
+                              setType(v);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-10 rounded-lg bg-background text-sm">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-64 bg-popover border shadow-lg z-[9999]">
+                            {types.map((t) => (
+                              <SelectItem key={t} value={t}>
+                                {t}
+                              </SelectItem>
+                            ))}
+                            <div className="p-1 border-t mt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsCreatingType(true);
+                                }}
+                                className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors text-left"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                + Criar novo tipo...
+                              </button>
+                            </div>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+
+                    {/* Base */}
+                    <div className="sm:col-span-4 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          <Label className="text-xs font-semibold text-muted-foreground">
+                            Base:
+                          </Label>
+                          <Info
+                            className="w-3.5 h-3.5 text-muted-foreground/70"
+                            title="Base de dados de referência ou Própria"
+                          />
+                          <span className="text-destructive text-xs font-semibold">*</span>
+                        </div>
+                        {!isCreatingBase && (
+                          <button
+                            type="button"
+                            onClick={() => setIsCreatingBase(true)}
+                            className="text-[11px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                            title="Criar nova base de dados"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Nova
+                          </button>
+                        )}
+                      </div>
+                      {isCreatingBase ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            autoFocus
+                            value={newBaseInput}
+                            onChange={(e) => setNewBaseInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveNewBase();
+                              } else if (e.key === 'Escape') {
+                                setIsCreatingBase(false);
+                              }
+                            }}
+                            placeholder="Ex: TCPO, EMOP"
+                            className="h-10 rounded-lg text-xs font-medium bg-background"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveNewBase}
+                            className="h-10 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shrink-0 shadow-sm flex items-center justify-center"
+                            title="Salvar base"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCreatingBase(false);
+                              setNewBaseInput('');
+                            }}
+                            className="h-10 px-2 text-muted-foreground hover:text-foreground rounded-lg shrink-0"
+                            title="Cancelar"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Select
+                          value={base}
+                          onValueChange={(v) => {
+                            if (v === '__create_new_base__') {
+                              setIsCreatingBase(true);
+                            } else {
+                              setBase(v);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-10 rounded-lg bg-background text-sm">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-64 bg-popover border shadow-lg z-[9999]">
+                            {bases.map((b) => (
+                              <SelectItem key={b} value={b}>
+                                {b}
+                              </SelectItem>
+                            ))}
+                            <div className="p-1 border-t mt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsCreatingBase(true);
+                                }}
+                                className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors text-left"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                + Criar nova base...
+                              </button>
+                            </div>
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1132,7 +1430,7 @@ export function ComposicaoFormModal({
                   <SelectTrigger className="w-40 h-10 rounded-xl">
                     <SelectValue placeholder="Grupo" />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover border shadow-lg z-50">
+                  <SelectContent className="bg-popover border shadow-lg z-[9999]">
                     <SelectItem value="all">Todos Grupos</SelectItem>
                     <SelectItem value="material">Material</SelectItem>
                     <SelectItem value="labor">Mão de Obra</SelectItem>
@@ -1217,9 +1515,9 @@ export function ComposicaoFormModal({
                   <SelectTrigger className="w-44 h-10 rounded-xl">
                     <SelectValue placeholder="Disciplina" />
                   </SelectTrigger>
-                  <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
+                  <SelectContent className="max-h-56 bg-popover border shadow-lg z-[9999]">
                     <SelectItem value="all">Todas Disciplinas</SelectItem>
-                    {INSUMO_TIPOS_PADRAO.map((t) => (
+                    {types.map((t) => (
                       <SelectItem key={t} value={t}>
                         {t}
                       </SelectItem>

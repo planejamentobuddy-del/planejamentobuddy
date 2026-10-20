@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { Insumo, Composicao, InsumoGrupo, InsumoStatus } from '@/types/catalog';
+import {
+  Insumo,
+  Composicao,
+  InsumoGrupo,
+  InsumoStatus,
+  INSUMO_UNIDADES_PADRAO,
+  INSUMO_TIPOS_PADRAO,
+  INSUMO_BASES_PADRAO,
+} from '@/types/catalog';
 import { toast } from 'sonner';
 
 interface CatalogContextType {
@@ -16,10 +24,19 @@ interface CatalogContextType {
   getNextComposicaoCode: () => string;
   getInsumoById: (id: string) => Insumo | undefined;
   getComposicaoById: (id: string) => Composicao | undefined;
+  units: string[];
+  types: string[];
+  bases: string[];
+  addCustomUnit: (unit: string) => string;
+  addCustomType: (type: string) => string;
+  addCustomBase: (base: string) => string;
 }
 
 const INSUMOS_STORAGE_KEY = 'buddy_catalogo_insumos_v1';
 const COMPOSICOES_STORAGE_KEY = 'buddy_catalogo_composicoes_v1';
+const CUSTOM_UNITS_STORAGE_KEY = 'buddy_catalogo_custom_units_v1';
+const CUSTOM_TYPES_STORAGE_KEY = 'buddy_catalogo_custom_types_v1';
+const CUSTOM_BASES_STORAGE_KEY = 'buddy_catalogo_custom_bases_v1';
 
 const INITIAL_INSUMOS_SEED: Insumo[] = [
   {
@@ -274,6 +291,45 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [loading, setLoading] = useState(false);
 
+  const [customUnits, setCustomUnits] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(CUSTOM_UNITS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error('Erro ao ler unidades customizadas:', e);
+    }
+    return [];
+  });
+
+  const [customTypes, setCustomTypes] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(CUSTOM_TYPES_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error('Erro ao ler tipos customizados:', e);
+    }
+    return [];
+  });
+
+  const [customBases, setCustomBases] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(CUSTOM_BASES_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error('Erro ao ler bases customizadas:', e);
+    }
+    return [];
+  });
+
   // Sincronizar Insumos
   useEffect(() => {
     try {
@@ -291,6 +347,102 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.error('Erro ao salvar composições no localStorage:', e);
     }
   }, [composicoes]);
+
+  // Sincronizar Unidades Customizadas
+  useEffect(() => {
+    try {
+      localStorage.setItem(CUSTOM_UNITS_STORAGE_KEY, JSON.stringify(customUnits));
+    } catch (e) {
+      console.error('Erro ao salvar unidades customizadas:', e);
+    }
+  }, [customUnits]);
+
+  // Sincronizar Tipos Customizados
+  useEffect(() => {
+    try {
+      localStorage.setItem(CUSTOM_TYPES_STORAGE_KEY, JSON.stringify(customTypes));
+    } catch (e) {
+      console.error('Erro ao salvar tipos customizados:', e);
+    }
+  }, [customTypes]);
+
+  // Sincronizar Bases Customizadas
+  useEffect(() => {
+    try {
+      localStorage.setItem(CUSTOM_BASES_STORAGE_KEY, JSON.stringify(customBases));
+    } catch (e) {
+      console.error('Erro ao salvar bases customizadas:', e);
+    }
+  }, [customBases]);
+
+  const addCustomUnit = (newUnit: string): string => {
+    const trimmed = (newUnit || '').trim();
+    if (!trimmed) return '';
+    setCustomUnits((prev) => {
+      if (prev.some((u) => u.toLowerCase() === trimmed.toLowerCase())) return prev;
+      return [...prev, trimmed];
+    });
+    return trimmed;
+  };
+
+  const addCustomType = (newType: string): string => {
+    const trimmed = (newType || '').trim();
+    if (!trimmed) return '';
+    setCustomTypes((prev) => {
+      if (prev.some((t) => t.toLowerCase() === trimmed.toLowerCase())) return prev;
+      return [...prev, trimmed];
+    });
+    return trimmed;
+  };
+
+  const addCustomBase = (newBase: string): string => {
+    const trimmed = (newBase || '').trim();
+    if (!trimmed) return '';
+    setCustomBases((prev) => {
+      if (prev.some((b) => b.toLowerCase() === trimmed.toLowerCase())) return prev;
+      return [...prev, trimmed];
+    });
+    return trimmed;
+  };
+
+  const units = useMemo(() => {
+    const set = new Set<string>();
+    INSUMO_UNIDADES_PADRAO.forEach((u) => set.add(u));
+    customUnits.forEach((u) => set.add(u));
+    insumos.forEach((i) => {
+      if (i.unit) set.add(i.unit);
+    });
+    composicoes.forEach((c) => {
+      if (c.unit) set.add(c.unit);
+    });
+    return Array.from(set).filter(Boolean);
+  }, [customUnits, insumos, composicoes]);
+
+  const types = useMemo(() => {
+    const set = new Set<string>();
+    INSUMO_TIPOS_PADRAO.forEach((t) => set.add(t));
+    customTypes.forEach((t) => set.add(t));
+    insumos.forEach((i) => {
+      if (i.type && i.type !== 'Outro') set.add(i.type);
+    });
+    composicoes.forEach((c) => {
+      if (c.type && c.type !== 'Outro') set.add(c.type);
+    });
+    return Array.from(set).filter(Boolean);
+  }, [customTypes, insumos, composicoes]);
+
+  const bases = useMemo(() => {
+    const set = new Set<string>();
+    INSUMO_BASES_PADRAO.forEach((b) => set.add(b));
+    customBases.forEach((b) => set.add(b));
+    insumos.forEach((i) => {
+      if (i.base) set.add(i.base);
+    });
+    composicoes.forEach((c) => {
+      if (c.base) set.add(c.base);
+    });
+    return Array.from(set).filter(Boolean);
+  }, [customBases, insumos, composicoes]);
 
   /**
    * Calcula o próximo código sequencial numérico para insumo.
@@ -419,6 +571,12 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
         getNextComposicaoCode,
         getInsumoById,
         getComposicaoById,
+        units,
+        types,
+        bases,
+        addCustomUnit,
+        addCustomType,
+        addCustomBase,
       }}
     >
       {children}

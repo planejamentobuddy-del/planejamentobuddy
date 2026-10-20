@@ -69,6 +69,8 @@ export default function CatalogoGeral() {
     deleteInsumo,
     deleteComposicao,
     addComposicao,
+    types = [],
+    bases = [],
   } = useCatalog();
 
   // Abas principais: "insumos" ou "composicoes"
@@ -406,7 +408,7 @@ export default function CatalogoGeral() {
                     <SelectTrigger className="h-10 rounded-xl bg-background">
                       <SelectValue placeholder="Grupo" />
                     </SelectTrigger>
-                    <SelectContent className="bg-popover border shadow-lg z-50">
+                    <SelectContent className="bg-popover border shadow-lg z-[9999]">
                       <SelectItem value="all">Todos os Grupos</SelectItem>
                       <SelectItem value="material">Material</SelectItem>
                       <SelectItem value="labor">Mão de Obra</SelectItem>
@@ -422,9 +424,9 @@ export default function CatalogoGeral() {
                     <SelectTrigger className="h-10 rounded-xl bg-background">
                       <SelectValue placeholder="Disciplina / Tipo" />
                     </SelectTrigger>
-                    <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
+                    <SelectContent className="max-h-56 bg-popover border shadow-lg z-[9999]">
                       <SelectItem value="all">Todas as Disciplinas</SelectItem>
-                      {INSUMO_TIPOS_PADRAO.map((t) => (
+                      {types.map((t) => (
                         <SelectItem key={t} value={t}>
                           {t}
                         </SelectItem>
@@ -439,9 +441,9 @@ export default function CatalogoGeral() {
                     <SelectTrigger className="h-10 rounded-xl bg-background">
                       <SelectValue placeholder="Base" />
                     </SelectTrigger>
-                    <SelectContent className="bg-popover border shadow-lg z-50">
+                    <SelectContent className="bg-popover border shadow-lg z-[9999]">
                       <SelectItem value="all">Todas as Bases</SelectItem>
-                      {INSUMO_BASES_PADRAO.map((b) => (
+                      {bases.map((b) => (
                         <SelectItem key={b} value={b}>
                           {b}
                         </SelectItem>
@@ -655,9 +657,9 @@ export default function CatalogoGeral() {
                     <SelectTrigger className="h-10 rounded-xl bg-background">
                       <SelectValue placeholder="Disciplina / Tipo" />
                     </SelectTrigger>
-                    <SelectContent className="max-h-56 bg-popover border shadow-lg z-50">
+                    <SelectContent className="max-h-56 bg-popover border shadow-lg z-[9999]">
                       <SelectItem value="all">Todas as Disciplinas</SelectItem>
-                      {INSUMO_TIPOS_PADRAO.map((t) => (
+                      {types.map((t) => (
                         <SelectItem key={t} value={t}>
                           {t}
                         </SelectItem>
@@ -671,9 +673,9 @@ export default function CatalogoGeral() {
                     <SelectTrigger className="h-10 rounded-xl bg-background">
                       <SelectValue placeholder="Base" />
                     </SelectTrigger>
-                    <SelectContent className="bg-popover border shadow-lg z-50">
+                    <SelectContent className="bg-popover border shadow-lg z-[9999]">
                       <SelectItem value="all">Todas as Bases</SelectItem>
-                      {INSUMO_BASES_PADRAO.map((b) => (
+                      {bases.map((b) => (
                         <SelectItem key={b} value={b}>
                           {b}
                         </SelectItem>
