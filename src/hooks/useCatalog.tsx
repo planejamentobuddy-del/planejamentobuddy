@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Insumo,
   Composicao,
@@ -260,6 +261,99 @@ const INITIAL_COMPOSICOES_SEED: Composicao[] = [
   },
 ];
 
+// Funções de conversão para o banco de dados Supabase (Compartilhado entre todos os usuários)
+function dbRowToInsumo(row: any): Insumo {
+  return {
+    id: row.id,
+    code: row.code,
+    group: row.group as InsumoGrupo,
+    description: row.description,
+    unit: row.unit,
+    type: row.type,
+    base: row.base,
+    unitCost: Number(row.unit_cost) || 0,
+    salario: row.salario != null ? Number(row.salario) : undefined,
+    encargosPercent: row.encargos_percent != null ? Number(row.encargos_percent) : undefined,
+    beneficios: row.beneficios != null ? Number(row.beneficios) : undefined,
+    status: (row.status as InsumoStatus) || 'active',
+    notes: row.notes || '',
+    files: Array.isArray(row.files) ? row.files : [],
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function insumoToDbRow(i: Insumo) {
+  return {
+    id: i.id,
+    code: i.code,
+    group: i.group,
+    description: i.description,
+    unit: i.unit,
+    type: i.type,
+    base: i.base,
+    unit_cost: i.unitCost,
+    salario: i.salario ?? null,
+    encargos_percent: i.encargosPercent ?? null,
+    beneficios: i.beneficios ?? null,
+    status: i.status,
+    notes: i.notes || null,
+    files: i.files || [],
+    created_at: i.createdAt,
+    updated_at: i.updatedAt,
+  };
+}
+
+function dbRowToComposicao(row: any): Composicao {
+  return {
+    id: row.id,
+    code: row.code,
+    description: row.description,
+    unit: row.unit,
+    type: row.type,
+    base: row.base,
+    status: (row.status as InsumoStatus) || 'active',
+    items: Array.isArray(row.items) ? row.items : [],
+    costMaterial: Number(row.cost_material) || 0,
+    costLabor: Number(row.cost_labor) || 0,
+    costEquipment: Number(row.cost_equipment) || 0,
+    costOther: Number(row.cost_other) || 0,
+    costTotal: Number(row.cost_total) || 0,
+    detailedDescription: row.detailed_description || '',
+    bdi: row.bdi != null ? Number(row.bdi) : 0,
+    sellingPrice: row.selling_price != null ? Number(row.selling_price) : 0,
+    notes: row.notes || '',
+    files: Array.isArray(row.files) ? row.files : [],
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function composicaoToDbRow(c: Composicao) {
+  return {
+    id: c.id,
+    code: c.code,
+    description: c.description,
+    unit: c.unit,
+    type: c.type,
+    base: c.base,
+    status: c.status,
+    items: c.items || [],
+    cost_material: c.costMaterial,
+    cost_labor: c.costLabor,
+    cost_equipment: c.costEquipment,
+    cost_other: c.costOther,
+    cost_total: c.costTotal,
+    detailed_description: c.detailedDescription || null,
+    bdi: c.bdi ?? 0,
+    selling_price: c.sellingPrice ?? 0,
+    notes: c.notes || null,
+    files: c.files || [],
+    created_at: c.createdAt,
+    updated_at: c.updatedAt,
+  };
+}
+
 const CatalogContext = createContext<CatalogContextType | undefined>(undefined);
 
 export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -330,7 +424,72 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return [];
   });
 
-  // Sincronizar Insumos
+  // Carregar dados compartilhados do Supabase e sincronizar entre todos os usuários
+  const fetchCloudData = useCallback(async () => {
+    try {
+      const [insRes, compRes, metaRes] = await Promise.all([
+        supabase.from('catalog_insumos').select('*'),
+        supabase.from('catalog_composicoes').select('*'),
+        supabase.from('catalog_metadata').select('*'),
+      ]);
+
+      // Se tabelas não existirem ainda no Supabase, continua funcionando normalmente com cache local
+      if (insRes.error && ((insRes.error as any).code === 'PGRST205' || (insRes.error as any).code === '42P01')) {
+        return;
+      }
+
+      if (insRes.data && insRes.data.length > 0) {
+        setInsumos(insRes.data.map(dbRowToInsumo));
+      } else if (insRes.data && insRes.data.length === 0 && INITIAL_INSUMOS_SEED.length > 0) {
+        // Envia semente inicial para o Supabase para que todos os usuários recebam
+        await supabase.from('catalog_insumos').insert(INITIAL_INSUMOS_SEED.map(insumoToDbRow));
+      }
+
+      if (compRes.data && compRes.data.length > 0) {
+        setComposicoes(compRes.data.map(dbRowToComposicao));
+      } else if (compRes.data && compRes.data.length === 0 && INITIAL_COMPOSICOES_SEED.length > 0) {
+        await supabase.from('catalog_composicoes').insert(INITIAL_COMPOSICOES_SEED.map(composicaoToDbRow));
+      }
+
+      if (metaRes.data && metaRes.data.length > 0) {
+        metaRes.data.forEach((m: any) => {
+          if (m.id === 'custom_units' && Array.isArray(m.values)) {
+            setCustomUnits(prev => Array.from(new Set([...prev, ...m.values])));
+          } else if (m.id === 'custom_types' && Array.isArray(m.values)) {
+            setCustomTypes(prev => Array.from(new Set([...prev, ...m.values])));
+          } else if (m.id === 'custom_bases' && Array.isArray(m.values)) {
+            setCustomBases(prev => Array.from(new Set([...prev, ...m.values])));
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Erro ao buscar dados do catálogo no Supabase:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCloudData();
+
+    // Sincronização em tempo real: qualquer alteração de qualquer usuário atualiza a tela na hora!
+    const channel = supabase
+      .channel('public:catalog_shared_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'catalog_insumos' }, () => {
+        fetchCloudData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'catalog_composicoes' }, () => {
+        fetchCloudData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'catalog_metadata' }, () => {
+        fetchCloudData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchCloudData]);
+
+  // Sincronizar Insumos no localStorage (Cache instantâneo offline)
   useEffect(() => {
     try {
       localStorage.setItem(INSUMOS_STORAGE_KEY, JSON.stringify(insumos));
@@ -339,7 +498,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [insumos]);
 
-  // Sincronizar Composições
+  // Sincronizar Composições no localStorage
   useEffect(() => {
     try {
       localStorage.setItem(COMPOSICOES_STORAGE_KEY, JSON.stringify(composicoes));
@@ -380,7 +539,14 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!trimmed) return '';
     setCustomUnits((prev) => {
       if (prev.some((u) => u.toLowerCase() === trimmed.toLowerCase())) return prev;
-      return [...prev, trimmed];
+      const updated = [...prev, trimmed];
+      // Salva no Supabase para compartilhar com todos
+      supabase
+        .from('catalog_metadata')
+        .upsert({ id: 'custom_units', values: updated, updated_at: new Date().toISOString() })
+        .then(() => {})
+        .catch(() => {});
+      return updated;
     });
     return trimmed;
   };
@@ -390,7 +556,14 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!trimmed) return '';
     setCustomTypes((prev) => {
       if (prev.some((t) => t.toLowerCase() === trimmed.toLowerCase())) return prev;
-      return [...prev, trimmed];
+      const updated = [...prev, trimmed];
+      // Salva no Supabase para compartilhar com todos
+      supabase
+        .from('catalog_metadata')
+        .upsert({ id: 'custom_types', values: updated, updated_at: new Date().toISOString() })
+        .then(() => {})
+        .catch(() => {});
+      return updated;
     });
     return trimmed;
   };
@@ -400,7 +573,14 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!trimmed) return '';
     setCustomBases((prev) => {
       if (prev.some((b) => b.toLowerCase() === trimmed.toLowerCase())) return prev;
-      return [...prev, trimmed];
+      const updated = [...prev, trimmed];
+      // Salva no Supabase para compartilhar com todos
+      supabase
+        .from('catalog_metadata')
+        .upsert({ id: 'custom_bases', values: updated, updated_at: new Date().toISOString() })
+        .then(() => {})
+        .catch(() => {});
+      return updated;
     });
     return trimmed;
   };
@@ -487,28 +667,54 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     setInsumos(prev => [newInsumo, ...prev]);
+    // Sincroniza com o Supabase para que todos os usuários vejam
+    supabase
+      .from('catalog_insumos')
+      .insert(insumoToDbRow(newInsumo))
+      .then(() => {})
+      .catch((e) => console.error('Erro ao sincronizar novo insumo no Supabase:', e));
+
     toast.success(`Insumo #${newInsumo.code} cadastrado com sucesso!`);
     return newInsumo;
   };
 
   const updateInsumo = (id: string, updates: Partial<Insumo>) => {
+    let updatedItem: Insumo | undefined;
     setInsumos(prev =>
       prev.map(item => {
         if (item.id === id) {
-          return {
+          updatedItem = {
             ...item,
             ...updates,
             updatedAt: new Date().toISOString(),
           };
+          return updatedItem;
         }
         return item;
       })
     );
+
+    if (updatedItem) {
+      supabase
+        .from('catalog_insumos')
+        .update(insumoToDbRow(updatedItem))
+        .eq('id', id)
+        .then(() => {})
+        .catch((e) => console.error('Erro ao atualizar insumo no Supabase:', e));
+    }
+
     toast.success('Insumo atualizado com sucesso!');
   };
 
   const deleteInsumo = (id: string) => {
     setInsumos(prev => prev.filter(item => item.id !== id));
+    supabase
+      .from('catalog_insumos')
+      .delete()
+      .eq('id', id)
+      .then(() => {})
+      .catch((e) => console.error('Erro ao deletar insumo no Supabase:', e));
+
     toast.success('Insumo removido do catálogo!');
   };
 
@@ -526,28 +732,54 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     setComposicoes(prev => [newComp, ...prev]);
+    // Sincroniza com o Supabase para que todos os usuários vejam
+    supabase
+      .from('catalog_composicoes')
+      .insert(composicaoToDbRow(newComp))
+      .then(() => {})
+      .catch((e) => console.error('Erro ao sincronizar nova composição no Supabase:', e));
+
     toast.success(`Composição ${newComp.code} cadastrada com sucesso!`);
     return newComp;
   };
 
   const updateComposicao = (id: string, updates: Partial<Composicao>) => {
+    let updatedComp: Composicao | undefined;
     setComposicoes(prev =>
       prev.map(c => {
         if (c.id === id) {
-          return {
+          updatedComp = {
             ...c,
             ...updates,
             updatedAt: new Date().toISOString(),
           };
+          return updatedComp;
         }
         return c;
       })
     );
+
+    if (updatedComp) {
+      supabase
+        .from('catalog_composicoes')
+        .update(composicaoToDbRow(updatedComp))
+        .eq('id', id)
+        .then(() => {})
+        .catch((e) => console.error('Erro ao atualizar composição no Supabase:', e));
+    }
+
     toast.success('Composição atualizada com sucesso!');
   };
 
   const deleteComposicao = (id: string) => {
     setComposicoes(prev => prev.filter(c => c.id !== id));
+    supabase
+      .from('catalog_composicoes')
+      .delete()
+      .eq('id', id)
+      .then(() => {})
+      .catch((e) => console.error('Erro ao deletar composição no Supabase:', e));
+
     toast.success('Composição removida do catálogo!');
   };
 
