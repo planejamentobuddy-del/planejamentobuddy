@@ -43,7 +43,7 @@ const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
   { value: 'in_progress', label: 'Em andamento', color: 'bg-blue-600/10 text-blue-600 border border-blue-600/20' },
   { value: 'completed', label: 'Concluído', color: 'bg-status-ok/10 text-status-ok border border-status-ok/20' },
   { value: 'delayed', label: 'Atrasado', color: 'bg-status-danger/10 text-status-danger border border-status-danger/20' },
-  { value: 'rescheduled', label: 'Reprogramada', color: 'bg-amber-500/10 text-amber-600 border border-amber-500/20' },
+
 ];
 
 function isOverdue(task: Task): boolean {
@@ -601,7 +601,7 @@ export default function PlanningTab({ project }: { project: Project }) {
   const StatusBadge = ({ status }: { status: TaskStatus }) => {
     const opt = statusOptions.find(o => o.value === status) || statusOptions[0];
     return (
-      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${opt.color}`}>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${opt.color}`}>
         {opt.label}
       </span>
     );
@@ -621,7 +621,7 @@ export default function PlanningTab({ project }: { project: Project }) {
       agg.hasActive ? 'in_progress' as TaskStatus :
       agg.percent > 0 ? 'in_progress' as TaskStatus :
       'not_started' as TaskStatus
-    ) : task.status);
+    ) : (task.status === 'rescheduled' ? (task.percentComplete >= 100 ? 'completed' : task.percentComplete > 0 ? 'in_progress' : 'not_started') : task.status));
 
     const isMilestone = !isStage && task.duration === 0;
 
@@ -632,7 +632,7 @@ export default function PlanningTab({ project }: { project: Project }) {
                              (effectiveStatus === 'completed' ? 'border-l-status-ok' :
                               effectiveStatus === 'in_progress' ? 'border-l-blue-600' :
                               effectiveStatus === 'delayed' ? 'border-l-status-danger' :
-                              effectiveStatus === 'rescheduled' ? 'border-l-amber-500' :
+                              (task.rescheduleCount || 0) > 0 ? 'border-l-amber-500' :
                               'border-l-muted'));
 
     const crossLinks = task.crossProjectPredecessors || [];
@@ -867,22 +867,22 @@ export default function PlanningTab({ project }: { project: Project }) {
 
         {/* 7. Status */}
         <td className="py-2.5 px-3 border-r border-border/70">
-          <div className="space-y-1">
+          <div className="flex items-center gap-1">
             <Select
-              value={isStage && agg ? effectiveStatus : task.status}
+              value={effectiveStatus}
               onValueChange={v => handleChange(task, 'status', v as TaskStatus)}
             >
-              <SelectTrigger className="h-8 w-full text-xs border-0 bg-transparent px-1 hover:bg-primary/5 transition-colors group">
-                <StatusBadge status={isStage && agg ? effectiveStatus : task.status} />
-                <ChevronDown className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-50 transition-opacity" />
+              <SelectTrigger className="h-8 flex-1 min-w-0 text-xs border-0 bg-transparent px-1 hover:bg-primary/5 transition-colors group">
+                <StatusBadge status={effectiveStatus} />
+
               </SelectTrigger>
               <SelectContent>
                 {statusOptions.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
               </SelectContent>
             </Select>
             {!isStage && (task.rescheduleCount || 0) > 0 && (
-              <div className="px-1 text-[10px] text-amber-600/80 font-semibold">
-                Reprog. {task.rescheduleCount}x
+              <div className="shrink-0"><button type="button" onClick={(e) => { e.stopPropagation(); setHistoryTask(task); }} title={`Reprogramada ${task.rescheduleCount}x — clique para ver o histórico`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20 hover:bg-amber-500/20 transition-colors">
+                <CalendarClock className="w-2.5 h-2.5" />{task.rescheduleCount}x</button>
               </div>
             )}
           </div>
