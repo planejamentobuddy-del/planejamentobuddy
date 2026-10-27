@@ -88,12 +88,12 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       if (taskData) {
         const today = new Date().toISOString().split('T')[0];
         setTasks(taskData.map(t => {
-          let st = t.status as any;
+          const pct = t.percent_complete || 0; let st = t.status === 'rescheduled' ? (pct >= 100 ? 'completed' : pct > 0 ? 'in_progress' : 'not_started') : (t.status as any);
           const effectiveEnd = (t as any).current_end || t.end_date;
-          if (st !== 'completed' && st !== 'rescheduled' && effectiveEnd && effectiveEnd < today) {
+          if (st !== 'completed' && effectiveEnd && effectiveEnd < today) {
             st = 'delayed';
           } else if (st === 'delayed' && effectiveEnd && effectiveEnd >= today) {
-            st = 'in_progress';
+            st = pct > 0 ? 'in_progress' : 'not_started';
           }
           return {
             id: t.id,

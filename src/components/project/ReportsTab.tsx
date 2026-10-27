@@ -65,7 +65,7 @@ export default function ReportsTab({ project }: ReportsTabProps) {
     'in_progress': 'Em Andamento',
     'completed': 'Concluído',
     'delayed': 'Atrasado',
-    'rescheduled': 'Reprogramada',
+    'rescheduled': 'Não Iniciado',
     'open': 'Aberta',
     'closed': 'Resolvida'
   };
@@ -368,8 +368,8 @@ export default function ReportsTab({ project }: ReportsTabProps) {
     const allEnds = tasks.map(t => t.endDate).filter(Boolean).sort();
     const plannedEnd = allEnds.length > 0 ? allEnds[allEnds.length - 1] : project.endDate;
     const taskMap = new Map(tasks.map(t => [t.id, t]));
-    const statusLabel: Record<string, string> = { not_started: 'Não Iniciado', in_progress: 'Em Andamento', completed: 'Concluído', delayed: 'Atrasado', rescheduled: 'Reprogramada' };
-    const statusColor: Record<string, string> = { not_started: '#64748B', in_progress: '#2563EB', completed: '#16A34A', delayed: '#DC2626', rescheduled: '#D97706' };
+    const statusLabel: Record<string, string> = { not_started: 'Não Iniciado', in_progress: 'Em Andamento', completed: 'Concluído', delayed: 'Atrasado', rescheduled: 'Não Iniciado' };
+    const statusColor: Record<string, string> = { not_started: '#64748B', in_progress: '#2563EB', completed: '#16A34A', delayed: '#DC2626', rescheduled: '#64748B' };
 
     let rows = '';
     stages.forEach((stage, sIdx) => {
@@ -443,7 +443,7 @@ export default function ReportsTab({ project }: ReportsTabProps) {
   const buildCronogramaShareHTML = (): string => {
     const now = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
     const fmtD = (d?: string) => { if (!d) return '—'; try { return new Date(d + 'T12:00:00').toLocaleDateString('pt-BR'); } catch { return d; } };
-    const statusColor: Record<string, string> = { not_started: '#94A3B8', in_progress: '#3B82F6', completed: '#10B981', delayed: '#EF4444', rescheduled: '#F59E0B' };
+    const statusColor: Record<string, string> = { not_started: '#94A3B8', in_progress: '#3B82F6', completed: '#10B981', delayed: '#EF4444', rescheduled: '#94A3B8' };
 
     const stages = tasks.filter(t => !t.parentId).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
     const stageData = stages.map(stage => {

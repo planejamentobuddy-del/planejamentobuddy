@@ -163,7 +163,7 @@ export function useReschedule() {
 
       // -- Determine if base task is already rescheduled (to preserve plannedStart/plannedEnd) --
       const plannedStart = task.plannedStart || previousStart;
-      const plannedEnd = task.plannedEnd || previousEnd;
+      const plannedEnd = task.plannedEnd || previousEnd; const todayStr = new Date().toISOString().split('T')[0]; const resolveRealStatus = (pct: number, endStr: string, prev: string) => (pct >= 100 || prev === 'completed' ? 'completed' : endStr && endStr < todayStr ? 'delayed' : pct > 0 || prev === 'in_progress' ? 'in_progress' : 'not_started') as Task['status']; const mainNewStatus = resolveRealStatus(task.percentComplete, newEnd, task.status);
 
       // -- Update the main task --
       const { error: taskError } = await supabase
@@ -176,7 +176,7 @@ export function useReschedule() {
           planned_start: plannedStart,
           planned_end: plannedEnd,
           duration: newDuration,
-          status: 'rescheduled',
+          status: mainNewStatus,
           reschedule_count: (task.rescheduleCount || 0) + 1,
         })
         .eq('id', task.id);
@@ -212,7 +212,7 @@ export function useReschedule() {
           plannedStart,
           plannedEnd,
           duration: newDuration,
-          status: 'rescheduled',
+          status: mainNewStatus,
           rescheduleCount: (task.rescheduleCount || 0) + 1,
         },
       ];
@@ -235,7 +235,7 @@ export function useReschedule() {
             planned_start: succPlannedStart,
             planned_end: succPlannedEnd,
             duration: succDur,
-            status: 'rescheduled',
+            status: resolveRealStatus(succ.percentComplete, sEnd, succ.status),
             reschedule_count: (succ.rescheduleCount || 0) + 1,
           }).eq('id', succ.id);
 
@@ -262,7 +262,7 @@ export function useReschedule() {
             plannedStart: succPlannedStart,
             plannedEnd: succPlannedEnd,
             duration: succDur,
-            status: 'rescheduled',
+            status: resolveRealStatus(succ.percentComplete, sEnd, succ.status),
             rescheduleCount: (succ.rescheduleCount || 0) + 1,
           });
         }

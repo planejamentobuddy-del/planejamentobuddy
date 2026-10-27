@@ -13,7 +13,7 @@ const STATUS_LABEL: Record<string, string> = {
   in_progress: 'Em Andamento',
   completed: 'Concluído',
   delayed: 'Atrasado',
-  rescheduled: 'Reprogramada',
+  rescheduled: 'Não Iniciado',
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -21,7 +21,7 @@ const STATUS_COLOR: Record<string, string> = {
   in_progress: '#2563EB',
   completed: '#16A34A',
   delayed: '#DC2626',
-  rescheduled: '#D97706',
+  rescheduled: '#64748B',
 };
 
 function fmtDate(dateStr?: string): string {
