@@ -588,18 +588,18 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       if (finalStatus !== 'completed' && endDate < today) {
         finalStatus = 'delayed';
       } else if (finalStatus === 'delayed' && endDate >= today) {
-        finalStatus = 'in_progress';
+        finalStatus = (task.percentComplete || 0) > 0 ? 'in_progress' : 'not_started';
       }
     }
 
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...task, status: finalStatus } : t));
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...task, status: finalStatus, currentStart: startDate, currentEnd: endDate, plannedStart: (task.rescheduleCount || 0) > 0 ? (task.plannedStart || startDate) : startDate, plannedEnd: (task.rescheduleCount || 0) > 0 ? (task.plannedEnd || endDate) : endDate } : t));
 
     const { error } = await supabase
       .from('tasks')
       .update({
         name: task.name,
         start_date: startDate,
-        end_date: endDate,
+        end_date: endDate, current_start: startDate, current_end: endDate, planned_start: (task.rescheduleCount || 0) > 0 ? (task.plannedStart || startDate) : startDate, planned_end: (task.rescheduleCount || 0) > 0 ? (task.plannedEnd || endDate) : endDate,
         duration: task.duration,
         percent_complete: task.percentComplete,
         responsible: task.responsible,
@@ -675,7 +675,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         id: upd.id,
         order_index: upd.orderIndex
       }));
-      const { error } = await supabase.rpc('update_tasks', { updates: rpcUpdates });
+      const batchRes = await Promise.all(rpcUpdates.map(({ id, ...fields }) => supabase.from('tasks').update(fields).eq('id', id))); const error = batchRes.find(r => r.error)?.error;
       
       if (error) {
         throw error;
@@ -706,11 +706,11 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         if (finalStatus !== 'completed' && endDate < today) {
           finalStatus = 'delayed';
         } else if (finalStatus === 'delayed' && endDate >= today) {
-          finalStatus = 'in_progress';
+          finalStatus = (task.percentComplete || 0) > 0 ? 'in_progress' : 'not_started';
         }
       }
 
-      const updatedTask = { ...task, status: finalStatus };
+      const updatedTask = { ...task, status: finalStatus, currentStart: startDate, currentEnd: endDate, plannedStart: (task.rescheduleCount || 0) > 0 ? (task.plannedStart || startDate) : startDate, plannedEnd: (task.rescheduleCount || 0) > 0 ? (task.plannedEnd || endDate) : endDate };
       sanitizedUpdates.push(updatedTask);
 
       if (finalStatus === 'completed') {
@@ -721,7 +721,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         id: task.id,
         name: task.name,
         start_date: startDate,
-        end_date: endDate,
+        end_date: endDate, current_start: startDate, current_end: endDate, planned_start: (task.rescheduleCount || 0) > 0 ? (task.plannedStart || startDate) : startDate, planned_end: (task.rescheduleCount || 0) > 0 ? (task.plannedEnd || endDate) : endDate,
         duration: task.duration,
         percent_complete: task.percentComplete,
         responsible: task.responsible,
@@ -751,7 +751,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      const { error } = await supabase.rpc('update_tasks', { updates: rpcUpdates });
+      const batchRes = await Promise.all(rpcUpdates.map(({ id, ...fields }) => supabase.from('tasks').update(fields).eq('id', id))); const error = batchRes.find(r => r.error)?.error;
 
       if (error) {
         throw error;

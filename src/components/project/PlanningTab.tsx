@@ -780,14 +780,14 @@ export default function PlanningTab({ project }: { project: Project }) {
               <Input
                 type="date"
                 className="h-8 text-xs border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
-                defaultValue={task.startDate}
+                key={`${task.id}_start_${task.startDate}`} defaultValue={task.startDate}
                 onBlur={e => {
                   if (e.target.value && e.target.value !== task.startDate) {
                     handleChange(task, 'startDate', e.target.value);
                   }
                 }}
               />
-              {task.plannedStart && task.plannedStart !== task.startDate && (
+              {(task.rescheduleCount || 0) > 0 && task.plannedStart && task.plannedStart !== task.startDate && (
                 <div className="px-1 text-[10px] text-muted-foreground/50 font-mono">
                   Orig: {formatDate(task.plannedStart)}
                 </div>
@@ -805,14 +805,14 @@ export default function PlanningTab({ project }: { project: Project }) {
               <Input
                 type="date"
                 className="h-8 text-xs border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
-                defaultValue={task.endDate}
+                key={`${task.id}_end_${task.endDate}`} defaultValue={task.endDate}
                 onBlur={e => {
                   if (e.target.value && e.target.value !== task.endDate) {
                     handleChange(task, 'endDate', e.target.value);
                   }
                 }}
               />
-              {task.plannedEnd && task.plannedEnd !== task.endDate && (
+              {(task.rescheduleCount || 0) > 0 && task.plannedEnd && task.plannedEnd !== task.endDate && (
                 <div className="px-1 text-[10px] text-muted-foreground/50 font-mono">
                   Orig: {formatDate(task.plannedEnd)}
                 </div>
@@ -829,7 +829,7 @@ export default function PlanningTab({ project }: { project: Project }) {
             <Input
               type="number"
               className="h-8 w-full text-center text-sm border-0 bg-transparent px-1 focus-visible:ring-1 focus-visible:ring-primary/30"
-              defaultValue={task.duration}
+              key={`${task.id}_dur_${task.duration}`} defaultValue={task.duration}
               onBlur={e => {
                 const val = parseInt(e.target.value) || 0;
                 if (val !== task.duration) {
