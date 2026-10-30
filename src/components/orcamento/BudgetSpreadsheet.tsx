@@ -13,6 +13,9 @@ import {
   FolderPlus,
   RotateCcw,
   Sparkles,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import { CompositionDetailModal } from './CompositionDetailModal';
 import { AreaBreakdownTable } from './AreaBreakdownTable';
@@ -426,8 +429,10 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
     bdiRate,
     stageSummaries,
     addStage,
+    updateStage,
     deleteStage,
     addSubstage,
+    updateSubstage,
     deleteSubstage,
     updateItem,
     deleteItem,
@@ -462,6 +467,12 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
   // Criação de Nova Subetapa (Nível 2)
   const [addingSubstageForStageId, setAddingSubstageForStageId] = useState<string | null>(null);
   const [newSubstageTitle, setNewSubstageTitle] = useState('');
+
+  // Edição (renomear) Etapa e Subetapa
+  const [editingStageId, setEditingStageId] = useState<string | null>(null);
+  const [editingStageTitle, setEditingStageTitle] = useState('');
+  const [editingSubstageId, setEditingSubstageId] = useState<string | null>(null);
+  const [editingSubstageTitle, setEditingSubstageTitle] = useState('');
 
   const toggleStage = (stageId: string) => {
     setExpandedStages((prev) => ({ ...prev, [stageId]: !prev[stageId] }));
@@ -621,9 +632,76 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                   </span>
 
                   <div>
-                    <h3 className="text-sm sm:text-base font-bold font-display text-foreground leading-tight">
-                      {stage.title}
-                    </h3>
+                    {editingStageId === stage.id ? (
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <Input
+                          autoFocus
+                          value={editingStageTitle}
+                          onChange={(e) => setEditingStageTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              if (editingStageTitle.trim()) updateStage(stage.id, editingStageTitle.trim(), stage.code);
+                              setEditingStageId(null);
+                            } else if (e.key === 'Escape') {
+                              setEditingStageId(null);
+                            }
+                          }}
+                          className="h-7 text-sm font-bold w-56 sm:w-72 bg-background"
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-emerald-600 hover:bg-emerald-500/10"
+                          onClick={() => {
+                            if (editingStageTitle.trim()) updateStage(stage.id, editingStageTitle.trim(), stage.code);
+                            setEditingStageId(null);
+                          }}
+                          title="Salvar nome da etapa"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                          onClick={() => setEditingStageId(null)}
+                          title="Cancelar"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 group/stage">
+                        <h3 className="text-sm sm:text-base font-bold font-display text-foreground leading-tight">
+                          {stage.title}
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingStageId(stage.id);
+                            setEditingStageTitle(stage.title);
+                          }}
+                          className="text-muted-foreground/60 hover:text-primary p-1 rounded hover:bg-background/80 transition-colors"
+                          title="Renomear Etapa"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteStage(stage.id);
+                          }}
+                          className="text-muted-foreground/60 hover:text-destructive p-1 rounded hover:bg-destructive/10 transition-colors"
+                          title="Excluir Etapa"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                     <span className="text-[11px] text-muted-foreground font-mono">
                       {hasSubstages ? `${stage.substages!.length} subetapas • ` : ''}
                       {allStageItems.length} serviços
@@ -695,9 +773,80 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                                 <span className="font-mono font-bold text-[11px] bg-sky-500/15 text-sky-700 dark:text-sky-300 px-1.5 py-0.2 rounded border border-sky-500/30">
                                   {substage.code}
                                 </span>
-                                <span className="font-bold text-foreground">
-                                  {substage.title}
-                                </span>
+                                {editingSubstageId === substage.id ? (
+                                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                    <Input
+                                      autoFocus
+                                      value={editingSubstageTitle}
+                                      onChange={(e) => setEditingSubstageTitle(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          if (editingSubstageTitle.trim()) {
+                                            updateSubstage(stage.id, substage.id, editingSubstageTitle.trim(), substage.code);
+                                          }
+                                          setEditingSubstageId(null);
+                                        } else if (e.key === 'Escape') {
+                                          setEditingSubstageId(null);
+                                        }
+                                      }}
+                                      className="h-6 text-xs font-bold w-48 sm:w-64 bg-background"
+                                    />
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6 text-emerald-600 hover:bg-emerald-500/10"
+                                      onClick={() => {
+                                        if (editingSubstageTitle.trim()) {
+                                          updateSubstage(stage.id, substage.id, editingSubstageTitle.trim(), substage.code);
+                                        }
+                                        setEditingSubstageId(null);
+                                      }}
+                                      title="Salvar nome da subetapa"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6 text-muted-foreground hover:bg-muted"
+                                      onClick={() => setEditingSubstageId(null)}
+                                      title="Cancelar"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-bold text-foreground">
+                                      {substage.title}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingSubstageId(substage.id);
+                                        setEditingSubstageTitle(substage.title);
+                                      }}
+                                      className="text-muted-foreground/60 hover:text-primary p-0.5 rounded hover:bg-background/80 transition-colors"
+                                      title="Renomear Subetapa"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteSubstage(stage.id, substage.id);
+                                      }}
+                                      className="text-muted-foreground/60 hover:text-destructive p-0.5 rounded hover:bg-destructive/10 transition-colors"
+                                      title="Excluir Subetapa"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )}
                                 <span className="text-[10px] text-muted-foreground font-mono">
                                   ({substage.items?.length || 0} itens)
                                 </span>

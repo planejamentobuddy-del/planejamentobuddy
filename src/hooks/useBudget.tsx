@@ -96,11 +96,11 @@ const ACTIVE_PROJ_KEY = 'buddy_orcamento_active_id';
 export function normalizeProjectStages(stages: BudgetStage[]): BudgetStage[] {
   return stages.map((stage, sIdx) => {
     const stageNum = String(stage.order || sIdx + 1);
-    const stageCode = stage.code || stageNum;
+    const stageCode = String(sIdx + 1);
 
     const normalizedSubs = (stage.substages || []).map((sub, subIdx) => {
       const subNum = String(sub.order || subIdx + 1);
-      const subCode = sub.code || `${stageCode}.${subNum}`;
+      const subCode = `${stageCode}.${subIdx + 1}`;
       return {
         ...sub,
         stageId: stage.id,
@@ -109,7 +109,7 @@ export function normalizeProjectStages(stages: BudgetStage[]): BudgetStage[] {
           ...it,
           stageId: stage.id,
           substageId: sub.id,
-          code: it.code || `${subCode}.${it.order || itIdx + 1}`,
+          order: itIdx + 1, code: `${subCode}.${itIdx + 1}`, sinapiCode: it.sinapiCode || (it.code && !/^\d+(\.\d+)*$/.test(it.code) ? it.code : undefined),
           unitCostOther: it.unitCostOther || 0,
         })),
       };
@@ -118,7 +118,7 @@ export function normalizeProjectStages(stages: BudgetStage[]): BudgetStage[] {
     const normalizedDirectItems = (stage.items || []).map((it, itIdx) => ({
       ...it,
       stageId: stage.id,
-      code: it.code || `${stageCode}.${it.order || itIdx + 1}`,
+      order: itIdx + 1, code: `${stageCode}.${itIdx + 1}`, sinapiCode: it.sinapiCode || (it.code && !/^\d+(\.\d+)*$/.test(it.code) ? it.code : undefined),
       unitCostOther: it.unitCostOther || 0,
     }));
 
@@ -674,7 +674,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
 
   const updateProject = (id: string, data: Partial<BudgetProject>) => {
     setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p))
+      prev.map((p) => (p.id === id ? { ...p, ...data, stages: data.stages ? normalizeProjectStages(data.stages) : p.stages, updatedAt: new Date().toISOString() } : p))
     );
   };
 
@@ -764,7 +764,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     toast.success(`Etapa "${finalCode} - ${title}" adicionada`);
   };
 
-  const updateStage = (stageId: string, title: string, code: string) => {
+  const updateStage = (stageId: string, title: string, code: string) => { toast.success('Etapa renomeada');
     if (!activeProject) return;
     const updatedStages = activeProject.stages.map((st) =>
       st.id === stageId ? { ...st, title, code } : st
@@ -822,7 +822,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       return {
         ...st,
         substages: (st.substages || []).map((sub) =>
-          sub.id === substageId ? { ...sub, title, code } : sub
+          sub.id === substageId ? (toast.success('Subetapa renomeada'), { ...sub, title, code }) : sub
         ),
       };
     });
@@ -874,7 +874,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
           stageId,
           substageId,
           order,
-          code: item.code || autoCode,
+          code: autoCode, sinapiCode: item.sinapiCode || (item.code && !/^\d+(\.\d+)*$/.test(item.code) ? item.code : undefined),
           unitCostTotal: item.unitCostTotal || totalUnit,
           bdi: item.bdi !== undefined ? item.bdi : bdiRate,
         };
@@ -932,7 +932,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       id: 'it-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
       stageId,
       order,
-      code: item.code || autoCode,
+      code: autoCode, sinapiCode: item.sinapiCode || (item.code && !/^\d+(\.\d+)*$/.test(item.code) ? item.code : undefined),
       unitCostTotal: item.unitCostTotal || totalUnit,
       bdi: item.bdi !== undefined ? item.bdi : bdiRate,
     };
