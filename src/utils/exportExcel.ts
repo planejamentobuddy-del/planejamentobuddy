@@ -9,6 +9,7 @@ export function exportBudgetToExcel(project: BudgetProject) {
   // ABA 1: RESUMO DO ORÇAMENTO (SINTÉTICO)
   // ──────────────────────────────────────────
   let totalDirect = 0;
+  let totalSelling = 0;
   let totalMaterial = 0;
   let totalLabor = 0;
   let totalEquipment = 0;
@@ -16,9 +17,11 @@ export function exportBudgetToExcel(project: BudgetProject) {
   const stageRows: any[] = [];
   project.stages.forEach(stage => {
     let sDirect = 0;
+    let sSelling = 0;
     let sMat = 0;
     let sLab = 0;
     let sEq = 0;
+    const stageBdi = stage.bdi !== undefined ? Number(stage.bdi) : bdiRate;
 
     const stageItems = (stage.substages && stage.substages.length > 0)
       ? stage.substages.flatMap(s => s.items || [])
@@ -26,13 +29,17 @@ export function exportBudgetToExcel(project: BudgetProject) {
 
     stageItems.forEach(item => {
       const q = item.quantity || 0;
+      const itemDirect = (item.unitCostTotal || 0) * q;
+      const itemEffectiveBdi = item.bdi !== undefined ? Number(item.bdi) : stageBdi;
       sMat += (item.unitCostMaterial || 0) * q;
       sLab += (item.unitCostLabor || 0) * q;
       sEq += (item.unitCostEquipment || 0) * q;
-      sDirect += (item.unitCostTotal || 0) * q;
+      sDirect += itemDirect;
+      sSelling += itemDirect * (1 + itemEffectiveBdi / 100);
     });
 
     totalDirect += sDirect;
+    totalSelling += sSelling;
     totalMaterial += sMat;
     totalLabor += sLab;
     totalEquipment += sEq;
@@ -43,11 +50,10 @@ export function exportBudgetToExcel(project: BudgetProject) {
       sMat,
       sLab,
       sEq,
-      sSelling: sDirect * (1 + bdiRate / 100),
+      sSelling,
     });
   });
 
-  const totalSelling = totalDirect * (1 + bdiRate / 100);
   const area = project.totalArea || 0;
 
   const summaryData: any[] = [

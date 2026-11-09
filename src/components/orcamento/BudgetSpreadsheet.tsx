@@ -36,6 +36,98 @@ function formatPercent(val: number, dec: number = 2): string {
 }
 
 /**
+ * Controle inline de BDI (%) para Etapa ou Subetapa
+ */
+function GroupBdiInputCell({
+  value,
+  fallbackBdi,
+  isCustom,
+  onUpdateBdi,
+  tooltip,
+  resetTitle,
+}: {
+  value: number | undefined;
+  fallbackBdi: number;
+  isCustom: boolean;
+  onUpdateBdi: (newBdi: number | undefined) => void;
+  tooltip: string;
+  resetTitle: string;
+}) {
+  const effectiveVal = value !== undefined && value !== null ? Number(value) : fallbackBdi;
+  const [val, setVal] = useState<string>(effectiveVal.toString());
+
+  useEffect(() => {
+    setVal(effectiveVal.toString());
+  }, [value, fallbackBdi, effectiveVal]);
+
+  const handleCommit = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      onUpdateBdi(undefined);
+      setVal(fallbackBdi.toString());
+      return;
+    }
+
+    const parsed = parseFloat(trimmed.replace(',', '.'));
+    if (!isNaN(parsed) && parsed >= 0) {
+      if (Math.abs(parsed - effectiveVal) > 0.0001 || (!isCustom && Math.abs(parsed - fallbackBdi) > 0.0001)) {
+        onUpdateBdi(parsed);
+      } else {
+        setVal(effectiveVal.toString());
+      }
+    } else {
+      setVal(effectiveVal.toString());
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1 group/gbdi" onClick={(e) => e.stopPropagation()}>
+      <div className="relative flex items-center">
+        <input
+          type="number"
+          step="0.1"
+          min="0"
+          max="300"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={(e) => handleCommit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleCommit(e.currentTarget.value);
+              e.currentTarget.blur();
+            }
+          }}
+          className={`h-6 w-14 text-right text-xs font-mono font-bold px-1.5 py-0.5 rounded border transition-all ${
+            isCustom
+              ? 'border-amber-500/80 bg-amber-500/15 text-amber-900 dark:text-amber-200 ring-1 ring-amber-500/30'
+              : 'border-border/70 bg-background text-foreground hover:border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary'
+          }`}
+          title={tooltip}
+        />
+        <span className="text-[10px] font-mono font-bold text-muted-foreground ml-0.5 select-none">
+          %
+        </span>
+      </div>
+
+      {isCustom && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onUpdateBdi(undefined);
+            setVal(fallbackBdi.toString());
+          }}
+          className="text-muted-foreground hover:text-amber-600 p-0.5"
+          title={resetTitle}
+        >
+          <RotateCcw className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
  * Célula de edição inline do BDI (%) do item
  */
 function BdiInputCell({
@@ -47,8 +139,9 @@ function BdiInputCell({
   globalBdi: number;
   onUpdateBdi: (itemId: string, newBdi: number | undefined) => void;
 }) {
-  const isCustom = item.bdi !== undefined && item.bdi !== null;
-  const effectiveVal = isCustom ? Number(item.bdi) : globalBdi;
+  const hasItemBdi = item.bdi !== undefined && item.bdi !== null;
+  const effectiveVal = hasItemBdi ? Number(item.bdi) : globalBdi;
+  const isCustom = Boolean(item.bdiCustom) || (hasItemBdi && Math.abs(Number(item.bdi) - globalBdi) > 0.001);
   const [val, setVal] = useState<string>(effectiveVal.toString());
 
   useEffect(() => {
@@ -58,7 +151,7 @@ function BdiInputCell({
   const handleCommit = (raw: string) => {
     const trimmed = raw.trim();
     if (!trimmed) {
-      // Reverter para BDI global
+      // Reverter para BDI da subetapa/etapa/obra
       onUpdateBdi(item.id, undefined);
       setVal(globalBdi.toString());
       return;
@@ -66,7 +159,11 @@ function BdiInputCell({
 
     const parsed = parseFloat(trimmed.replace(',', '.'));
     if (!isNaN(parsed) && parsed >= 0) {
-      onUpdateBdi(item.id, parsed);
+      if (Math.abs(parsed - effectiveVal) > 0.0001) {
+        onUpdateBdi(item.id, parsed);
+      } else {
+        setVal(effectiveVal.toString());
+      }
     } else {
       setVal(effectiveVal.toString());
     }
@@ -471,9 +568,11 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
     stageSummaries,
     addStage,
     updateStage,
+    updateStageBdi,
     deleteStage,
     addSubstage,
     updateSubstage,
+    updateSubstageBdi,
     deleteSubstage,
     updateItem,
     deleteItem,
@@ -670,6 +769,13 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
 
           const stageTotal = viewMode === 'selling' ? summary?.sellingPrice || 0 : summary?.directCost || 0;
           const hasSubstages = stage.substages && stage.substages.length > 0;
+          const stageFallbackBdi =
+            allStageItems.length > 0 &&
+            allStageItems.every((it) => it.bdi !== undefined && it.bdi === allStageItems[0].bdi)
+              ? Number(allStageItems[0].bdi)
+              : bdiRate;
+          const stageEffectiveBdi =
+            stage.bdi !== undefined && stage.bdi !== null ? Number(stage.bdi) : stageFallbackBdi;
 
           // Itens diretos filtrados (para etapas sem subetapas ou com itens diretos)
           const filteredDirectItems = directItemsAll.filter((it) => {
@@ -795,6 +901,22 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                 </div>
 
                 <div className="flex items-center gap-3">
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1.5 bg-background/80 px-2.5 py-1 rounded-xl border border-border/70"
+                  >
+                    <span className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">
+                      BDI Etapa:
+                    </span>
+                    <GroupBdiInputCell
+                      value={stage.bdi}
+                      fallbackBdi={stageFallbackBdi}
+                      isCustom={stage.bdi !== undefined && stage.bdi !== null}
+                      onUpdateBdi={(newBdi) => updateStageBdi(stage.id, newBdi)}
+                      tooltip="BDI geral desta Etapa. Altera o BDI da etapa (mantendo subetapas/itens personalizados)."
+                      resetTitle={`Redefinir etapa para o BDI geral da obra (${bdiRate.toFixed(1)}%)`}
+                    />
+                  </div>
                   <div className="text-right">
                     <span className="text-[10px] text-muted-foreground block uppercase font-medium">
                       Subtotal {viewMode === 'selling' ? 'c/ BDI' : 'Direto'}
@@ -819,8 +941,20 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                     <div className="space-y-3">
                       {stage.substages!.map((substage) => {
                         const isSubExpanded = expandedSubstages[substage.id] !== false;
+                        const subItems = substage.items || [];
+                        const subFallbackBdi =
+                          stage.bdi !== undefined && stage.bdi !== null
+                            ? Number(stage.bdi)
+                            : subItems.length > 0 &&
+                              subItems.every((it) => it.bdi !== undefined && it.bdi === subItems[0].bdi)
+                            ? Number(subItems[0].bdi)
+                            : stageEffectiveBdi;
+                        const subEffectiveBdi =
+                          substage.bdi !== undefined && substage.bdi !== null
+                            ? Number(substage.bdi)
+                            : subFallbackBdi;
 
-                        const filteredSubItems = (substage.items || []).filter((it) => {
+                        const filteredSubItems = subItems.filter((it) => {
                           return (
                             !q ||
                             it.description.toLowerCase().includes(q) ||
@@ -831,8 +965,8 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
 
                         // Subtotal da subetapa
                         let subTotal = 0;
-                        (substage.items || []).forEach((it) => {
-                          const itemEffectiveBdi = it.bdi !== undefined ? Number(it.bdi) : bdiRate;
+                        subItems.forEach((it) => {
+                          const itemEffectiveBdi = it.bdi !== undefined ? Number(it.bdi) : subEffectiveBdi;
                           const mult = viewMode === 'selling' ? 1 + itemEffectiveBdi / 100 : 1;
                           subTotal += (it.unitCostTotal || 0) * mult * (it.quantity || 0);
                         });
@@ -956,6 +1090,28 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                               </div>
 
                               <div className="flex items-center gap-3">
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex items-center gap-1.5 bg-background/80 px-2 py-0.5 rounded-lg border border-border/60"
+                                >
+                                  <span className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">
+                                    BDI Subetapa:
+                                  </span>
+                                  <GroupBdiInputCell
+                                    value={substage.bdi}
+                                    fallbackBdi={subFallbackBdi}
+                                    isCustom={Boolean(
+                                      substage.bdiCustom &&
+                                        substage.bdi !== undefined &&
+                                        substage.bdi !== null
+                                    )}
+                                    onUpdateBdi={(newBdi) =>
+                                      updateSubstageBdi(stage.id, substage.id, newBdi)
+                                    }
+                                    tooltip="BDI individual desta Subetapa. Altera o BDI dos itens desta subetapa."
+                                    resetTitle={`Redefinir subetapa para o BDI da etapa (${stageEffectiveBdi.toFixed(1)}%)`}
+                                  />
+                                </div>
                                 <span className="font-bold font-mono text-foreground">
                                   {formatCurrency(subTotal)}
                                 </span>
@@ -972,7 +1128,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                                   onAddItem={() => onOpenSinapiModal(stage.id, substage.id)}
                                   addItemLabel={`Adicionar item a ${substage.code} agora`}
                                   viewMode={viewMode}
-                                  globalBdi={bdiRate}
+                                  globalBdi={subEffectiveBdi}
                                   onOpenComposition={(item) => {
                                     setSelectedCompositionItem(item);
                                     setIsCompModalOpen(true);
@@ -1028,7 +1184,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                         onAddItem={() => onOpenSinapiModal(stage.id)}
                         addItemLabel="Adicionar serviço agora"
                         viewMode={viewMode}
-                        globalBdi={bdiRate}
+                        globalBdi={stageEffectiveBdi}
                         onOpenComposition={(item) => {
                           setSelectedCompositionItem(item);
                           setIsCompModalOpen(true);

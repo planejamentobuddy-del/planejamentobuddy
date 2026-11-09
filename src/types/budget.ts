@@ -44,6 +44,7 @@ export interface BudgetItem {
   unitCostOther?: number;
   unitCostTotal: number;
   bdi?: number; // BDI individual por item (%)
+  bdiCustom?: boolean; // Indica se o BDI do item foi personalizado manualmente
   composition?: CompositionInput[];
   notes?: string;
 }
@@ -54,6 +55,8 @@ export interface BudgetSubstage {
   order: number;
   code: string; // Ex: "1.1", "1.2"
   title: string; // Ex: "Tapume", "Portões e Fechamentos"
+  bdi?: number; // BDI individual da subetapa (%)
+  bdiCustom?: boolean; // Indica se o BDI da subetapa foi personalizado manualmente
   items: BudgetItem[];
 }
 
@@ -63,6 +66,7 @@ export interface BudgetStage {
   order: number;
   code: string; // Ex: "1", "2"
   title: string;
+  bdi?: number; // BDI geral da etapa (%)
   substages?: BudgetSubstage[];
   items?: BudgetItem[]; // Mantido para compatibilidade com orçamentos existentes
 }

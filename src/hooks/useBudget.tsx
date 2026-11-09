@@ -63,10 +63,12 @@ interface BudgetContextType {
   // Ações de Etapas, Subetapas e Itens
   addStage: (title: string, code?: string) => void;
   updateStage: (stageId: string, title: string, code: string) => void;
+  updateStageBdi: (stageId: string, bdi: number | undefined) => void;
   deleteStage: (stageId: string) => void;
 
   addSubstage: (stageId: string, title: string, code?: string) => void;
   updateSubstage: (stageId: string, substageId: string, title: string, code: string) => void;
+  updateSubstageBdi: (stageId: string, substageId: string, bdi: number | undefined) => void;
   deleteSubstage: (stageId: string, substageId: string) => void;
 
   addItemToSubstage: (
@@ -811,6 +813,76 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     updateProject(activeProject.id, { stages: updatedStages });
   };
 
+  const updateStageBdi = (stageId: string, newBdi: number | undefined) => {
+    if (!activeProject) return;
+    const targetBdi = newBdi !== undefined ? newBdi : bdiRate;
+
+    const updatedStages = activeProject.stages.map((st) => {
+      if (st.id !== stageId) return st;
+
+      const subs = st.substages || [];
+      const directItems = st.items || [];
+
+      // Se todas as subetapas/itens já estavam marcados como personalizados, aplica em todos ao mudar a etapa geral
+      const anyNonCustomSub = subs.some((s) => !s.bdiCustom);
+      const forceResetSubs = newBdi === undefined || (!anyNonCustomSub && subs.length > 0);
+
+      const updatedSubs = subs.map((sub) => {
+        const subIsCustom = !forceResetSubs && Boolean(sub.bdiCustom && sub.bdi !== undefined);
+        const nextSubBdi = subIsCustom ? sub.bdi : newBdi;
+        const effectiveSubBdi = nextSubBdi !== undefined ? nextSubBdi : targetBdi;
+
+        const subItems = sub.items || [];
+        const anyNonCustomItem = subItems.some((it) => !it.bdiCustom);
+        const forceResetItems = newBdi === undefined || (!anyNonCustomItem && subItems.length > 0 && !subIsCustom);
+
+        return {
+          ...sub,
+          bdi: subIsCustom ? sub.bdi : undefined,
+          bdiCustom: subIsCustom,
+          items: subItems.map((it) => {
+            if (!forceResetItems && it.bdiCustom && it.bdi !== undefined) {
+              return it;
+            }
+            return {
+              ...it,
+              bdi: effectiveSubBdi,
+              bdiCustom: false,
+            };
+          }),
+        };
+      });
+
+      const anyNonCustomDirect = directItems.some((it) => !it.bdiCustom);
+      const forceResetDirect = newBdi === undefined || (!anyNonCustomDirect && directItems.length > 0);
+
+      const updatedDirectItems = directItems.map((it) => {
+        if (!forceResetDirect && it.bdiCustom && it.bdi !== undefined) {
+          return it;
+        }
+        return {
+          ...it,
+          bdi: targetBdi,
+          bdiCustom: false,
+        };
+      });
+
+      return {
+        ...st,
+        bdi: newBdi,
+        substages: updatedSubs,
+        items: updatedDirectItems,
+      };
+    });
+
+    updateProject(activeProject.id, { stages: updatedStages });
+    toast.success(
+      newBdi !== undefined
+        ? `BDI da etapa atualizado para ${newBdi.toFixed(1)}%`
+        : `BDI da etapa redefinido para o padrão da obra (${bdiRate.toFixed(1)}%)`
+    );
+  };
+
   const deleteStage = (stageId: string) => {
     if (!activeProject) return;
     const updatedStages = normalizeProjectStages(
@@ -872,6 +944,54 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     updateProject(activeProject.id, { stages: updatedStages });
   };
 
+  const updateSubstageBdi = (
+    stageId: string,
+    substageId: string,
+    newBdi: number | undefined
+  ) => {
+    if (!activeProject) return;
+
+    const updatedStages = activeProject.stages.map((st) => {
+      if (st.id !== stageId) return st;
+      const stageEffectiveBdi = st.bdi !== undefined ? st.bdi : bdiRate;
+      const targetBdi = newBdi !== undefined ? newBdi : stageEffectiveBdi;
+
+      return {
+        ...st,
+        substages: (st.substages || []).map((sub) => {
+          if (sub.id !== substageId) return sub;
+
+          const subItems = sub.items || [];
+          const anyNonCustomItem = subItems.some((it) => !it.bdiCustom);
+          const forceResetItems = newBdi === undefined || (!anyNonCustomItem && subItems.length > 0);
+
+          return {
+            ...sub,
+            bdi: newBdi,
+            bdiCustom: newBdi !== undefined,
+            items: subItems.map((it) => {
+              if (!forceResetItems && it.bdiCustom && it.bdi !== undefined) {
+                return it;
+              }
+              return {
+                ...it,
+                bdi: targetBdi,
+                bdiCustom: false,
+              };
+            }),
+          };
+        }),
+      };
+    });
+
+    updateProject(activeProject.id, { stages: updatedStages });
+    toast.success(
+      newBdi !== undefined
+        ? `BDI da subetapa atualizado para ${newBdi.toFixed(1)}%`
+        : 'BDI da subetapa redefinido para o BDI da etapa'
+    );
+  };
+
   const deleteSubstage = (stageId: string, substageId: string) => {
     if (!activeProject) return;
 
@@ -909,6 +1029,8 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
           (item.unitCostOther || 0);
 
         const autoCode = `${sub.code}.${order}`;
+        const inheritedBdi =
+          sub.bdi !== undefined ? sub.bdi : st.bdi !== undefined ? st.bdi : bdiRate;
 
         const newItem: BudgetItem = {
           ...item,
@@ -918,7 +1040,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
           order,
           code: autoCode, sinapiCode: item.sinapiCode || (item.code && !/^\d+(\.\d+)*$/.test(item.code) ? item.code : undefined),
           unitCostTotal: item.unitCostTotal || totalUnit,
-          bdi: item.bdi !== undefined ? item.bdi : bdiRate,
+          bdi: item.bdiCustom && item.bdi !== undefined ? item.bdi : inheritedBdi,
         };
 
         return {
@@ -968,6 +1090,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       (item.unitCostOther || 0);
 
     const autoCode = `${stage.code}.${order}`;
+    const inheritedBdi = stage.bdi !== undefined ? stage.bdi : bdiRate;
 
     const newItem: BudgetItem = {
       ...item,
@@ -976,7 +1099,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       order,
       code: autoCode, sinapiCode: item.sinapiCode || (item.code && !/^\d+(\.\d+)*$/.test(item.code) ? item.code : undefined),
       unitCostTotal: item.unitCostTotal || totalUnit,
-      bdi: item.bdi !== undefined ? item.bdi : bdiRate,
+      bdi: item.bdiCustom && item.bdi !== undefined ? item.bdi : inheritedBdi,
     };
 
     const updatedStages = activeProject.stages.map((st) =>
@@ -994,12 +1117,17 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
 
     const updatedStages = activeProject.stages.map((st) => {
       let changed = false;
+      const stageEffectiveBdi = st.bdi !== undefined ? st.bdi : bdiRate;
 
       // 1. Atualiza nos itens diretos da etapa
       const updatedDirectItems = (st.items || []).map((it) => {
         if (it.id !== itemId) return it;
         changed = true;
         const merged = { ...it, ...updates };
+        if ('bdi' in updates) {
+          merged.bdiCustom = updates.bdi !== undefined;
+          merged.bdi = updates.bdi !== undefined ? updates.bdi : stageEffectiveBdi;
+        }
         const calculatedTotal =
           (merged.unitCostMaterial || 0) +
           (merged.unitCostLabor || 0) +
@@ -1019,10 +1147,15 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         if (!itemExists) return sub;
 
         changed = true;
+        const subEffectiveBdi = sub.bdi !== undefined ? sub.bdi : stageEffectiveBdi;
         const updatedItems = sub.items.map((it) => {
           if (it.id !== itemId) return it;
 
           const merged = { ...it, ...updates };
+          if ('bdi' in updates) {
+            merged.bdiCustom = updates.bdi !== undefined;
+            merged.bdi = updates.bdi !== undefined ? updates.bdi : subEffectiveBdi;
+          }
           const calculatedTotal =
             (merged.unitCostMaterial || 0) +
             (merged.unitCostLabor || 0) +
@@ -1227,9 +1360,11 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         getOrCreateBudgetForProject,
         addStage,
         updateStage,
+        updateStageBdi,
         deleteStage,
         addSubstage,
         updateSubstage,
+        updateSubstageBdi,
         deleteSubstage,
         addItemToSubstage,
         addItemToStage,
