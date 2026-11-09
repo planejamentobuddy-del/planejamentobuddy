@@ -82,6 +82,7 @@ interface BudgetContextType {
   updateItem: (itemId: string, updates: Partial<BudgetItem>) => void;
   deleteItem: (itemId: string) => void;
   updateInputPriceGlobally: (match: { code?: string; description: string }, newUnitCost: number) => number;
+  sortProjectIndices: () => void;
 
   // BDI e Cronograma
   updateBdiConfig: (config: BdiConfig) => void;
@@ -94,23 +95,54 @@ const ACTIVE_PROJ_KEY = 'buddy_orcamento_active_id';
 /**
  * Garante que todas as etapas possuam substages e numeração padronizada (Etapa 1 -> Subetapa 1.1 -> Item 1.1.1)
  */
-export function normalizeProjectStages(stages: BudgetStage[]): BudgetStage[] {
+function compareHierarchicalCodes(aCode?: string, bCode?: string, aOrder = 0, bOrder = 0): number {
+  const parseParts = (c?: string) =>
+    (c || '')
+      .trim()
+      .split('.')
+      .map((p) => {
+        const n = parseInt(p.replace(/\D/g, ''), 10);
+        return isNaN(n) ? Number.MAX_SAFE_INTEGER : n;
+      });
+
+  const aParts = parseParts(aCode);
+  const bParts = parseParts(bCode);
+  const len = Math.max(aParts.length, bParts.length);
+
+  for (let i = 0; i < len; i++) {
+    const av = aParts[i] ?? 0;
+    const bv = bParts[i] ?? 0;
+    if (av !== bv) return av - bv;
+  }
+  return aOrder - bOrder;
+}
+
+export function normalizeProjectStages(stages: BudgetStage[], forceSequential = false): BudgetStage[] {
+  const isNumericIndex = (val?: string) => !!val && /^\d+(\.\d+)*$/.test(val.trim());
+
   return stages.map((stage, sIdx) => {
-    const stageNum = String(stage.order || sIdx + 1);
-    const stageCode = String(sIdx + 1);
+    const stageCode = !forceSequential && isNumericIndex(stage.code) ? stage.code.trim() : String(sIdx + 1);
 
     const normalizedSubs = (stage.substages || []).map((sub, subIdx) => {
-      const subNum = String(sub.order || subIdx + 1);
-      const subCode = `${stageCode}.${subIdx + 1}`;
+      const subCode =
+        !forceSequential && isNumericIndex(sub.code)
+          ? sub.code.trim()
+          : `${stageCode}.${subIdx + 1}`;
       return {
         ...sub,
+        order: subIdx + 1,
         stageId: stage.id,
         code: subCode,
         items: (sub.items || []).map((it, itIdx) => ({
           ...it,
           stageId: stage.id,
           substageId: sub.id,
-          order: itIdx + 1, code: `${subCode}.${itIdx + 1}`, sinapiCode: it.sinapiCode || (it.code && !/^\d+(\.\d+)*$/.test(it.code) ? it.code : undefined),
+          order: itIdx + 1,
+          code:
+            !forceSequential && isNumericIndex(it.code)
+              ? it.code.trim()
+              : `${subCode}.${itIdx + 1}`,
+          sinapiCode: it.sinapiCode || (it.code && !isNumericIndex(it.code) ? it.code : undefined),
           unitCostOther: it.unitCostOther || 0,
         })),
       };
@@ -119,12 +151,18 @@ export function normalizeProjectStages(stages: BudgetStage[]): BudgetStage[] {
     const normalizedDirectItems = (stage.items || []).map((it, itIdx) => ({
       ...it,
       stageId: stage.id,
-      order: itIdx + 1, code: `${stageCode}.${itIdx + 1}`, sinapiCode: it.sinapiCode || (it.code && !/^\d+(\.\d+)*$/.test(it.code) ? it.code : undefined),
+      order: itIdx + 1,
+      code:
+        !forceSequential && isNumericIndex(it.code)
+          ? it.code.trim()
+          : `${stageCode}.${itIdx + 1}`,
+      sinapiCode: it.sinapiCode || (it.code && !isNumericIndex(it.code) ? it.code : undefined),
       unitCostOther: it.unitCostOther || 0,
     }));
 
     return {
       ...stage,
+      order: sIdx + 1,
       code: stageCode,
       substages: normalizedSubs,
       items: normalizedDirectItems,
@@ -775,7 +813,10 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
 
   const deleteStage = (stageId: string) => {
     if (!activeProject) return;
-    const updatedStages = activeProject.stages.filter((st) => st.id !== stageId);
+    const updatedStages = normalizeProjectStages(
+      activeProject.stages.filter((st) => st.id !== stageId),
+      true
+    );
     updateProject(activeProject.id, { stages: updatedStages });
     toast.success('Etapa excluída');
   };
@@ -842,7 +883,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       };
     });
 
-    updateProject(activeProject.id, { stages: updatedStages });
+    updateProject(activeProject.id, { stages: normalizeProjectStages(updatedStages, true) });
     toast.success('Subetapa excluída');
   };
 
@@ -1028,7 +1069,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       };
     });
 
-    updateProject(activeProject.id, { stages: updatedStages });
+    updateProject(activeProject.id, { stages: normalizeProjectStages(updatedStages, true) });
     toast.success('Item removido da planilha');
   };
 
@@ -1134,6 +1175,31 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     return updatedOccurrences;
   };
 
+  const sortProjectIndices = () => {
+    if (!activeProject) return;
+
+    const sortedStages = [...activeProject.stages]
+      .sort((a, b) => compareHierarchicalCodes(a.code, b.code, a.order, b.order))
+      .map((stage) => ({
+        ...stage,
+        substages: [...(stage.substages || [])]
+          .sort((a, b) => compareHierarchicalCodes(a.code, b.code, a.order, b.order))
+          .map((sub) => ({
+            ...sub,
+            items: [...(sub.items || [])].sort((a, b) =>
+              compareHierarchicalCodes(a.code, b.code, a.order, b.order)
+            ),
+          })),
+        items: [...(stage.items || [])].sort((a, b) =>
+          compareHierarchicalCodes(a.code, b.code, a.order, b.order)
+        ),
+      }));
+
+    const renumbered = normalizeProjectStages(sortedStages, true);
+    updateProject(activeProject.id, { stages: renumbered });
+    toast.success('Índices de etapas, subetapas e itens ordenados e renumerados (1 -> 1.1 -> 1.1.1)!');
+  };
+
   return (
     <BudgetContext.Provider
       value={{
@@ -1170,6 +1236,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         updateItem,
         deleteItem,
         updateInputPriceGlobally,
+        sortProjectIndices,
         updateBdiConfig,
         updateDisbursementSchedule,
       }}

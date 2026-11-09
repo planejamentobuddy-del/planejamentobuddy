@@ -17,6 +17,7 @@ import {
   Check,
   X,
   RefreshCw,
+  ArrowDown10,
 } from 'lucide-react';
 import { CompositionDetailModal } from './CompositionDetailModal';
 import { GlobalInputPriceModal } from './GlobalInputPriceModal';
@@ -223,6 +224,7 @@ function ItemNotesInput({
  */
 function BudgetItemRow({
   item,
+  fallbackCode,
   viewMode,
   globalBdi,
   onOpenComposition,
@@ -230,8 +232,10 @@ function BudgetItemRow({
   onUpdateBdi,
   onUpdateQty,
   onUpdateNotes,
+  onUpdateCode,
 }: {
   item: BudgetItem;
+  fallbackCode: string;
   viewMode: 'cost' | 'selling';
   globalBdi: number;
   onOpenComposition: (item: BudgetItem) => void;
@@ -239,22 +243,51 @@ function BudgetItemRow({
   onUpdateBdi: (itemId: string, newBdi: number | undefined) => void;
   onUpdateQty: (itemId: string, newQty: number) => void;
   onUpdateNotes: (itemId: string, notes: string) => void;
+  onUpdateCode: (itemId: string, code: string) => void;
 }) {
   const itemEffectiveBdi = item.bdi !== undefined ? Number(item.bdi) : globalBdi;
   const unitCost = item.unitCostTotal || 0;
   const unitSelling = unitCost * (1 + itemEffectiveBdi / 100);
   const itemTotal = (viewMode === 'selling' ? unitSelling : unitCost) * (item.quantity || 0);
+  const resolvedCode = /^\d+(\.\d+)*$/.test((item.code || '').trim()) ? item.code : fallbackCode;
+  const [codeVal, setCodeVal] = useState(resolvedCode);
+
+  useEffect(() => {
+    setCodeVal(resolvedCode);
+  }, [resolvedCode]);
+
+  const commitCode = () => {
+    const trimmed = codeVal.trim();
+    if (trimmed && trimmed !== item.code) {
+      onUpdateCode(item.id, trimmed);
+    } else {
+      setCodeVal(resolvedCode);
+    }
+  };
 
   return (
     <div className="p-3 sm:px-3 sm:py-2.5 hover:bg-muted/30 transition-colors flex flex-col lg:grid lg:grid-cols-12 items-start lg:items-center gap-2 text-xs">
-      {/* 1. Item Code (1.1.1 ou 1.1) */}
-      <div className="lg:col-span-1 flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
-        <span className="font-bold text-foreground">{item.code}</span>
-        <span className="text-[8px] px-1 py-0 rounded font-semibold border bg-primary/10 text-primary border-primary/20">
+      {/* 1. Item Code (1.1.1, 1.1.2...) */}
+      <div className="lg:col-span-1 flex flex-col items-start gap-0.5 font-mono text-[11px] text-muted-foreground">
+        <input
+          type="text"
+          value={codeVal}
+          onChange={(e) => setCodeVal(e.target.value)}
+          onBlur={commitCode}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commitCode();
+              e.currentTarget.blur();
+            }
+          }}
+          className="font-bold text-foreground bg-transparent border border-transparent hover:border-border/80 focus:border-primary focus:bg-background rounded px-1 py-0.5 w-14 text-[11px] font-mono focus:outline-none"
+          title="Índice do item (ex: 1.1.1). Clique para editar e depois use 'Ordenar índices'."
+        />
+        <span className="text-[8px] px-1 py-0 rounded font-semibold border bg-primary/10 text-primary border-primary/20 ml-1">
           {item.source === 'sinapi'
             ? 'SINAPI'
             : item.source === 'catalogo'
-            ? 'CAT'
+            ? 'Comp.'
             : 'PROP'}
         </span>
       </div>
@@ -348,6 +381,7 @@ function BudgetItemRow({
  */
 function BudgetItemTable({
   items,
+  parentCode,
   emptyMessage,
   onAddItem,
   addItemLabel,
@@ -358,8 +392,10 @@ function BudgetItemTable({
   onUpdateBdi,
   onUpdateQty,
   onUpdateNotes,
+  onUpdateCode,
 }: {
   items: BudgetItem[];
+  parentCode: string;
   emptyMessage: string;
   onAddItem: () => void;
   addItemLabel: string;
@@ -370,6 +406,7 @@ function BudgetItemTable({
   onUpdateBdi: (itemId: string, newBdi: number | undefined) => void;
   onUpdateQty: (itemId: string, newQty: number) => void;
   onUpdateNotes: (itemId: string, notes: string) => void;
+  onUpdateCode: (itemId: string, code: string) => void;
 }) {
   const safeItems = items || [];
 
@@ -402,10 +439,11 @@ function BudgetItemTable({
           </button>
         </div>
       ) : (
-        safeItems.map((item) => (
+        safeItems.map((item, idx) => (
           <BudgetItemRow
             key={item.id}
             item={item}
+            fallbackCode={`${parentCode}.${idx + 1}`}
             viewMode={viewMode}
             globalBdi={globalBdi}
             onOpenComposition={onOpenComposition}
@@ -413,6 +451,7 @@ function BudgetItemTable({
             onUpdateBdi={onUpdateBdi}
             onUpdateQty={onUpdateQty}
             onUpdateNotes={onUpdateNotes}
+            onUpdateCode={onUpdateCode}
           />
         ))
       )}
@@ -438,6 +477,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
     deleteSubstage,
     updateItem,
     deleteItem,
+    sortProjectIndices,
   } = useBudget();
 
   // Expansão de Etapas (Nível 1)
@@ -473,8 +513,10 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
 
   // Edição (renomear) Etapa e Subetapa
   const [editingStageId, setEditingStageId] = useState<string | null>(null);
+  const [editingStageCode, setEditingStageCode] = useState('');
   const [editingStageTitle, setEditingStageTitle] = useState('');
   const [editingSubstageId, setEditingSubstageId] = useState<string | null>(null);
+  const [editingSubstageCode, setEditingSubstageCode] = useState('');
   const [editingSubstageTitle, setEditingSubstageTitle] = useState('');
 
   const toggleStage = (stageId: string) => {
@@ -495,6 +537,10 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
 
   const handleUpdateItemNotes = (itemId: string, notes: string) => {
     updateItem(itemId, { notes });
+  };
+
+  const handleUpdateItemCode = (itemId: string, code: string) => {
+    updateItem(itemId, { code });
   };
 
   const handleCreateStage = (e: React.FormEvent) => {
@@ -525,14 +571,27 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
     <div className="space-y-6">
       {/* BARRA SUPERIOR DE PESQUISA E AÇÕES */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-card p-3 rounded-2xl border shadow-sm">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
-          <Input
-            placeholder="Filtrar serviços por nome, código..."
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-            className="pl-9 h-9 rounded-xl text-xs"
-          />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={sortProjectIndices}
+            className="h-9 rounded-xl text-xs flex items-center gap-1.5 font-semibold text-primary border-primary/30 hover:bg-primary/10 shrink-0"
+            title="Ordenar índices do menor para o maior (etapas 1, 2... subetapas 1.1, 1.2... e itens 1.1.1, 1.1.2...)"
+          >
+            <ArrowDown10 className="w-4 h-4 text-primary" />
+            Ordenar índices
+          </Button>
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+            <Input
+              placeholder="Filtrar serviços por nome, código..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="pl-9 h-9 rounded-xl text-xs"
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
@@ -649,12 +708,21 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                     {editingStageId === stage.id ? (
                       <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                         <Input
+                          value={editingStageCode}
+                          onChange={(e) => setEditingStageCode(e.target.value)}
+                          placeholder="1"
+                          className="h-7 text-xs font-mono font-bold w-14 bg-background text-center"
+                          title="Índice da Etapa (ex: 1, 2)"
+                        />
+                        <Input
                           autoFocus
                           value={editingStageTitle}
                           onChange={(e) => setEditingStageTitle(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                              if (editingStageTitle.trim()) updateStage(stage.id, editingStageTitle.trim(), stage.code);
+                              if (editingStageTitle.trim()) {
+                                updateStage(stage.id, editingStageTitle.trim(), editingStageCode.trim() || stage.code);
+                              }
                               setEditingStageId(null);
                             } else if (e.key === 'Escape') {
                               setEditingStageId(null);
@@ -668,10 +736,12 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                           variant="ghost"
                           className="h-7 w-7 text-emerald-600 hover:bg-emerald-500/10"
                           onClick={() => {
-                            if (editingStageTitle.trim()) updateStage(stage.id, editingStageTitle.trim(), stage.code);
+                            if (editingStageTitle.trim()) {
+                              updateStage(stage.id, editingStageTitle.trim(), editingStageCode.trim() || stage.code);
+                            }
                             setEditingStageId(null);
                           }}
-                          title="Salvar nome da etapa"
+                          title="Salvar etapa"
                         >
                           <Check className="w-3.5 h-3.5" />
                         </Button>
@@ -696,10 +766,11 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditingStageId(stage.id);
+                            setEditingStageCode(stage.code);
                             setEditingStageTitle(stage.title);
                           }}
                           className="text-muted-foreground/60 hover:text-primary p-1 rounded hover:bg-background/80 transition-colors"
-                          title="Renomear Etapa"
+                          title="Editar índice e nome da Etapa"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -790,13 +861,25 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                                 {editingSubstageId === substage.id ? (
                                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                     <Input
+                                      value={editingSubstageCode}
+                                      onChange={(e) => setEditingSubstageCode(e.target.value)}
+                                      placeholder="1.1"
+                                      className="h-6 text-xs font-mono font-bold w-14 bg-background text-center"
+                                      title="Índice da Subetapa (ex: 1.1, 1.2)"
+                                    />
+                                    <Input
                                       autoFocus
                                       value={editingSubstageTitle}
                                       onChange={(e) => setEditingSubstageTitle(e.target.value)}
                                       onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                           if (editingSubstageTitle.trim()) {
-                                            updateSubstage(stage.id, substage.id, editingSubstageTitle.trim(), substage.code);
+                                            updateSubstage(
+                                              stage.id,
+                                              substage.id,
+                                              editingSubstageTitle.trim(),
+                                              editingSubstageCode.trim() || substage.code
+                                            );
                                           }
                                           setEditingSubstageId(null);
                                         } else if (e.key === 'Escape') {
@@ -812,11 +895,16 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                                       className="h-6 w-6 text-emerald-600 hover:bg-emerald-500/10"
                                       onClick={() => {
                                         if (editingSubstageTitle.trim()) {
-                                          updateSubstage(stage.id, substage.id, editingSubstageTitle.trim(), substage.code);
+                                          updateSubstage(
+                                            stage.id,
+                                            substage.id,
+                                            editingSubstageTitle.trim(),
+                                            editingSubstageCode.trim() || substage.code
+                                          );
                                         }
                                         setEditingSubstageId(null);
                                       }}
-                                      title="Salvar nome da subetapa"
+                                      title="Salvar subetapa"
                                     >
                                       <Check className="w-3 h-3" />
                                     </Button>
@@ -841,10 +929,11 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setEditingSubstageId(substage.id);
+                                        setEditingSubstageCode(substage.code);
                                         setEditingSubstageTitle(substage.title);
                                       }}
                                       className="text-muted-foreground/60 hover:text-primary p-0.5 rounded hover:bg-background/80 transition-colors"
-                                      title="Renomear Subetapa"
+                                      title="Editar índice e nome da Subetapa"
                                     >
                                       <Pencil className="w-3 h-3" />
                                     </button>
@@ -878,6 +967,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                               <div>
                                 <BudgetItemTable
                                   items={filteredSubItems}
+                                  parentCode={substage.code}
                                   emptyMessage="Nenhum item cadastrado nesta subetapa."
                                   onAddItem={() => onOpenSinapiModal(stage.id, substage.id)}
                                   addItemLabel={`Adicionar item a ${substage.code} agora`}
@@ -891,6 +981,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                                   onUpdateBdi={handleUpdateItemBdi}
                                   onUpdateQty={handleUpdateItemQty}
                                   onUpdateNotes={handleUpdateItemNotes}
+                                  onUpdateCode={handleUpdateItemCode}
                                 />
 
                                 {/* Barra de Ações da Subetapa */}
@@ -932,6 +1023,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                       )}
                       <BudgetItemTable
                         items={filteredDirectItems}
+                        parentCode={stage.code}
                         emptyMessage="Nenhum item cadastrado nesta etapa."
                         onAddItem={() => onOpenSinapiModal(stage.id)}
                         addItemLabel="Adicionar serviço agora"
@@ -945,6 +1037,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                         onUpdateBdi={handleUpdateItemBdi}
                         onUpdateQty={handleUpdateItemQty}
                         onUpdateNotes={handleUpdateItemNotes}
+                        onUpdateCode={handleUpdateItemCode}
                       />
                     </div>
                   )}
