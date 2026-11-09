@@ -42,10 +42,12 @@ export interface ItemsSummary {
   material: number;
   labor: number;
   equipment: number;
+  outsourced: number;
   other: number;
   hasMaterial: boolean;
   hasLabor: boolean;
   hasEquipment: boolean;
+  hasOutsourced: boolean;
   hasOther: boolean;
   total: number;
 }
@@ -59,10 +61,12 @@ export function summarizeItems(items: ComposicaoItem[]): ItemsSummary {
     material: 0,
     labor: 0,
     equipment: 0,
+    outsourced: 0,
     other: 0,
     hasMaterial: false,
     hasLabor: false,
     hasEquipment: false,
+    hasOutsourced: false,
     hasOther: false,
     total: 0,
   };
@@ -73,12 +77,14 @@ export function summarizeItems(items: ComposicaoItem[]): ItemsSummary {
       const m = (item.breakdown.costMaterial || 0) * coef;
       const l = (item.breakdown.costLabor || 0) * coef;
       const e = (item.breakdown.costEquipment || 0) * coef;
+      const t = (item.breakdown.costOutsourced || 0) * coef;
       const o = (item.breakdown.costOther || 0) * coef;
       if (m > 0) { s.material += m; s.hasMaterial = true; }
       if (l > 0) { s.labor += l; s.hasLabor = true; }
       if (e > 0) { s.equipment += e; s.hasEquipment = true; }
+      if (t > 0) { s.outsourced += t; s.hasOutsourced = true; }
       if (o > 0) { s.other += o; s.hasOther = true; }
-      if (m === 0 && l === 0 && e === 0 && o === 0) {
+      if (m === 0 && l === 0 && e === 0 && t === 0 && o === 0) {
         s.other += (item.unitCost || 0) * coef;
         s.hasOther = true;
       }
@@ -87,11 +93,12 @@ export function summarizeItems(items: ComposicaoItem[]): ItemsSummary {
       if (item.group === 'material') { s.material += tot; s.hasMaterial = true; }
       else if (item.group === 'labor') { s.labor += tot; s.hasLabor = true; }
       else if (item.group === 'equipment') { s.equipment += tot; s.hasEquipment = true; }
+      else if (item.group === 'outsourced') { s.outsourced += tot; s.hasOutsourced = true; }
       else { s.other += tot; s.hasOther = true; }
     }
   });
 
-  s.total = s.material + s.labor + s.equipment + s.other;
+  s.total = s.material + s.labor + s.equipment + s.outsourced + s.other;
   return s;
 }
 
@@ -187,6 +194,7 @@ export function ComposicaoItensEditor({
           costMaterial: comp.costMaterial || 0,
           costLabor: comp.costLabor || 0,
           costEquipment: comp.costEquipment || 0,
+          costOutsourced: comp.costOutsourced || 0,
           costOther: comp.costOther || 0,
         },
       },
@@ -236,6 +244,7 @@ export function ComposicaoItensEditor({
             costMaterial: it.breakdown.costMaterial * k,
             costLabor: it.breakdown.costLabor * k,
             costEquipment: it.breakdown.costEquipment * k,
+            costOutsourced: (it.breakdown.costOutsourced || 0) * k,
             costOther: it.breakdown.costOther * k,
           };
         }
@@ -488,6 +497,7 @@ export function ComposicaoItensEditor({
                     <SelectItem value="material">Material</SelectItem>
                     <SelectItem value="labor">Mão de Obra</SelectItem>
                     <SelectItem value="equipment">Equipamento</SelectItem>
+                    <SelectItem value="outsourced">Terceirizados</SelectItem>
                     <SelectItem value="other">Outros</SelectItem>
                   </SelectContent>
                 </Select>

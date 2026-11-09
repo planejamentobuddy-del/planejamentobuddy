@@ -413,6 +413,7 @@ export default function CatalogoGeral() {
                       <SelectItem value="material">Material</SelectItem>
                       <SelectItem value="labor">Mão de Obra</SelectItem>
                       <SelectItem value="equipment">Equipamento</SelectItem>
+                      <SelectItem value="outsourced">Terceirizados</SelectItem>
                       <SelectItem value="other">Outros</SelectItem>
                     </SelectContent>
                   </Select>

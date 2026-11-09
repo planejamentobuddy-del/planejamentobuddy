@@ -91,6 +91,7 @@ export function SinapiSearchModal({
   const [customMat, setCustomMat] = useState<number>(0);
   const [customLab, setCustomLab] = useState<number>(0);
   const [customEq, setCustomEq] = useState<number>(0);
+  const [customOutsourced, setCustomOutsourced] = useState<number>(0);
   const [customOth, setCustomOth] = useState<number>(0);
   const [customBdi, setCustomBdi] = useState<number>(bdiRate);
   const [saveToGlobalCatalog, setSaveToGlobalCatalog] = useState(true);
@@ -105,8 +106,9 @@ export function SinapiSearchModal({
   const effMat = useItems && itemsSummary.hasMaterial ? itemsSummary.material : customMat;
   const effLab = useItems && itemsSummary.hasLabor ? itemsSummary.labor : customLab;
   const effEq = useItems && itemsSummary.hasEquipment ? itemsSummary.equipment : customEq;
+  const effOutsourced = useItems && itemsSummary.hasOutsourced ? itemsSummary.outsourced : customOutsourced;
   const effOth = useItems && itemsSummary.hasOther ? itemsSummary.other : customOth;
-  const effTotal = effMat + effLab + effEq + effOth;
+  const effTotal = effMat + effLab + effEq + effOutsourced + effOth;
 
   // Sincronizar destino ao abrir
   useEffect(() => {
@@ -191,11 +193,13 @@ export function SinapiSearchModal({
       let mat = 0;
       let lab = 0;
       let eq = 0;
+      let out = 0;
       let oth = 0;
 
       if (insumo.group === 'material') mat = insumo.unitCost;
       else if (insumo.group === 'labor') lab = insumo.unitCost;
       else if (insumo.group === 'equipment') eq = insumo.unitCost;
+      else if (insumo.group === 'outsourced') out = insumo.unitCost;
       else oth = insumo.unitCost;
 
       addItemToStage(selectedStageId, {
@@ -209,6 +213,7 @@ export function SinapiSearchModal({
         unitCostMaterial: mat,
         unitCostLabor: lab,
         unitCostEquipment: eq,
+        unitCostOutsourced: out,
         unitCostOther: oth,
         unitCostTotal: insumo.unitCost,
         bdi: bdiRate,
@@ -226,12 +231,13 @@ export function SinapiSearchModal({
         unitCostMaterial: comp.costMaterial || 0,
         unitCostLabor: comp.costLabor || 0,
         unitCostEquipment: comp.costEquipment || 0,
+        unitCostOutsourced: comp.costOutsourced || 0,
         unitCostOther: comp.costOther || 0,
         unitCostTotal: comp.costTotal,
         bdi: comp.bdi !== undefined ? comp.bdi : bdiRate,
         composition: comp.items?.map((it) => ({
           id: it.id,
-          type: it.group === 'other' ? 'material' : it.group,
+          type: it.group,
           code: it.code,
           description: it.description,
           unit: it.unit,
@@ -286,8 +292,9 @@ export function SinapiSearchModal({
     const mat = Number(effMat) || 0;
     const lab = Number(effLab) || 0;
     const eq = Number(effEq) || 0;
+    const out = Number(effOutsourced) || 0;
     const oth = Number(effOth) || 0;
-    const unitTot = mat + lab + eq + oth;
+    const unitTot = mat + lab + eq + out + oth;
     const bdiVal = customBdi !== undefined ? Number(customBdi) : bdiRate;
 
     // Itens vinculados (somente para composição)
@@ -298,7 +305,7 @@ export function SinapiSearchModal({
       if (customType === 'insumo') {
         addInsumo({
           code: '',
-          group: lab > mat ? 'labor' : 'material',
+          group: out > mat && out > lab ? 'outsourced' : lab > mat ? 'labor' : 'material',
           description: customDesc.trim(),
           unit: customUnit.trim() || 'und',
           type: currentStage?.title || 'Geral',
@@ -318,6 +325,7 @@ export function SinapiSearchModal({
           costMaterial: mat,
           costLabor: lab,
           costEquipment: eq,
+          costOutsourced: out,
           costOther: oth,
           costTotal: unitTot,
           bdi: bdiVal,
@@ -328,16 +336,15 @@ export function SinapiSearchModal({
 
     // Detalhamento (composição analítica) exibido no item do orçamento
     const compositionDetail = itemsToSave.map((it) => {
-      let type: 'material' | 'labor' | 'equipment' = 'material';
+      let type: 'material' | 'labor' | 'equipment' | 'outsourced' | 'other' = 'material';
       if (it.itemType === 'composicao' && it.breakdown) {
         const b = it.breakdown;
-        const max = Math.max(b.costMaterial, b.costLabor, b.costEquipment);
+        const max = Math.max(b.costMaterial, b.costLabor, b.costEquipment, b.costOutsourced || 0);
         if (max === b.costLabor && b.costLabor > 0) type = 'labor';
         else if (max === b.costEquipment && b.costEquipment > 0) type = 'equipment';
-      } else if (it.group === 'labor') {
-        type = 'labor';
-      } else if (it.group === 'equipment') {
-        type = 'equipment';
+        else if (max === (b.costOutsourced || 0) && (b.costOutsourced || 0) > 0) type = 'outsourced';
+      } else {
+        type = it.group;
       }
       return {
         id: it.id,
@@ -359,6 +366,7 @@ export function SinapiSearchModal({
       unitCostMaterial: mat,
       unitCostLabor: lab,
       unitCostEquipment: eq,
+      unitCostOutsourced: out,
       unitCostOther: oth,
       unitCostTotal: unitTot,
       bdi: bdiVal,
@@ -372,6 +380,7 @@ export function SinapiSearchModal({
     setCustomMat(0);
     setCustomLab(0);
     setCustomEq(0);
+    setCustomOutsourced(0);
     setCustomOth(0);
     setCustomItems([]);
     onOpenChange(false);
@@ -893,7 +902,7 @@ export function SinapiSearchModal({
                 </div>
               )}
 
-              {/* 4 Categorias de Custos: Material, Mão de Obra, Equipamento, Outros */}
+              {/* 5 Categorias de Custos: Material, Mão de Obra, Equipamento, Terceirizados, Outros */}
               <div className="space-y-1.5 pt-1">
                 {customType === 'composicao' && (
                   <p className="text-[11px] text-muted-foreground">
@@ -902,11 +911,12 @@ export function SinapiSearchModal({
                       : 'Sem itens vinculados: informe os custos manualmente ou adicione insumos/composições acima.'}
                   </p>
                 )}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   {[
                     { label: 'Custo Mat. (R$)', color: 'text-blue-600 dark:text-blue-400', has: itemsSummary.hasMaterial, eff: effMat, set: setCustomMat },
                     { label: 'Custo M.O. (R$)', color: 'text-emerald-600 dark:text-emerald-400', has: itemsSummary.hasLabor, eff: effLab, set: setCustomLab },
                     { label: 'Custo Equip. (R$)', color: 'text-amber-600 dark:text-amber-400', has: itemsSummary.hasEquipment, eff: effEq, set: setCustomEq },
+                    { label: 'Terceirizados (R$)', color: 'text-cyan-600 dark:text-cyan-400', has: itemsSummary.hasOutsourced, eff: effOutsourced, set: setCustomOutsourced },
                     { label: 'Custo Outros (R$)', color: 'text-purple-600 dark:text-purple-400', has: itemsSummary.hasOther, eff: effOth, set: setCustomOth },
                   ].map((field) => {
                     const locked = useItems && field.has;

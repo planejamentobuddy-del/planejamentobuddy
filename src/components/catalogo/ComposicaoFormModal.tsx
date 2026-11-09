@@ -173,16 +173,18 @@ export function ComposicaoFormModal({
   // Tabela de Itens (Insumos e Composições Auxiliares) da composição
   const [items, setItems] = useState<ComposicaoItem[]>([]);
 
-  // Custos das 4 categorias (permitindo modo granular via itens OU modo manual direto)
+  // Custos das 5 categorias (permitindo modo granular via itens OU modo manual direto)
   const [costLabor, setCostLabor] = useState<number>(0);
   const [costMaterial, setCostMaterial] = useState<number>(0);
   const [costEquipment, setCostEquipment] = useState<number>(0);
+  const [costOutsourced, setCostOutsourced] = useState<number>(0);
   const [costOther, setCostOther] = useState<number>(0);
 
   // Strings dos inputs para digitação livre
   const [laborInput, setLaborInput] = useState<string>('R$ 0,00');
   const [materialInput, setMaterialInput] = useState<string>('R$ 0,00');
   const [equipmentInput, setEquipmentInput] = useState<string>('R$ 0,00');
+  const [outsourcedInput, setOutsourcedInput] = useState<string>('R$ 0,00');
   const [otherInput, setOtherInput] = useState<string>('R$ 0,00');
 
   // BDI e Preço Unitário
@@ -232,23 +234,26 @@ export function ComposicaoFormModal({
         const lab = composicaoToEdit.costLabor || 0;
         const mat = composicaoToEdit.costMaterial || 0;
         const eq = composicaoToEdit.costEquipment || 0;
+        const out = composicaoToEdit.costOutsourced || 0;
         const oth = composicaoToEdit.costOther || 0;
 
         setCostLabor(lab);
         setCostMaterial(mat);
         setCostEquipment(eq);
+        setCostOutsourced(out);
         setCostOther(oth);
 
         setLaborInput(formatCurrency(lab));
         setMaterialInput(formatCurrency(mat));
         setEquipmentInput(formatCurrency(eq));
+        setOutsourcedInput(formatCurrency(out));
         setOtherInput(formatCurrency(oth));
 
         const compBdi = composicaoToEdit.bdi ?? 0;
         setBdi(compBdi);
         setBdiInput(String(compBdi));
 
-        const compTot = lab + mat + eq + oth;
+        const compTot = lab + mat + eq + out + oth;
         const compPrice = composicaoToEdit.sellingPrice ?? compTot * (1 + compBdi / 100);
         setPriceInput(formatCurrency(compPrice));
       } else {
@@ -265,11 +270,13 @@ export function ComposicaoFormModal({
         setCostLabor(0);
         setCostMaterial(0);
         setCostEquipment(0);
+        setCostOutsourced(0);
         setCostOther(0);
 
         setLaborInput('R$ 0,00');
         setMaterialInput('R$ 0,00');
         setEquipmentInput('R$ 0,00');
+        setOutsourcedInput('R$ 0,00');
         setOtherInput('R$ 0,00');
 
         setBdi(0);
@@ -286,11 +293,13 @@ export function ComposicaoFormModal({
     let mat = 0;
     let lab = 0;
     let eq = 0;
+    let out = 0;
     let oth = 0;
 
     let hasMat = false;
     let hasLab = false;
     let hasEq = false;
+    let hasOut = false;
     let hasOth = false;
 
     currentItems.forEach((item) => {
@@ -299,14 +308,16 @@ export function ComposicaoFormModal({
         const itemMat = (item.breakdown.costMaterial || 0) * coef;
         const itemLab = (item.breakdown.costLabor || 0) * coef;
         const itemEq = (item.breakdown.costEquipment || 0) * coef;
+        const itemOut = (item.breakdown.costOutsourced || 0) * coef;
         const itemOth = (item.breakdown.costOther || 0) * coef;
 
         if (itemMat > 0) { mat += itemMat; hasMat = true; }
         if (itemLab > 0) { lab += itemLab; hasLab = true; }
         if (itemEq > 0) { eq += itemEq; hasEq = true; }
+        if (itemOut > 0) { out += itemOut; hasOut = true; }
         if (itemOth > 0) { oth += itemOth; hasOth = true; }
 
-        if (itemMat === 0 && itemLab === 0 && itemEq === 0 && itemOth === 0) {
+        if (itemMat === 0 && itemLab === 0 && itemEq === 0 && itemOut === 0 && itemOth === 0) {
           const tot = (item.unitCost || 0) * coef;
           oth += tot;
           hasOth = true;
@@ -322,6 +333,9 @@ export function ComposicaoFormModal({
         } else if (item.group === 'equipment') {
           eq += tot;
           hasEq = true;
+        } else if (item.group === 'outsourced') {
+          out += tot;
+          hasOut = true;
         } else {
           oth += tot;
           hasOth = true;
@@ -334,27 +348,30 @@ export function ComposicaoFormModal({
     const newLabor = hasLab ? lab : costLabor;
     const newMaterial = hasMat ? mat : costMaterial;
     const newEquipment = hasEq ? eq : costEquipment;
+    const newOutsourced = hasOut ? out : costOutsourced;
     const newOther = hasOth ? oth : costOther;
 
     setCostLabor(newLabor);
     setCostMaterial(newMaterial);
     setCostEquipment(newEquipment);
+    setCostOutsourced(newOutsourced);
     setCostOther(newOther);
 
     if (hasLab) setLaborInput(formatCurrency(newLabor));
     if (hasMat) setMaterialInput(formatCurrency(newMaterial));
     if (hasEq) setEquipmentInput(formatCurrency(newEquipment));
+    if (hasOut) setOutsourcedInput(formatCurrency(newOutsourced));
     if (hasOth) setOtherInput(formatCurrency(newOther));
 
-    const newTotal = newLabor + newMaterial + newEquipment + newOther;
+    const newTotal = newLabor + newMaterial + newEquipment + newOutsourced + newOther;
     const newSelling = newTotal * (1 + bdi / 100);
     setPriceInput(formatCurrency(newSelling));
   };
 
   // Custo unitário total computado
   const costTotal = useMemo(() => {
-    return costLabor + costMaterial + costEquipment + costOther;
-  }, [costLabor, costMaterial, costEquipment, costOther]);
+    return costLabor + costMaterial + costEquipment + costOutsourced + costOther;
+  }, [costLabor, costMaterial, costEquipment, costOutsourced, costOther]);
 
   // Preço Unitário computado a partir do Custo Total e BDI
   const computedSellingPrice = useMemo(() => {
@@ -416,6 +433,16 @@ export function ComposicaoFormModal({
     setEquipmentInput(formatCurrency(costEquipment));
   };
 
+  const handleOutsourcedChange = (valStr: string) => {
+    setOutsourcedInput(valStr);
+    const parsed = parseMoneyInput(valStr);
+    setCostOutsourced(parsed);
+  };
+
+  const handleOutsourcedBlur = () => {
+    setOutsourcedInput(formatCurrency(costOutsourced));
+  };
+
   const handleOtherChange = (valStr: string) => {
     setOtherInput(valStr);
     const parsed = parseMoneyInput(valStr);
@@ -470,6 +497,7 @@ export function ComposicaoFormModal({
         costMaterial: comp.costMaterial || 0,
         costLabor: comp.costLabor || 0,
         costEquipment: comp.costEquipment || 0,
+        costOutsourced: comp.costOutsourced || 0,
         costOther: comp.costOther || 0,
       },
     };
@@ -527,6 +555,7 @@ export function ComposicaoFormModal({
                   costMaterial: (item.breakdown.costMaterial / item.unitCost) * unitCost,
                   costLabor: (item.breakdown.costLabor / item.unitCost) * unitCost,
                   costEquipment: (item.breakdown.costEquipment / item.unitCost) * unitCost,
+                  costOutsourced: ((item.breakdown.costOutsourced || 0) / item.unitCost) * unitCost,
                   costOther: (item.breakdown.costOther / item.unitCost) * unitCost,
                 },
               }
@@ -569,6 +598,7 @@ export function ComposicaoFormModal({
       costMaterial,
       costLabor,
       costEquipment,
+      costOutsourced,
       costOther,
       costTotal,
       detailedDescription: detailedDescription.trim(),
@@ -1196,8 +1226,8 @@ export function ComposicaoFormModal({
                 </span>
               </div>
 
-              {/* Grid 4 colunas: Mão de Obra, Material, Equipamento, Outros */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Grid 5 colunas: Mão de Obra, Material, Equipamento, Terceirizados, Outros */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* Mão de Obra */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold text-foreground/80">
@@ -1238,6 +1268,21 @@ export function ComposicaoFormModal({
                     value={equipmentInput}
                     onChange={(e) => handleEquipmentChange(e.target.value)}
                     onBlur={handleEquipmentBlur}
+                    placeholder="R$ 0,00"
+                    className="h-10 rounded-lg text-sm bg-background font-mono"
+                  />
+                </div>
+
+                {/* Terceirizados */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-foreground/80">
+                    Terceirizados
+                  </Label>
+                  <Input
+                    type="text"
+                    value={outsourcedInput}
+                    onChange={(e) => handleOutsourcedChange(e.target.value)}
+                    onBlur={handleOutsourcedBlur}
                     placeholder="R$ 0,00"
                     className="h-10 rounded-lg text-sm bg-background font-mono"
                   />
@@ -1330,6 +1375,7 @@ export function ComposicaoFormModal({
                     <SelectItem value="material">Material</SelectItem>
                     <SelectItem value="labor">Mão de Obra</SelectItem>
                     <SelectItem value="equipment">Equipamento</SelectItem>
+                    <SelectItem value="outsourced">Terceirizados</SelectItem>
                     <SelectItem value="other">Outros</SelectItem>
                   </SelectContent>
                 </Select>

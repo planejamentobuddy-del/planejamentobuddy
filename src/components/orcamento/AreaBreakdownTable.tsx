@@ -36,6 +36,7 @@ export function AreaBreakdownTable() {
     materialCostTotal,
     laborCostTotal,
     equipmentCostTotal,
+    outsourcedCostTotal,
     otherCostTotal,
     updateProject,
   } = useBudget();
@@ -65,12 +66,14 @@ export function AreaBreakdownTable() {
   const grandMat = materialCostTotal;
   const grandLab = laborCostTotal;
   const grandEq = equipmentCostTotal;
+  const grandOut = outsourcedCostTotal;
   const grandOth = otherCostTotal;
 
   const grandTotalPerM2 = totalArea > 0 ? grandTotal / totalArea : 0;
   const grandMatPerM2 = totalArea > 0 ? grandMat / totalArea : 0;
   const grandLabPerM2 = totalArea > 0 ? grandLab / totalArea : 0;
   const grandEqPerM2 = totalArea > 0 ? grandEq / totalArea : 0;
+  const grandOutPerM2 = totalArea > 0 ? grandOut / totalArea : 0;
   const grandOthPerM2 = totalArea > 0 ? grandOth / totalArea : 0;
 
   return (
@@ -178,6 +181,7 @@ export function AreaBreakdownTable() {
                   <th className="py-3 px-3 text-right min-w-[120px]">Mão de Obra</th>
                   <th className="py-3 px-3 text-right min-w-[120px]">Material</th>
                   <th className="py-3 px-3 text-right min-w-[120px]">Equipamento</th>
+                  <th className="py-3 px-3 text-right min-w-[120px]">Terceirizados</th>
                   <th className="py-3 px-3 text-right min-w-[120px]">Outros</th>
                   <th className="py-3 px-3 text-right min-w-[130px]">
                     {mode === 'selling' ? 'Preço Total' : 'Custo Total'}
@@ -188,7 +192,7 @@ export function AreaBreakdownTable() {
               <tbody className="divide-y divide-border/60">
                 {stageSummaries.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={8} className="py-8 text-center text-muted-foreground">
                       Nenhuma etapa cadastrada no orçamento.
                     </td>
                   </tr>
@@ -237,6 +241,16 @@ export function AreaBreakdownTable() {
                           </span>
                           <span className="font-bold text-foreground block font-mono">
                             {formatCurrency(stage.equipmentPerM2)} / m²
+                          </span>
+                        </td>
+
+                        {/* Terceirizados */}
+                        <td className="py-3.5 px-3 text-right">
+                          <span className="text-muted-foreground block font-mono">
+                            {formatCurrency(stage.outsourcedCost || 0)}
+                          </span>
+                          <span className="font-bold text-foreground block font-mono">
+                            {formatCurrency(stage.outsourcedPerM2 || 0)} / m²
                           </span>
                         </td>
 
@@ -304,6 +318,16 @@ export function AreaBreakdownTable() {
                     </span>
                     <span className="text-xs font-black text-foreground block font-mono">
                       {formatCurrency(grandEqPerM2)} / m²
+                    </span>
+                  </td>
+
+                  {/* Terceirizados Total */}
+                  <td className="py-4 px-3 text-right">
+                    <span className="text-xs text-muted-foreground block font-mono">
+                      {formatCurrency(grandOut)}
+                    </span>
+                    <span className="text-xs font-black text-foreground block font-mono">
+                      {formatCurrency(grandOutPerM2)} / m²
                     </span>
                   </td>
 

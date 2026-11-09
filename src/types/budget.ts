@@ -17,7 +17,7 @@ export interface BdiConfig {
 
 export interface CompositionInput {
   id: string;
-  type: 'material' | 'labor' | 'equipment';
+  type: 'material' | 'labor' | 'equipment' | 'outsourced' | 'other';
   code: string;
   description: string;
   unit: string;
@@ -41,6 +41,7 @@ export interface BudgetItem {
   unitCostMaterial: number;
   unitCostLabor: number;
   unitCostEquipment: number;
+  unitCostOutsourced?: number;
   unitCostOther?: number;
   unitCostTotal: number;
   bdi?: number; // BDI individual por item (%)

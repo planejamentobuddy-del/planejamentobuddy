@@ -1,9 +1,10 @@
-export type InsumoGrupo = 'material' | 'labor' | 'equipment' | 'other';
+export type InsumoGrupo = 'material' | 'labor' | 'equipment' | 'outsourced' | 'other';
 
 export const INSUMO_GRUPO_LABELS: Record<InsumoGrupo, string> = {
   material: 'Material',
   labor: 'Mão de Obra',
   equipment: 'Equipamento',
+  outsourced: 'Terceirizados',
   other: 'Outros',
 };
 
@@ -11,6 +12,7 @@ export const INSUMO_GRUPO_COLORS: Record<InsumoGrupo, string> = {
   material: 'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400',
   labor: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-400',
   equipment: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-400',
+  outsourced: 'bg-cyan-500/10 text-cyan-700 border-cyan-500/30 dark:text-cyan-400',
   other: 'bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400',
 };
 
@@ -64,6 +66,7 @@ export interface ComposicaoItem {
     costMaterial: number;
     costLabor: number;
     costEquipment: number;
+    costOutsourced?: number;
     costOther: number;
   };
 }
@@ -80,6 +83,7 @@ export interface Composicao {
   costMaterial: number;
   costLabor: number;
   costEquipment: number;
+  costOutsourced?: number;
   costOther: number;
   costTotal: number;
   detailedDescription?: string;

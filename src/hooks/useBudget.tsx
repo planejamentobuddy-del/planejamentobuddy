@@ -20,6 +20,7 @@ export interface StageSummary {
   materialCost: number;
   laborCost: number;
   equipmentCost: number;
+  outsourcedCost: number;
   otherCost: number;
   sellingPrice: number;
   // Valores por m² de área construída
@@ -27,6 +28,7 @@ export interface StageSummary {
   materialPerM2: number;
   laborPerM2: number;
   equipmentPerM2: number;
+  outsourcedPerM2: number;
   otherPerM2: number;
   sellingPerM2: number;
   percentageOfTotal: number;
@@ -45,6 +47,7 @@ interface BudgetContextType {
   materialCostTotal: number;
   laborCostTotal: number;
   equipmentCostTotal: number;
+  outsourcedCostTotal: number;
   otherCostTotal: number;
   sellingPriceTotal: number;
   costPerSquareMeter: number;
@@ -480,12 +483,13 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     return calculateBdiRate(activeProject.bdiConfig);
   }, [activeProject]);
 
-  // Cálculos consolidados por Etapa e Categorias (Mão de Obra, Material, Equipamento, Outros)
+  // Cálculos consolidados por Etapa e Categorias (Mão de Obra, Material, Equipamento, Terceirizados, Outros)
   const {
     directCostTotal,
     materialCostTotal,
     laborCostTotal,
     equipmentCostTotal,
+    outsourcedCostTotal,
     otherCostTotal,
     sellingPriceTotal,
     stageSummaries,
@@ -496,6 +500,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         materialCostTotal: 0,
         laborCostTotal: 0,
         equipmentCostTotal: 0,
+        outsourcedCostTotal: 0,
         otherCostTotal: 0,
         sellingPriceTotal: 0,
         stageSummaries: [],
@@ -506,6 +511,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     let grandMat = 0;
     let grandLab = 0;
     let grandEq = 0;
+    let grandOut = 0;
     let grandOth = 0;
     let grandSelling = 0;
 
@@ -515,6 +521,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       let stageMat = 0;
       let stageLab = 0;
       let stageEq = 0;
+      let stageOut = 0;
       let stageOth = 0;
       let stageDirect = 0;
       let stageSelling = 0;
@@ -526,12 +533,14 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         const itemMat = (item.unitCostMaterial || 0) * q;
         const itemLab = (item.unitCostLabor || 0) * q;
         const itemEq = (item.unitCostEquipment || 0) * q;
+        const itemOut = (item.unitCostOutsourced || 0) * q;
         const itemOth = (item.unitCostOther || 0) * q;
 
         const calculatedUnitTotal =
           (item.unitCostMaterial || 0) +
           (item.unitCostLabor || 0) +
           (item.unitCostEquipment || 0) +
+          (item.unitCostOutsourced || 0) +
           (item.unitCostOther || 0);
 
         const unitCostTotal = item.unitCostTotal || calculatedUnitTotal;
@@ -548,6 +557,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         stageMat += itemMat;
         stageLab += itemLab;
         stageEq += itemEq;
+        stageOut += itemOut;
         stageOth += itemOth;
         stageDirect += itemDirect;
         stageSelling += itemSelling;
@@ -557,6 +567,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       grandMat += stageMat;
       grandLab += stageLab;
       grandEq += stageEq;
+      grandOut += stageOut;
       grandOth += stageOth;
       grandSelling += stageSelling;
 
@@ -568,12 +579,14 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         materialCost: stageMat,
         laborCost: stageLab,
         equipmentCost: stageEq,
+        outsourcedCost: stageOut,
         otherCost: stageOth,
         sellingPrice: stageSelling,
         directCostPerM2: area > 0 ? stageDirect / area : 0,
         materialPerM2: area > 0 ? stageMat / area : 0,
         laborPerM2: area > 0 ? stageLab / area : 0,
         equipmentPerM2: area > 0 ? stageEq / area : 0,
+        outsourcedPerM2: area > 0 ? stageOut / area : 0,
         otherPerM2: area > 0 ? stageOth / area : 0,
         sellingPerM2: area > 0 ? stageSelling / area : 0,
         percentageOfTotal: 0,
@@ -590,6 +603,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       materialCostTotal: grandMat,
       laborCostTotal: grandLab,
       equipmentCostTotal: grandEq,
+      outsourcedCostTotal: grandOut,
       otherCostTotal: grandOth,
       sellingPriceTotal: grandSelling,
       stageSummaries: summaries,
@@ -1026,6 +1040,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
           (item.unitCostMaterial || 0) +
           (item.unitCostLabor || 0) +
           (item.unitCostEquipment || 0) +
+          (item.unitCostOutsourced || 0) +
           (item.unitCostOther || 0);
 
         const autoCode = `${sub.code}.${order}`;
@@ -1087,6 +1102,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
       (item.unitCostMaterial || 0) +
       (item.unitCostLabor || 0) +
       (item.unitCostEquipment || 0) +
+      (item.unitCostOutsourced || 0) +
       (item.unitCostOther || 0);
 
     const autoCode = `${stage.code}.${order}`;
@@ -1132,6 +1148,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
           (merged.unitCostMaterial || 0) +
           (merged.unitCostLabor || 0) +
           (merged.unitCostEquipment || 0) +
+          (merged.unitCostOutsourced || 0) +
           (merged.unitCostOther || 0);
 
         return {
@@ -1160,6 +1177,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
             (merged.unitCostMaterial || 0) +
             (merged.unitCostLabor || 0) +
             (merged.unitCostEquipment || 0) +
+            (merged.unitCostOutsourced || 0) +
             (merged.unitCostOther || 0);
 
           return {
@@ -1252,14 +1270,16 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         let mat = 0;
         let lab = 0;
         let eq = 0;
+        let out = 0;
         newComp.forEach((c) => {
           const sub = (c.coefficient || 0) * (c.unitCost || 0);
           if (c.type === 'labor') lab += sub;
           else if (c.type === 'equipment') eq += sub;
+          else if (c.type === 'outsourced') out += sub;
           else mat += sub;
         });
         const oth = it.unitCostOther || 0;
-        const total = Number((mat + lab + eq + oth).toFixed(2));
+        const total = Number((mat + lab + eq + out + oth).toFixed(2));
 
         return {
           ...it,
@@ -1267,6 +1287,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
           unitCostMaterial: Number(mat.toFixed(2)),
           unitCostLabor: Number(lab.toFixed(2)),
           unitCostEquipment: Number(eq.toFixed(2)),
+          unitCostOutsourced: Number(out.toFixed(2)),
           unitCostTotal: total,
         };
       }
@@ -1346,6 +1367,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         materialCostTotal,
         laborCostTotal,
         equipmentCostTotal,
+        outsourcedCostTotal,
         otherCostTotal,
         sellingPriceTotal,
         costPerSquareMeter,
