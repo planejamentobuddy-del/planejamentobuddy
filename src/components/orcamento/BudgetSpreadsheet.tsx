@@ -16,8 +16,10 @@ import {
   Pencil,
   Check,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import { CompositionDetailModal } from './CompositionDetailModal';
+import { GlobalInputPriceModal } from './GlobalInputPriceModal';
 import { AreaBreakdownTable } from './AreaBreakdownTable';
 
 function formatCurrency(val: number): string {
@@ -459,6 +461,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
   const [searchFilter, setSearchFilter] = useState('');
   const [selectedCompositionItem, setSelectedCompositionItem] = useState<BudgetItem | null>(null);
   const [isCompModalOpen, setIsCompModalOpen] = useState(false);
+  const [isGlobalInputModalOpen, setIsGlobalInputModalOpen] = useState(false);
 
   // Criação de Nova Etapa (Nível 1)
   const [isAddingStage, setIsAddingStage] = useState(false);
@@ -533,6 +536,17 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsGlobalInputModalOpen(true)}
+            className="h-9 rounded-xl text-xs flex items-center gap-1.5 font-semibold text-foreground border-border/80 hover:bg-muted/60"
+            title="Atualizar o valor de um insumo (ex: Pedreiro) em todas as ocorrências do orçamento"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-primary" />
+            Atualizar Insumo no Orçamento
+          </Button>
           {isAddingStage ? (
             <form onSubmit={handleCreateStage} className="flex items-center gap-2">
               <Input
@@ -1009,6 +1023,11 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
         item={selectedCompositionItem}
         open={isCompModalOpen}
         onOpenChange={setIsCompModalOpen}
+      />
+
+      <GlobalInputPriceModal
+        open={isGlobalInputModalOpen}
+        onOpenChange={setIsGlobalInputModalOpen}
       />
     </div>
   );

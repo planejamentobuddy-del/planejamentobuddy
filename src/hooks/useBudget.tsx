@@ -81,6 +81,7 @@ interface BudgetContextType {
   ) => void;
   updateItem: (itemId: string, updates: Partial<BudgetItem>) => void;
   deleteItem: (itemId: string) => void;
+  updateInputPriceGlobally: (match: { code?: string; description: string }, newUnitCost: number) => number;
 
   // BDI e Cronograma
   updateBdiConfig: (config: BdiConfig) => void;
@@ -1043,6 +1044,96 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     toast.success('Cronograma de desembolso atualizado');
   };
 
+  const updateInputPriceGlobally = (
+    match: { code?: string; description: string },
+    newUnitCost: number
+  ): number => {
+    if (!activeProject) return 0;
+    const targetCode = (match.code || '').trim().toLowerCase();
+    const targetDesc = (match.description || '').trim().toLowerCase();
+    let updatedOccurrences = 0;
+
+    const isSameInput = (code?: string, desc?: string) => {
+      const c = (code || '').trim().toLowerCase();
+      const d = (desc || '').trim().toLowerCase();
+      if (targetDesc && d && d === targetDesc) return true;
+      if (targetCode && c && c === targetCode) return true;
+      return false;
+    };
+
+    const recalcItem = (it: BudgetItem): BudgetItem => {
+      if (it.composition && it.composition.length > 0) {
+        let changed = false;
+        const newComp = it.composition.map((comp) => {
+          if (isSameInput(comp.code, comp.description)) {
+            changed = true;
+            updatedOccurrences++;
+            return { ...comp, unitCost: newUnitCost };
+          }
+          return comp;
+        });
+
+        if (!changed) return it;
+
+        let mat = 0;
+        let lab = 0;
+        let eq = 0;
+        newComp.forEach((c) => {
+          const sub = (c.coefficient || 0) * (c.unitCost || 0);
+          if (c.type === 'labor') lab += sub;
+          else if (c.type === 'equipment') eq += sub;
+          else mat += sub;
+        });
+        const oth = it.unitCostOther || 0;
+        const total = Number((mat + lab + eq + oth).toFixed(2));
+
+        return {
+          ...it,
+          composition: newComp,
+          unitCostMaterial: Number(mat.toFixed(2)),
+          unitCostLabor: Number(lab.toFixed(2)),
+          unitCostEquipment: Number(eq.toFixed(2)),
+          unitCostTotal: total,
+        };
+      }
+
+      if (isSameInput(it.sinapiCode || it.code, it.description)) {
+        updatedOccurrences++;
+        const isLab = (it.unitCostLabor || 0) > 0 && (it.unitCostMaterial || 0) === 0;
+        const isEq = (it.unitCostEquipment || 0) > 0 && (it.unitCostMaterial || 0) === 0;
+        return {
+          ...it,
+          unitCostMaterial: !isLab && !isEq ? newUnitCost : 0,
+          unitCostLabor: isLab ? newUnitCost : 0,
+          unitCostEquipment: isEq ? newUnitCost : 0,
+          unitCostTotal: newUnitCost,
+        };
+      }
+
+      return it;
+    };
+
+    const updatedStages = activeProject.stages.map((st) => ({
+      ...st,
+      items: (st.items || []).map(recalcItem),
+      substages: (st.substages || []).map((sub) => ({
+        ...sub,
+        items: (sub.items || []).map(recalcItem),
+      })),
+    }));
+
+    if (updatedOccurrences > 0) {
+      updateProject(activeProject.id, { stages: updatedStages });
+      toast.success(
+        `Insumo "${match.description}" atualizado para R$ ${newUnitCost.toFixed(2).replace('.', ',')} em ${updatedOccurrences} ocorrência(s) do orçamento!`
+      );
+    } else {
+      toast.info('Nenhuma ocorrência encontrada para este insumo.');
+    }
+
+    return updatedOccurrences;
+  };
+
   return (
     <BudgetContext.Provider
       value={{
@@ -1078,6 +1169,7 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         addItemToStage,
         updateItem,
         deleteItem,
+        updateInputPriceGlobally,
         updateBdiConfig,
         updateDisbursementSchedule,
       }}
