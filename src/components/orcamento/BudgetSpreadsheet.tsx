@@ -18,6 +18,9 @@ import {
   X,
   RefreshCw,
   ArrowDown10,
+  ArrowUp,
+  ArrowDown,
+  GripVertical,
 } from 'lucide-react';
 import { CompositionDetailModal } from './CompositionDetailModal';
 import { GlobalInputPriceModal } from './GlobalInputPriceModal';
@@ -33,6 +36,73 @@ function formatNumber(val: number, dec: number = 2): string {
 
 function formatPercent(val: number, dec: number = 2): string {
   return `${val.toFixed(dec)}%`;
+}
+
+/**
+ * Badge editável inline para digitar o número da Etapa (1, 2...) ou Subetapa (1.1, 1.2...)
+ * e reordenar automaticamente em ordem crescente
+ */
+function SequenceBadgeInput({
+  code,
+  onCommitPosition,
+  variant = 'stage',
+  title,
+}: {
+  code: string;
+  onCommitPosition: (targetPos: number) => void;
+  variant?: 'stage' | 'substage';
+  title: string;
+}) {
+  const [val, setVal] = useState(code);
+
+  useEffect(() => {
+    setVal(code);
+  }, [code]);
+
+  const handleCommit = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed === code) {
+      setVal(code);
+      return;
+    }
+    const parts = trimmed.split('.');
+    const targetStr = variant === 'stage' ? parts[0] : parts[parts.length - 1];
+    const parsed = parseInt((targetStr || '').replace(/\D/g, ''), 10);
+    if (!isNaN(parsed) && parsed >= 1) {
+      onCommitPosition(parsed);
+    } else {
+      setVal(code);
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      value={val}
+      onClick={(e) => {
+        e.stopPropagation();
+        e.currentTarget.select();
+      }}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={(e) => handleCommit(e.target.value)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+          handleCommit(e.currentTarget.value);
+          e.currentTarget.blur();
+        } else if (e.key === 'Escape') {
+          setVal(code);
+          e.currentTarget.blur();
+        }
+      }}
+      title={title}
+      className={
+        variant === 'stage'
+          ? 'font-mono font-black text-xs bg-primary text-white px-1.5 py-0.5 rounded-lg shadow-sm w-10 text-center focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-text'
+          : 'font-mono font-bold text-[11px] bg-sky-500/15 text-sky-700 dark:text-sky-300 px-1 py-0.5 rounded border border-sky-500/30 w-11 text-center focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-text'
+      }
+    />
+  );
 }
 
 /**
@@ -568,10 +638,12 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
     stageSummaries,
     addStage,
     updateStage,
+    moveStageToPosition,
     updateStageBdi,
     deleteStage,
     addSubstage,
     updateSubstage,
+    moveSubstageToPosition,
     updateSubstageBdi,
     deleteSubstage,
     updateItem,
@@ -617,6 +689,12 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
   const [editingSubstageId, setEditingSubstageId] = useState<string | null>(null);
   const [editingSubstageCode, setEditingSubstageCode] = useState('');
   const [editingSubstageTitle, setEditingSubstageTitle] = useState('');
+
+  // Drag-and-drop de Etapas e Subetapas
+  const [draggedStageId, setDraggedStageId] = useState<string | null>(null);
+  const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
+  const [draggedSubstage, setDraggedSubstage] = useState<{ stageId: string; substageId: string } | null>(null);
+  const [dragOverSubstageId, setDragOverSubstageId] = useState<string | null>(null);
 
   const toggleStage = (stageId: string) => {
     setExpandedStages((prev) => ({ ...prev, [stageId]: !prev[stageId] }));
@@ -743,7 +821,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
 
       {/* LISTA HIERÁRQUICA: ETAPAS -> (SUBETAPAS / ITENS) */}
       <div className="space-y-4">
-        {activeProject.stages.map((stage) => {
+        {activeProject.stages.map((stage, stageIdx) => {
           const summary = stageSummaries.find((s) => s.stageId === stage.id);
           const isStageExpanded = expandedStages[stage.id] !== false;
 
@@ -790,14 +868,71 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
           return (
             <div
               key={stage.id}
-              className="rounded-2xl border bg-card text-card-foreground shadow-sm overflow-hidden transition-all"
+              draggable={editingStageId !== stage.id}
+              onDragStart={(e) => {
+                setDraggedStageId(stage.id);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(e) => {
+                if (!draggedStageId || draggedStageId === stage.id) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                setDragOverStageId(stage.id);
+              }}
+              onDragLeave={() => {
+                if (dragOverStageId === stage.id) setDragOverStageId(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedStageId && draggedStageId !== stage.id) {
+                  moveStageToPosition(draggedStageId, stageIdx + 1);
+                }
+                setDraggedStageId(null);
+                setDragOverStageId(null);
+              }}
+              onDragEnd={() => {
+                setDraggedStageId(null);
+                setDragOverStageId(null);
+              }}
+              className={`rounded-2xl border bg-card text-card-foreground shadow-sm overflow-hidden transition-all ${
+                dragOverStageId === stage.id ? 'ring-2 ring-primary border-primary' : ''
+              } ${draggedStageId === stage.id ? 'opacity-60' : ''}`}
             >
               {/* NÍVEL 1: HEADER DA ETAPA (Número 01, 02...) */}
               <div
                 onClick={() => toggleStage(stage.id)}
                 className="p-3.5 sm:p-4 bg-muted/40 hover:bg-muted/70 transition-colors flex items-center justify-between cursor-pointer select-none border-b"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-2.5">
+                  <span
+                    className="text-muted-foreground/50 hover:text-foreground cursor-grab active:cursor-grabbing p-0.5"
+                    title="Arraste para mover esta Etapa (ou digite o número / use as setas)"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <GripVertical className="w-4 h-4" />
+                  </span>
+
+                  <div className="flex flex-col items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      disabled={stageIdx === 0}
+                      onClick={() => moveStageToPosition(stage.id, stageIdx)}
+                      className="text-muted-foreground hover:text-primary disabled:opacity-25 disabled:pointer-events-none p-0.5 rounded hover:bg-background/80"
+                      title="Mover Etapa para cima"
+                    >
+                      <ArrowUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={stageIdx === activeProject.stages.length - 1}
+                      onClick={() => moveStageToPosition(stage.id, stageIdx + 2)}
+                      className="text-muted-foreground hover:text-primary disabled:opacity-25 disabled:pointer-events-none p-0.5 rounded hover:bg-background/80"
+                      title="Mover Etapa para baixo"
+                    >
+                      <ArrowDown className="w-3 h-3" />
+                    </button>
+                  </div>
+
                   <button className="text-muted-foreground p-1 hover:text-foreground">
                     {isStageExpanded ? (
                       <ChevronDown className="w-4 h-4" />
@@ -806,9 +941,12 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                     )}
                   </button>
 
-                  <span className="font-mono font-black text-xs bg-primary text-white px-2 py-0.5 rounded-lg shadow-sm">
-                    {stage.code}
-                  </span>
+                  <SequenceBadgeInput
+                    code={stage.code}
+                    variant="stage"
+                    onCommitPosition={(pos) => moveStageToPosition(stage.id, pos)}
+                    title="Clique e digite o número desejado para esta Etapa (ex: 1, 2, 3) e pressione Enter para mover e renumerar tudo em ordem crescente"
+                  />
 
                   <div>
                     {editingStageId === stage.id ? (
@@ -939,7 +1077,7 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                   {/* CASO A: ETAPA POSSUI SUBETAPAS (NÍVEL 2) */}
                   {hasSubstages && (
                     <div className="space-y-3">
-                      {stage.substages!.map((substage) => {
+                      {stage.substages!.map((substage, subIdx) => {
                         const isSubExpanded = expandedSubstages[substage.id] !== false;
                         const subItems = substage.items || [];
                         const subFallbackBdi =
@@ -974,14 +1112,83 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                         return (
                           <div
                             key={substage.id}
-                            className="rounded-xl border bg-card/80 shadow-xs overflow-hidden"
+                            draggable={editingSubstageId !== substage.id}
+                            onDragStart={(e) => {
+                              e.stopPropagation();
+                              setDraggedSubstage({ stageId: stage.id, substageId: substage.id });
+                              e.dataTransfer.effectAllowed = 'move';
+                            }}
+                            onDragOver={(e) => {
+                              if (
+                                !draggedSubstage ||
+                                draggedSubstage.stageId !== stage.id ||
+                                draggedSubstage.substageId === substage.id
+                              )
+                                return;
+                              e.preventDefault();
+                              e.stopPropagation();
+                              e.dataTransfer.dropEffect = 'move';
+                              setDragOverSubstageId(substage.id);
+                            }}
+                            onDragLeave={() => {
+                              if (dragOverSubstageId === substage.id) setDragOverSubstageId(null);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (
+                                draggedSubstage &&
+                                draggedSubstage.stageId === stage.id &&
+                                draggedSubstage.substageId !== substage.id
+                              ) {
+                                moveSubstageToPosition(stage.id, draggedSubstage.substageId, subIdx + 1);
+                              }
+                              setDraggedSubstage(null);
+                              setDragOverSubstageId(null);
+                            }}
+                            onDragEnd={() => {
+                              setDraggedSubstage(null);
+                              setDragOverSubstageId(null);
+                            }}
+                            className={`rounded-xl border bg-card/80 shadow-xs overflow-hidden transition-all ${
+                              dragOverSubstageId === substage.id ? 'ring-2 ring-sky-500 border-sky-500' : ''
+                            } ${draggedSubstage?.substageId === substage.id ? 'opacity-60' : ''}`}
                           >
                             {/* HEADER DA SUBETAPA (1.1, 1.2...) */}
                             <div
                               onClick={() => toggleSubstage(substage.id)}
                               className="px-3 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-between cursor-pointer select-none border-b text-xs"
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5 sm:gap-2">
+                                <span
+                                  className="text-muted-foreground/50 hover:text-foreground cursor-grab active:cursor-grabbing p-0.5"
+                                  title="Arraste para mover esta Subetapa"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <GripVertical className="w-3.5 h-3.5" />
+                                </span>
+
+                                <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    disabled={subIdx === 0}
+                                    onClick={() => moveSubstageToPosition(stage.id, substage.id, subIdx)}
+                                    className="text-muted-foreground hover:text-primary disabled:opacity-25 disabled:pointer-events-none p-0.5 rounded hover:bg-background/80"
+                                    title="Mover Subetapa para cima"
+                                  >
+                                    <ArrowUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={subIdx === (stage.substages?.length || 1) - 1}
+                                    onClick={() => moveSubstageToPosition(stage.id, substage.id, subIdx + 2)}
+                                    className="text-muted-foreground hover:text-primary disabled:opacity-25 disabled:pointer-events-none p-0.5 rounded hover:bg-background/80"
+                                    title="Mover Subetapa para baixo"
+                                  >
+                                    <ArrowDown className="w-3 h-3" />
+                                  </button>
+                                </div>
+
                                 <button className="text-muted-foreground p-0.5 hover:text-foreground">
                                   {isSubExpanded ? (
                                     <ChevronDown className="w-3.5 h-3.5" />
@@ -989,9 +1196,12 @@ export function BudgetSpreadsheet({ onOpenSinapiModal }: BudgetSpreadsheetProps)
                                     <ChevronRight className="w-3.5 h-3.5" />
                                   )}
                                 </button>
-                                <span className="font-mono font-bold text-[11px] bg-sky-500/15 text-sky-700 dark:text-sky-300 px-1.5 py-0.2 rounded border border-sky-500/30">
-                                  {substage.code}
-                                </span>
+                                <SequenceBadgeInput
+                                  code={substage.code}
+                                  variant="substage"
+                                  onCommitPosition={(pos) => moveSubstageToPosition(stage.id, substage.id, pos)}
+                                  title="Clique e digite a posição da Subetapa (ex: 1.1, 1.2 ou apenas 1, 2) e pressione Enter para mover e renumerar em ordem crescente"
+                                />
                                 {editingSubstageId === substage.id ? (
                                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                     <Input

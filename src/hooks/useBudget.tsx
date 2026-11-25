@@ -66,11 +66,13 @@ interface BudgetContextType {
   // Ações de Etapas, Subetapas e Itens
   addStage: (title: string, code?: string) => void;
   updateStage: (stageId: string, title: string, code: string) => void;
+  moveStageToPosition: (stageId: string, targetPosition: number) => void;
   updateStageBdi: (stageId: string, bdi: number | undefined) => void;
   deleteStage: (stageId: string) => void;
 
   addSubstage: (stageId: string, title: string, code?: string) => void;
   updateSubstage: (stageId: string, substageId: string, title: string, code: string) => void;
+  moveSubstageToPosition: (stageId: string, substageId: string, targetPosition: number) => void;
   updateSubstageBdi: (stageId: string, substageId: string, bdi: number | undefined) => void;
   deleteSubstage: (stageId: string, substageId: string) => void;
 
@@ -85,6 +87,7 @@ interface BudgetContextType {
     substageId?: string
   ) => void;
   updateItem: (itemId: string, updates: Partial<BudgetItem>) => void;
+  moveItemToPosition: (itemId: string, targetPosition: number) => void;
   deleteItem: (itemId: string) => void;
   updateInputPriceGlobally: (match: { code?: string; description: string }, newUnitCost: number) => number;
   sortProjectIndices: () => void;
@@ -819,12 +822,51 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     toast.success(`Etapa "${finalCode} - ${title}" adicionada`);
   };
 
-  const updateStage = (stageId: string, title: string, code: string) => { toast.success('Etapa renomeada');
+  const moveStageToPosition = (stageId: string, targetPosition: number) => {
     if (!activeProject) return;
-    const updatedStages = activeProject.stages.map((st) =>
-      st.id === stageId ? { ...st, title, code } : st
+    const stages = [...activeProject.stages];
+    const fromIdx = stages.findIndex((st) => st.id === stageId);
+    if (fromIdx === -1) return;
+
+    const toIdx = Math.max(0, Math.min(stages.length - 1, targetPosition - 1));
+    if (fromIdx === toIdx) {
+      updateProject(activeProject.id, { stages: normalizeProjectStages(stages, true) });
+      return;
+    }
+
+    const [movedStage] = stages.splice(fromIdx, 1);
+    stages.splice(toIdx, 0, movedStage);
+
+    const renumbered = normalizeProjectStages(stages, true);
+    updateProject(activeProject.id, { stages: renumbered });
+    toast.success(`Etapa "${movedStage.title}" movida para a posição ${toIdx + 1} (subetapas e itens renumerados)`);
+  };
+
+  const updateStage = (stageId: string, title: string, code: string) => {
+    if (!activeProject) return;
+    const stages = activeProject.stages.map((st) =>
+      st.id === stageId ? { ...st, title } : st
     );
-    updateProject(activeProject.id, { stages: updatedStages });
+
+    const fromIdx = stages.findIndex((st) => st.id === stageId);
+    const parsedPos = parseInt((code || '').trim().split('.')[0].replace(/\D/g, ''), 10);
+
+    if (fromIdx !== -1 && !isNaN(parsedPos) && parsedPos >= 1) {
+      const toIdx = Math.max(0, Math.min(stages.length - 1, parsedPos - 1));
+      const reordered = [...stages];
+      const [movedStage] = reordered.splice(fromIdx, 1);
+      reordered.splice(toIdx, 0, movedStage);
+      updateProject(activeProject.id, { stages: normalizeProjectStages(reordered, true) });
+      toast.success(
+        fromIdx !== toIdx
+          ? `Etapa "${title}" movida para a posição ${toIdx + 1} e sequência renumerada`
+          : 'Etapa atualizada'
+      );
+      return;
+    }
+
+    updateProject(activeProject.id, { stages: normalizeProjectStages(stages, true) });
+    toast.success('Etapa atualizada');
   };
 
   const updateStageBdi = (stageId: string, newBdi: number | undefined) => {
@@ -937,6 +979,33 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     toast.success(`Subetapa "${title}" adicionada`);
   };
 
+  const moveSubstageToPosition = (
+    stageId: string,
+    substageId: string,
+    targetPosition: number
+  ) => {
+    if (!activeProject) return;
+
+    const updatedStages = activeProject.stages.map((st) => {
+      if (st.id !== stageId) return st;
+      const subs = [...(st.substages || [])];
+      const fromIdx = subs.findIndex((s) => s.id === substageId);
+      if (fromIdx === -1) return st;
+
+      const toIdx = Math.max(0, Math.min(subs.length - 1, targetPosition - 1));
+      const [movedSub] = subs.splice(fromIdx, 1);
+      subs.splice(toIdx, 0, movedSub);
+
+      return {
+        ...st,
+        substages: subs,
+      };
+    });
+
+    updateProject(activeProject.id, { stages: normalizeProjectStages(updatedStages, true) });
+    toast.success('Sequência das subetapas e itens atualizada em ordem crescente');
+  };
+
   const updateSubstage = (
     stageId: string,
     substageId: string,
@@ -945,17 +1014,36 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
   ) => {
     if (!activeProject) return;
 
+    const parts = (code || '').trim().split('.');
+    const lastPart = parts[parts.length - 1] || '';
+    const parsedPos = parseInt(lastPart.replace(/\D/g, ''), 10);
+
     const updatedStages = activeProject.stages.map((st) => {
       if (st.id !== stageId) return st;
+      const subs = (st.substages || []).map((sub) =>
+        sub.id === substageId ? { ...sub, title } : sub
+      );
+      const fromIdx = subs.findIndex((s) => s.id === substageId);
+
+      if (fromIdx !== -1 && !isNaN(parsedPos) && parsedPos >= 1) {
+        const toIdx = Math.max(0, Math.min(subs.length - 1, parsedPos - 1));
+        const reordered = [...subs];
+        const [movedSub] = reordered.splice(fromIdx, 1);
+        reordered.splice(toIdx, 0, movedSub);
+        return {
+          ...st,
+          substages: reordered,
+        };
+      }
+
       return {
         ...st,
-        substages: (st.substages || []).map((sub) =>
-          sub.id === substageId ? (toast.success('Subetapa renomeada'), { ...sub, title, code }) : sub
-        ),
+        substages: subs,
       };
     });
 
-    updateProject(activeProject.id, { stages: updatedStages });
+    updateProject(activeProject.id, { stages: normalizeProjectStages(updatedStages, true) });
+    toast.success('Subetapa atualizada e sequência renumerada');
   };
 
   const updateSubstageBdi = (
@@ -1128,8 +1216,51 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
     toast.success(`Item "${item.description.slice(0, 30)}..." adicionado`);
   };
 
+  const moveItemToPosition = (itemId: string, targetPosition: number) => {
+    if (!activeProject) return;
+
+    const updatedStages = activeProject.stages.map((st) => {
+      // 1. Verifica itens diretos da etapa
+      const directItems = [...(st.items || [])];
+      const directIdx = directItems.findIndex((it) => it.id === itemId);
+      if (directIdx !== -1) {
+        const toIdx = Math.max(0, Math.min(directItems.length - 1, targetPosition - 1));
+        const [movedItem] = directItems.splice(directIdx, 1);
+        directItems.splice(toIdx, 0, movedItem);
+        return { ...st, items: directItems };
+      }
+
+      // 2. Verifica itens das subetapas
+      const updatedSubs = (st.substages || []).map((sub) => {
+        const subItems = [...(sub.items || [])];
+        const itemIdx = subItems.findIndex((it) => it.id === itemId);
+        if (itemIdx === -1) return sub;
+
+        const toIdx = Math.max(0, Math.min(subItems.length - 1, targetPosition - 1));
+        const [movedItem] = subItems.splice(itemIdx, 1);
+        subItems.splice(toIdx, 0, movedItem);
+        return { ...sub, items: subItems };
+      });
+
+      return { ...st, substages: updatedSubs };
+    });
+
+    updateProject(activeProject.id, { stages: normalizeProjectStages(updatedStages, true) });
+    toast.success('Sequência dos itens renumerada em ordem crescente');
+  };
+
   const updateItem = (itemId: string, updates: Partial<BudgetItem>) => {
     if (!activeProject) return;
+
+    if (updates.code !== undefined && Object.keys(updates).length === 1) {
+      const parts = updates.code.trim().split('.');
+      const lastPart = parts[parts.length - 1] || '';
+      const parsedPos = parseInt(lastPart.replace(/\D/g, ''), 10);
+      if (!isNaN(parsedPos) && parsedPos >= 1) {
+        moveItemToPosition(itemId, parsedPos);
+        return;
+      }
+    }
 
     const updatedStages = activeProject.stages.map((st) => {
       let changed = false;
@@ -1382,15 +1513,18 @@ export function BudgetProvider({ children }: { children: React.ReactNode }) {
         getOrCreateBudgetForProject,
         addStage,
         updateStage,
+        moveStageToPosition,
         updateStageBdi,
         deleteStage,
         addSubstage,
         updateSubstage,
+        moveSubstageToPosition,
         updateSubstageBdi,
         deleteSubstage,
         addItemToSubstage,
         addItemToStage,
         updateItem,
+        moveItemToPosition,
         deleteItem,
         updateInputPriceGlobally,
         sortProjectIndices,
